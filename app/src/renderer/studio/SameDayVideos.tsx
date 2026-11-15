@@ -27,9 +27,11 @@ function SameDayCard({ entry, current, activeRef, onOpenVideo, onRemove, removeD
   const card = i18n.library.card
   const meta = [
     ...(entry.status === 'done' && entry.counts ? [
-      entry.counts.knock > 0 ? card.knockBadge.replace('{n}', String(entry.counts.knock)) : '',
+      // Same badges, in the same order, as the library card (VideoCard).
+      (entry.counts.knock ?? 0) > 0 ? card.knockBadge.replace('{n}', String(entry.counts.knock)) : '',
+      (entry.counts.assist ?? 0) > 0 ? card.assistBadge.replace('{n}', String(entry.counts.assist)) : '',
       (entry.counts.kill ?? 0) > 0 ? card.killBadge.replace('{n}', String(entry.counts.kill)) : '',
-      entry.counts.assist > 0 ? card.assistBadge.replace('{n}', String(entry.counts.assist)) : ''
+      (entry.counts.death ?? 0) > 0 ? card.deathBadge.replace('{n}', String(entry.counts.death)) : ''
     ] : []),
     entry.durationSec != null ? formatTime(entry.durationSec) : ''
   ].filter(Boolean).join(' · ')

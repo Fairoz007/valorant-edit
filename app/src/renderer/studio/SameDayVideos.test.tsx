@@ -46,6 +46,18 @@ describe('Same-day video list', () => {
     expect(await runAxe(document.querySelector('.same-day-videos')!)).toEqual([])
   })
 
+  test('Shows deaths next to kills, like the library card (Kills n · Deaths n · duration)', async () => {
+    fake.setEntries([entry(A, { counts: { knock: 0, assist: 0, kill: 1, death: 1 }, durationSec: 20 }),
+      entry(B, { counts: { knock: 0, assist: 0, kill: 2 }, durationSec: 25 })])
+    show()
+    await flush()
+    const card = i18n.library.card
+    const meta = (i: number) => cards()[i].querySelector('.same-day-meta')?.textContent
+    // Sorted newest first: B (23:59) then A (00:01).
+    expect(meta(1)).toBe([card.killBadge.replace('{n}', '1'), card.deathBadge.replace('{n}', '1'), '0:20'].join(' · '))
+    expect(meta(0)).toBe([card.killBadge.replace('{n}', '2'), '0:25'].join(' · '))
+  })
+
   test('Keeps the current video visible, adds new videos from updates, opens selections through onOpenVideo, and unsubscribes on unmount', async () => {
     fake.setEntries([entry(A)])
     const onOpenVideo = vi.fn()
