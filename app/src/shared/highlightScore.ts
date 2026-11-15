@@ -5,7 +5,7 @@
  *
  * Ranking order (highest first): ace > 4k > 3k > clutch > 2k > single.
  */
-import type { EngineEvent, Round } from './types'
+import { isCounted, type EngineEvent, type Round } from './types'
 
 export type HighlightKind = 'ace' | '4k' | '3k' | 'clutch' | '2k' | 'single'
 
@@ -86,9 +86,9 @@ export interface HighlightWindow {
 
 const isLive = (e: EngineEvent): boolean => e.deleted !== true && Number.isFinite(e.t)
 
-/** Player kills that count (VALORANT `kill`; `elim` for imported Apex data). Deleted and uncounted events are ignored. */
+/** Player kills that count (VALORANT `kill`; `elim` for imported Apex data), honouring the user's `counted_override`. */
 export function isKillEvent(e: EngineEvent): boolean {
-  return isLive(e) && (e.type === 'kill' || e.type === 'elim') && e.counted
+  return isLive(e) && (e.type === 'kill' || e.type === 'elim') && isCounted(e)
 }
 
 /** Player deaths (not deleted). */

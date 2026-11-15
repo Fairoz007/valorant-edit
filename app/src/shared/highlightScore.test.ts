@@ -26,6 +26,13 @@ describe('highlightWindows', () => {
     expect(highlightWindows([ev(10, 'death'), ev(20, 'kill', { deleted: true })], opts)).toEqual([])
   })
 
+  it("honours the user's counted_override in both directions", () => {
+    expect(isKillEvent(ev(1, 'kill', { counted: false, counted_override: true }))).toBe(true)
+    expect(isKillEvent(ev(1, 'kill', { counted: true, counted_override: false }))).toBe(false)
+    const w = highlightWindows([ev(100, 'kill', { counted: false, counted_override: true }), ev(102, 'kill', { counted_override: false })], opts)
+    expect(w.map((x) => x.kills)).toEqual([1])
+  })
+
   it('merges kills within the merge gap so a multikill is one window, with pre/post roll', () => {
     const w = highlightWindows([ev(100), ev(103), ev(106.5), ev(120)], opts)
     expect(w.map((x) => [x.start, x.end, x.kills, x.kind])).toEqual([
