@@ -28,6 +28,14 @@ function plan(over: Partial<ExportPlan> = {}): ExportPlan {
 const HW = { encoders: ['h264_nvenc'], openh264: false }
 
 describe('exportViewModel', () => {
+  test('a styled (Auto edit) project always re-encodes; a plain one keeps lossless copy', () => {
+    const plain = proj([['1', A, 0, 10], ['2', A, 20, 30]])
+    expect(exportViewModel(plain, plan(), HW).effectiveQuality).toBe('copy')
+    const styled: Project = { ...plain, version: 2, items: plain.items.map((i, n) => (n === 1 ? { ...i, transitionIn: 'dipBlack', transitionSec: 0.5 } : i)) }
+    expect(exportViewModel(styled, plan(), HW).effectiveQuality).toBe('precise')
+    expect(exportViewModel({ ...plain, version: 2, letterbox: true }, plan(), HW).effectiveQuality).toBe('precise')
+  })
+
   test('estimates mixed precise exports from the selected mode and preserves source fps', () => {
     const p = proj([['1', A, 0, 60], ['2', B, 0, 30]])
     const sources = { [A]: { codec: 'h264', width: 3840, height: 2160, fps: 30 }, [B]: { codec: 'h264', width: 1920, height: 1080, fps: 60 } }

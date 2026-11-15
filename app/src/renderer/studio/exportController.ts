@@ -17,6 +17,7 @@ import {
 import { applyPreset, maxSecondsFor, sourceFormat, trimItemsToSeconds } from '../../shared/exportPresets'
 import { clampOffset } from '../../shared/reframe'
 import type { ProjectItem, ProjectStyle } from '../editor/project'
+import { projectHasStyling } from '../../shared/autoEditProject'
 
 /**
  * Export drawer state machine (pure TS, no React/DOM dependency; window.api is injected for testing with a fake API).
@@ -396,7 +397,9 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     const limit = s.trimToLimit ? maxSecondsFor(format) : null
     const sentItems = limit !== null ? trimItemsToSeconds(items, limit, s.mode) : items
     // Stream copy cannot reframe, rescale, change fps or codec: ask for precise explicitly (main enforces the same rule).
-    const quality = formatRequiresPrecise(format) ? 'precise' : s.quality
+    // Styled projects (Auto edit) always go through the montage stage, which re-encodes.
+    const styled = projectHasStyling({ items: items as ProjectItem[], ...styleFields(style) })
+    const quality = formatRequiresPrecise(format) || styled ? 'precise' : s.quality
     const startedAt = Date.now()
     set({ phase: 'running', progress: { percent: 0, jobIndex: 0, totalJobs: 1, outTimeSeconds: 0 }, result: null })
     offProgress = api.onProgress((d) => {
