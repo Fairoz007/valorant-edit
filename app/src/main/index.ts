@@ -301,6 +301,7 @@ async function initEngineAndServices(): Promise<void> {
   })
   montageService = montage
   queue.on('analyzed', (videoPath: string, game) => montage.onMatchAnalyzed(videoPath, game))
+  queue.on('analysisFailed', (videoPath: string, _game: unknown, error: string) => montage.onAnalysisFailed(videoPath, error))
   const unregisterMontageIpc = registerMontageIpc(ipcMain, montage)
   const unsubscribeMontage = settingsStore.onChange(() => montage.onSettingsChanged())
 

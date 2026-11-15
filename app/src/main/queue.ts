@@ -271,6 +271,12 @@ export class AnalysisQueue extends EventEmitter {
           const msg = err instanceof Error ? err.message : String(err)
           this.library.update(videoPath, { status: 'error', error: msg, analyzingSince: undefined })
         }
+        // Auto montage: a job waiting for this analysis must not stay in 'analyzing'. Listener errors stay out of the queue.
+        try {
+          this.emit('analysisFailed', videoPath, PRODUCT_GAME, this.library.get(videoPath)?.error ?? String(err))
+        } catch (listenerErr) {
+          console.error('[Queue] analysisFailed listener failed:', listenerErr)
+        }
       }
     } finally {
       this.current = null

@@ -91,6 +91,8 @@ export interface MontageService {
   start(): void
   onMatchRecorded(videoPath: string, game: GameId): void
   onMatchAnalyzed(videoPath: string, game: GameId): void
+  /** The full analysis of a match failed (AnalysisQueue 'analysisFailed'): a waiting job ends as failed('analysis'). */
+  onAnalysisFailed(videoPath: string, error?: string): void
   onGameClosed(): void
   /** Game presence changed (shared poll); a known "not running" releases deferred jobs. */
   setGameRunning(running: boolean): void
@@ -371,7 +373,10 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
       store.transition(job.id, 'selecting', { attempts: job.attempts + 1 })
     }
     for (const job of store.inState('recorded', 'analyzing')) {
-      if (deps.library.get(job.sourcePath)?.status === 'done') ready(job)
+      const status = deps.library.get(job.sourcePath)?.status
+      if (!deps.fileExists(job.sourcePath)) skip(job.id, 'sourceMissing')
+      else if (status === 'done') ready(job)
+      else if (status === 'error') fail(job.id, 'analysis', tr('找不到這場對局的分析結果'))
       else if (job.state === 'recorded') store.transition(job.id, 'analyzing')
     }
     if (deps.getSettings().montage.timing === 'afterEachMatch') {
@@ -381,7 +386,9 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
 
   return {
     start() {
-      if (started || closed) return
+      // Also re-opens after shutdown() when the quit was blocked (main/index.ts onQuitBlocked).
+      if (started && !closed) return
+      closed = false
       started = true
       if (enabled()) {
         resume()
@@ -414,6 +421,14 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
       const job = store.getBySource(videoPath)
       if (!job || (job.state !== 'analyzing' && job.state !== 'recorded')) return
       ready(job)
+    },
+
+    onAnalysisFailed(videoPath, error) {
+      if (!enabled()) return
+      const job = store.getBySource(videoPath)
+      if (!job || (job.state !== 'analyzing' && job.state !== 'recorded')) return
+      fail(job.id, 'analysis', error || tr('找不到這場對局的分析結果'))
+      emit()
     },
 
     onGameClosed() {
