@@ -1,13 +1,14 @@
 import fs from 'fs'
 import path from 'path'
-import { ProjectItem, projectShapeError } from '../renderer/editor/project'
+import { migrateProject, ProjectItem, projectShapeError, type ProjectStyle, type ProjectVersion } from '../renderer/editor/project'
 import { tr } from '../shared/locale'
 import { writeFileAtomicSync } from './atomic-write'
 
 /** Project on disk: renderer Project plus file id. */
-export interface StoredProject {
+export interface StoredProject extends ProjectStyle {
   id: string
-  version: 1
+  /** v1 files are migrated to v2 by load (see migrateProject). */
+  version: ProjectVersion
   name: string
   items: ProjectItem[]
 }
@@ -114,7 +115,7 @@ export class ProjectStore {
       this.quarantine(id, file, shape.message)
       return null
     }
-    return { ...(data as StoredProject), id }
+    return { ...migrateProject(data as StoredProject), id }
   }
 
   /** Rename a corrupt file to a unique backup name and retain only the latest MAX_BACKUPS files. */

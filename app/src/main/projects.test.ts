@@ -3,6 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { ProjectStore, StoredProject } from './projects'
+import { PROJECT_VERSION } from '../renderer/editor/project'
 
 function tmpStore(): { dir: string; store: ProjectStore } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-projects-'))
@@ -12,7 +13,7 @@ function tmpStore(): { dir: string; store: ProjectStore } {
 function proj(id: string, name: string, itemCount = 1): StoredProject {
   return {
     id,
-    version: 1,
+    version: PROJECT_VERSION,
     name,
     items: Array.from({ length: itemCount }, (_, i) => ({
       id: `i${i}`,
@@ -169,7 +170,7 @@ describe('ProjectStore', () => {
 
   test('newer version is reported as unsupported and left untouched', async () => {
     const { dir, store } = tmpStore()
-    const body = JSON.stringify({ version: 2, name: 'future', items: [] })
+    const body = JSON.stringify({ version: PROJECT_VERSION + 1, name: 'future', items: [] })
     fs.writeFileSync(path.join(dir, 'p_future.json'), body, 'utf-8')
     expect(await store.load('p_future')).toBeNull()
     expect(store.lastErrorKind).toBe('unsupported')
@@ -185,7 +186,9 @@ describe('ProjectStore', () => {
       { ...proj('p_ok', 'n'), id: undefined },
       { ...proj('p_ok', 'n'), id: '' },
       { ...proj('p_ok', 'n'), id: '../evil' },
-      { ...proj('p_ok', 'n'), version: 2 },
+      { ...proj('p_ok', 'n'), version: PROJECT_VERSION + 1 },
+      { ...proj('p_ok', 'n'), style: 'vaporwave' },
+      { ...proj('p_ok', 'n'), items: [{ id: 'a', source: 'x', start: 0, end: 1, speed: 9 }] },
       { ...proj('p_ok', 'n'), name: 5 },
       { ...proj('p_ok', 'n'), items: 'no' },
       { ...proj('p_ok', 'n'), items: [{ id: 'a', source: 'x', start: 'a', end: 1 }] },
@@ -228,5 +231,31 @@ describe('ProjectStore', () => {
     expect(list.map((e) => e.id)).toEqual(['p_good'])
     expect(store.lastError).toContain('p_junk')
     expect(fs.existsSync(path.join(dir, 'p_junk.json'))).toBe(true)
+  })
+
+  test('v1 files migrate to v2 on load without changing anything else; the file on disk is left as is', async () => {
+    const { dir, store } = tmpStore()
+    const v1 = { version: 1, name: 'old', items: [{ id: 'a', source: 'C:/v/a.mp4', start: 1, end: 2, clipId: 'c1' }] }
+    const body = JSON.stringify(v1)
+    fs.writeFileSync(path.join(dir, 'p_old.json'), body, 'utf-8')
+    expect(await store.load('p_old')).toEqual({ ...v1, version: 2, id: 'p_old' })
+    expect(fs.readFileSync(path.join(dir, 'p_old.json'), 'utf-8')).toBe(body)
+    expect((await store.list()).map((e) => e.id)).toEqual(['p_old'])
+  })
+
+  test('v2 styling fields round-trip', async () => {
+    const { store } = tmpStore()
+    const p: StoredProject = {
+      ...proj('p_styled', 'styled', 0),
+      style: 'hype',
+      letterbox: true,
+      music: { path: 'C:/Music/a b.mp3', gain: 0.4, duck: true, fadeInSec: 1, fadeOutSec: 2 },
+      outro: { text: 'GG', durationSec: 2, background: 'black' },
+      items: [{ id: 'a', source: 'C:/v/a.mp4', start: 1, end: 5, speed: 0.75, gain: 1.5,
+        effects: [{ kind: 'slowmo', at: 3, durationSec: 0.6, speed: 0.5 }, { kind: 'zoomPunch', at: 3, durationSec: 0.3, scale: 1.2 }, { kind: 'flash', at: 3, durationSec: 0.1 }],
+        overlay: { text: 'DOUBLE KILL', at: 3, durationSec: 1.5 }, transitionIn: 'crossfade', transitionSec: 0.5 }]
+    }
+    await store.save(p)
+    expect(await store.load('p_styled')).toEqual(p)
   })
 })

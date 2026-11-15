@@ -2,7 +2,7 @@
  * Builds the Studio project for a montage (phase 2 contract; subagent C implements the body, signature fixed).
  * The project is a normal `StoredProject` shape, so export (`buildJobs`) and Studio both accept it.
  */
-import type { ProjectItem } from '../renderer/editor/project'
+import { PROJECT_VERSION, type ProjectItem } from '../renderer/editor/project'
 import type { Clip } from './types'
 
 export interface MontageProjectInput {
@@ -17,7 +17,7 @@ export interface MontageProjectInput {
 
 export interface MontageProject {
   id: string
-  version: 1
+  version: typeof PROJECT_VERSION
   name: string
   items: ProjectItem[]
 }
@@ -26,7 +26,7 @@ export interface MontageProject {
 export function buildMontageProject(input: MontageProjectInput): MontageProject {
   return {
     id: input.projectId,
-    version: 1,
+    version: PROJECT_VERSION,
     name: input.name,
     items: input.clips.map((c, i) => ({ id: `${input.projectId}_i${i}`, source: input.sourcePath, start: c.start, end: c.end, clipId: c.id }))
   }
