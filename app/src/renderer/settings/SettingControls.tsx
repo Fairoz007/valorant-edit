@@ -7,6 +7,7 @@ import { clampToRange, fillTemplate, formatBytes } from './settingsModel'
 import type { SettingsController, SettingsState } from './settingsController'
 import type { SettingRow } from './rows'
 import { RecordingControl } from './RecordingControl'
+import { AutoMontageControl } from './AutoMontageControl'
 import { StoragePreview } from './StoragePreview'
 import { UpdateControl } from './UpdateControl'
 import { ReportControl } from './ReportControl'
@@ -265,6 +266,8 @@ export function SettingControl(props: ControlProps): JSX.Element | null {
   switch (c.kind) {
     case 'recording':
       return <RecordingControl field={c.field} ids={ids} state={state} settings={settings.recording} controller={controller} />
+    case 'autoMontage':
+      return <AutoMontageControl field={c.field} ids={ids} state={state} settings={settings} controller={controller} />
     case 'switch':
       return (
         <SwitchControl

@@ -17,7 +17,9 @@ const i18n = {
     videoFilter: '影片檔案',
     selectFolderTitle: '選擇包含錄影的資料夾',
     addWatchFolderTitle: '選擇要監看的資料夾（新影片自動匯入）',
-    selectOutDirTitle: '選擇匯出目標資料夾'
+    selectOutDirTitle: '選擇匯出目標資料夾',
+    selectMusicTitle: '選擇背景音樂',
+    audioFilesFilter: '音訊檔案'
   },
   library: {
     title: '影片庫',
@@ -102,7 +104,10 @@ const i18n = {
       deleteSource: '刪除來源檔案',
       removeFromLibrary: '從影片庫移除',
       cancel: '取消',
-      removeFailed: '移除失敗，無法刪除來源影片檔案，請確認檔案權限或是否正被使用。'
+      removeFailed: '移除失敗，無法刪除來源影片檔案，請確認檔案權限或是否正被使用。',
+      montageTag: '精華剪輯',
+      montageRemoveConfirm: '要從影片庫移除精華剪輯「{name}」嗎？剪輯檔案會保留在磁碟上，來源錄影與專案不受影響。',
+      montageOpenFailed: '無法開啟這個精華剪輯的專案。'
     },
     selection: {
       select: '選取 {name}',
@@ -119,7 +124,11 @@ const i18n = {
       deleteChoiceRecordingNote: '錄製影片的來源檔案一律會刪除。',
       deleteSources: '刪除來源檔案',
       removeFromLibraryOnly: '僅從影片庫移除',
-      deleteFailed: '有 {n} 部影片無法移除，請檢查檔案權限或是否正在使用中。'
+      deleteFailed: '有 {n} 部影片無法移除，請檢查檔案權限或是否正在使用中。',
+      autoEdit: '自動剪輯',
+      autoEditHint: '請選取至少一支已分析的影片',
+      montageRemoveManyConfirm: '要從影片庫移除 {n} 個精華剪輯嗎？剪輯檔案會保留在磁碟上。',
+      montageNote: '精華剪輯只會從影片庫移除，檔案會保留在磁碟上。'
     }
   },
   queue: {
@@ -563,6 +572,83 @@ const i18n = {
     preview: '預覽',
     previewCurrent: '目前畫面',
     previewNone: '沒有預覽畫面'
+  },
+  autoEdit: {
+    open: '自動剪輯',
+    title: '自動剪輯',
+    intro: '從偵測到的擊殺自動產生一個可編輯的精華專案。',
+    sources: '來源影片',
+    sourcesHint: '依錄影時間排序',
+    sourceLoading: '正在載入分析結果…',
+    sourceFailed: '無法載入分析結果',
+    sourceKills: '{n} 次擊殺',
+    addOthers: '加入其他已分析的影片',
+    noOthers: '沒有其他已分析的影片',
+    addSameDay: '加入同一天的所有影片',
+    target: '目標長度',
+    targetAll: '全部',
+    targetCustom: '自訂',
+    targetCustomLabel: '自訂長度（秒，或 分:秒）',
+    targetCustomHint: '{min} 秒到 {max} 分鐘',
+    targetInvalid: '請輸入 {min} 秒到 {max} 分鐘之間的長度',
+    style: '風格',
+    styles: {
+      clean: '簡潔',
+      cinematic: '電影感',
+      hype: '熱血',
+      shorts: '短影音'
+    },
+    styleDesc: {
+      clean: '直接剪接，不加效果。',
+      cinematic: '淡出至黑轉場、最後一殺慢動作、寬銀幕黑邊，加上片頭與片尾。',
+      hype: '淡出至白轉場、擊殺時縮放與閃光，有音樂時依節拍剪接。',
+      shorts: '9:16 直式、大字幕，最長 60 秒。'
+    },
+    slowMoSilent: '慢動作片段播放時沒有遊戲音效。',
+    styleCap: '{style}風格最長 {sec} 秒，會縮短目標長度。',
+    music: '背景音樂',
+    musicLabel: '音樂檔案路徑（選填）',
+    musicPlaceholder: '貼上音樂檔案的完整路徑',
+    musicBrowse: '選擇…',
+    musicClear: '清除音樂',
+    musicHint: '尚無檔案選擇器，請直接輸入路徑。',
+    deaths: '保留以自己死亡結束的片段',
+    output: '輸出格式',
+    presets: {
+      source: '原始',
+      youtube: 'YouTube',
+      shorts: 'Shorts',
+      tiktok: 'TikTok',
+      reels: 'Reels',
+      square: '方形'
+    },
+    presetForced: '{style}風格一律輸出 9:16 直式，所以無法選擇其他格式。',
+    estimate: '{n} 個片段 · {len} · 約 {size}',
+    estimating: '計算中…',
+    emptyNoKills: '所選影片中沒有找到擊殺',
+    emptyNoSelection: '請至少選取一支影片',
+    warnings: '注意事項',
+    create: '建立',
+    creating: '建立中…',
+    cancel: '取消',
+    createFailed: '無法建立專案，請再試一次。',
+    defaultName: '自動剪輯 · {style} · {date}',
+    badges: '效果',
+    badge: {
+      slowmo: '慢',
+      zoomPunch: '縮放',
+      flash: '閃光',
+      transition: '轉場'
+    },
+    badgeAria: {
+      slowmo: '慢動作 ×{speed}',
+      zoomPunch: '縮放衝擊',
+      flash: '閃光',
+      caption: '字幕：{text}',
+      speed: '速度 ×{speed}',
+      dipBlack: '淡出至黑轉場',
+      dipWhite: '淡出至白轉場'
+    }
   }
 }
 
@@ -910,7 +996,7 @@ const settingsI18n = {
 const recordingI18n = {
   title: '錄影',
   card: '遊戲錄影',
-  cards: { basics: '基本', recorder: '錄影器', video: '影像', audio: '音訊', disk: '磁碟空間與通知' },
+  cards: { basics: '基本', recorder: '錄影器', video: '影像', audio: '音訊', disk: '磁碟空間與通知', autoMontage: '自動精華影片' },
   advanced: '進階選項',
   current: '目前：{value}',
   fit: '適配',
@@ -1031,7 +1117,73 @@ const recordingI18n = {
   watchLive: '觀看當局',
   watchLiveHint: '錄影中才能觀看當局',
   kills: '本局擊殺',
-  matchIndex: '對局'
+  matchIndex: '對局',
+  autoMontage: {
+    rows: {
+      enabled: { title: '自動製作精華影片', desc: '每局 VALORANT 錄影分析完成後，自動挑出精華並匯出一支精華影片。僅支援 VALORANT；製作時會使用 GPU／CPU。' },
+      formatPreset: { title: '影片格式', desc: '精華影片使用的匯出格式。' },
+      minClips: { title: '最少片段數', desc: '精華片段少於此數量時不製作精華影片。' },
+      maxDurationSec: { title: '最長長度', desc: '精華影片的總長度上限。' },
+      include: { title: '包含的精華', desc: '選擇哪些精華可以放進精華影片。' },
+      timing: { title: '製作時機', desc: '「每局結束後」在對局分析完成後立即製作（遊戲執行中以低優先順序進行）；「關閉 VALORANT 後」等遊戲關閉後再製作。' },
+      keepSourceRecording: { title: '保留該局原始錄影', desc: '關閉後，精華影片匯出並驗證成功後，會刪除該局的原始錄影。' },
+      outputDir: { title: '精華影片資料夾', desc: '精華影片的儲存位置。' }
+    },
+    include: { multiKills: '多殺（2–4 殺）', aces: 'ACE（5 殺）', clutches: '殘局', singleKills: '單殺' },
+    timingAfterEachMatch: '每局結束後',
+    timingAfterGameExit: '關閉 VALORANT 後',
+    clipsUnit: '個',
+    secondsUnit: '秒',
+    offHint: '開啟「自動製作精華影片」後才能調整這些選項。',
+    outputDefault: '預設：{dir}（每天一個資料夾）',
+    outputDefaultUnset: '預設：儲存位置中的 Montages 資料夾（每天一個資料夾）',
+    outputChoose: '選擇資料夾',
+    outputReset: '恢復預設',
+    outputPickFailed: '無法選擇資料夾，請再試一次。',
+    analysisNoneDisabled: '自動製作精華影片需要分析結果，開啟時無法選擇「不分析」。',
+    enableDialog: {
+      title: '開啟自動製作精華影片',
+      body: '精華影片需要對局分析結果。目前「錄後分析」為「不分析」，開啟後會改為「每局結束後」。',
+      confirm: '開啟並改為每局結束後',
+      cancel: '取消'
+    },
+    keepSourceDialog: {
+      title: '不保留原始錄影？',
+      body: '精華影片匯出並驗證成功後，該局的原始錄影會被刪除，刪除後無法復原。',
+      confirm: '不保留原始錄影',
+      cancel: '取消'
+    },
+    status: {
+      title: '自動精華影片',
+      idleEach: '已開啟：每局結束後製作精華影片',
+      idleExit: '已開啟：關閉 VALORANT 後製作精華影片',
+      recorded: '準備製作精華影片…',
+      analyzing: '等待對局分析完成…',
+      selecting: '正在挑選精華…',
+      exporting: '正在製作精華影片… {pct}%',
+      deferred: '等待 VALORANT 關閉',
+      done: '精華影片已完成：{n} 個片段，{dur}',
+      doneOne: '精華影片已完成：1 個片段，{dur}',
+      skipped: {
+        tooFew: '已略過：只有 {n} 個精華',
+        tooFewOne: '已略過：只有 1 個精華',
+        tooFewNoCount: '已略過：精華太少',
+        empty: '已略過：這局沒有精華',
+        lowDisk: '已略過：磁碟空間不足',
+        notValorant: '已略過：不是 VALORANT 錄影',
+        sourceMissing: '已略過：原始錄影已被移除'
+      },
+      failed: '失敗：{error}',
+      failedUnknown: '精華影片製作失敗',
+      cancelled: '已取消精華影片',
+      open: '在工作室開啟',
+      retry: '重試',
+      cancel: '取消製作',
+      openFailed: '無法開啟精華影片專案。',
+      actionFailed: '操作失敗，請再試一次。',
+      unavailable: '無法取得自動精華影片狀態。'
+    }
+  }
 }
 
 /** Playback during recording (phase 3). */

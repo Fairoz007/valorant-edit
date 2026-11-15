@@ -1,0 +1,13 @@
+/* Auto montage card (settings): preset cards and the folder row span the full row width. */
+.set-row[data-row='autoMontage-formatPreset'] .set-ctl,
+.set-row[data-row='autoMontage-include'] .set-ctl { grid-column: 1 / -1; }
+.am-presets .xd-cards { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+.am-presets .xd-sec:disabled .xd-card { opacity: 0.4; cursor: default; }
+.am-fs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.am-fs:disabled .set-stepper { opacity: 0.4; }
+.am-include { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.am-check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; color: var(--text-1); font-size: var(--fs-small); }
+.am-check input { accent-color: var(--accent); }
+.am-check input:focus-visible { box-shadow: var(--focus-ring); }
+.am-check:has(input:disabled) { opacity: 0.4; cursor: default; }
+.am-output .set-err { flex-basis: 100%; text-align: right; }

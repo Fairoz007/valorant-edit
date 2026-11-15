@@ -1,4 +1,6 @@
 // Library filters (pure functions): search, favorites only, source/highlight type, and game.
+// Auto montage outputs (`source: 'montage'`) are made by the app from its own recordings, so they are grouped with
+// recordings under 'recording' and are never counted as imported ('external').
 import type { LibraryEntry } from '../../main/library'
 import type { GameId } from '../../shared/games'
 
@@ -21,6 +23,11 @@ export function entryGame(entry: LibraryEntry): GameId | null {
   return entry.status === 'done' ? 'apex' : null
 }
 
+/** Recordings and auto montages: videos the app produced itself (not imported). */
+export function isAppMade(entry: Pick<LibraryEntry, 'source'>): boolean {
+  return entry.source === 'recording' || entry.source === 'montage'
+}
+
 export function filterEntries(entries: LibraryEntry[], f: LibraryFilter): LibraryEntry[] {
   const needle = f.query.trim().toLowerCase()
   return entries.filter((entry) => {
@@ -38,10 +45,10 @@ export function filterEntries(entries: LibraryEntry[], f: LibraryFilter): Librar
     }
     switch (f.kind) {
       case 'recording':
-        return entry.source === 'recording'
+        return isAppMade(entry)
       case 'external':
         // Legacy entries have unknown ownership and are treated like imports.
-        return entry.source !== 'recording'
+        return !isAppMade(entry)
       case 'hl':
         return (entry.hl ?? 0) > 0
       default:

@@ -4,7 +4,7 @@ import { spawn } from 'child_process'
 import type { RecordingDeps } from './index'
 import type { ObsMatch, ObsMetadata } from './obs-session'
 import { ALLOWED_VIDEO_EXTS, isSafeLocalDirPath } from '../safe-path'
-import { addRecorded, MATCH_POST_PAD_SEC, MATCH_PRE_PAD_SEC, inOutputDir, liveMatches, outputBase, readOptional, reserveOutput,
+import { addRecorded, notifyMontage, MATCH_POST_PAD_SEC, MATCH_PRE_PAD_SEC, inOutputDir, liveMatches, outputBase, readOptional, reserveOutput,
   resumeMatchPart, publishRecordingPart, removeSessionDir, writeJson, gameMetadataArgs, type SessionSnapshot } from './finalize'
 import { isTrusted, writeLiveCache, type LiveCacheRange, type LiveFile } from './live-cache'
 import { createCutLookup, createMediaEndProbe } from '../export/keyframe'
@@ -184,6 +184,7 @@ export async function finalizeObsSession(dir: string, deps: RecordingDeps, confi
     const original = cut.outputPath === meta.outputPath
     if ((!original && !inOutputDir(cut.outputPath, outputDir)) || !await localFile(cut.outputPath)) throw new Error(tr('OBS 收尾影片路徑無效'))
     addRecorded(deps, [cut.outputPath], config.game)
+    notifyMontage(deps, 'onMatchRecorded', cut.outputPath, config.game)
     if (!cut.liveCached) {
       try {
         const summary = await writeLiveCache(dir, cut.outputPath, deps, cut)
@@ -197,6 +198,7 @@ export async function finalizeObsSession(dir: string, deps: RecordingDeps, confi
       cut.analysisQueued = true
       await writeJson(markerFile, marker)
     }
+    if (cut.liveTrusted && !cut.analysisQueued) notifyMontage(deps, 'onMatchAnalyzed', cut.outputPath, config.game)
   }
   const outputs = marker.cuts.filter((cut) => !outputWasRemoved(dir, cut.outputPath)).map((cut) => cut.outputPath)
   await removeSessionDir(dir)
@@ -258,6 +260,7 @@ export async function finalizeObsMatches(dir: string, deps: RecordingDeps, confi
       if (!info.duration) throw new Error(tr('無法取得 OBS 影片長度'))
       if (!match.added) {
         addRecorded(deps, [file], config.game)
+        notifyMontage(deps, 'onMatchRecorded', file, config.game)
         match.added = true
         await persist()
         outputs.push(file)
@@ -274,6 +277,7 @@ export async function finalizeObsMatches(dir: string, deps: RecordingDeps, confi
     if (!match.analysisQueued && !match.liveTrusted && (config.postAnalysis === 'perMatch' || (finishing && config.postAnalysis === 'afterExit'))) {
       deps.enqueueAnalysis(file); match.analysisQueued = true; await persist()
     }
+    if (match.liveTrusted && !match.analysisQueued) notifyMontage(deps, 'onMatchAnalyzed', file, config.game)
   }
   if (finishing) await removeSessionDir(dir)
   return outputs

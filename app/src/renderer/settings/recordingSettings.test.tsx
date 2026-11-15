@@ -6,6 +6,7 @@ import { SettingsController, type SettingsApi } from './settingsController'
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings'
 import type { RecorderCapabilities } from '../../shared/recording'
 import { recordingI18n as t } from '../i18n'
+import { AUTO_MONTAGE_FIELDS } from './rows'
 import { cleanupMounted, click, flush, installDomShims, mount } from '../../../test/dom'
 
 const capabilities: RecorderCapabilities = {
@@ -144,10 +145,11 @@ describe('Recording settings screen and controller', () => {
       'systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono',
       'diskWarnGb', 'diskStopGb', 'notifyMatch', 'openOnGameExit'
     ]
+    const montageRows = AUTO_MONTAGE_FIELDS.map((field) => `autoMontage-${field}`)
     expect(Array.from(document.querySelectorAll<HTMLElement>('[data-row]')).map((el) => el.dataset.row))
-      .toEqual(fields.map((field) => `recording-${field}`))
+      .toEqual([...fields.slice(0, 3).map((field) => `recording-${field}`), ...montageRows, ...fields.slice(3).map((field) => `recording-${field}`)])
     expect(Array.from(document.querySelectorAll('.set-card h2')).map((el) => el.textContent))
-      .toEqual([t.cards.basics, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
+      .toEqual([t.cards.basics, t.cards.autoMontage, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
     for (const field of fields) {
       const label = document.getElementById(`set-recording-${field}-title`)
       expect(label?.textContent).toBe(t.rows[field as keyof typeof t.rows].title)

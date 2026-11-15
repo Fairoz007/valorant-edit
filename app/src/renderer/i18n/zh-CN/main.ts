@@ -18,7 +18,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: '视频文件',
     selectFolderTitle: '选择包含录像的文件夹',
     addWatchFolderTitle: '选择要监控的文件夹（新视频自动导入）',
-    selectOutDirTitle: '选择导出目标文件夹'
+    selectOutDirTitle: '选择导出目标文件夹',
+    selectMusicTitle: '选择背景音乐',
+    audioFilesFilter: '音频文件'
   },
   library: {
     title: '视频库',
@@ -103,7 +105,10 @@ export const i18n: Messages['i18n'] = {
       deleteSource: '删除源文件',
       removeFromLibrary: '从视频库移除',
       cancel: '取消',
-      removeFailed: '移除失败，无法删除源视频文件，请检查文件权限或是否正在使用。'
+      removeFailed: '移除失败，无法删除源视频文件，请检查文件权限或是否正在使用。',
+      montageTag: '精华剪辑',
+      montageRemoveConfirm: '要从视频库移除精华剪辑“{name}”吗？剪辑文件会保留在磁盘上，源录像和项目不受影响。',
+      montageOpenFailed: '无法打开这个精华剪辑的项目。'
     },
     selection: {
       select: '选择 {name}',
@@ -120,7 +125,11 @@ export const i18n: Messages['i18n'] = {
       deleteChoiceRecordingNote: '录制视频的源文件一律会删除。',
       deleteSources: '删除源文件',
       removeFromLibraryOnly: '仅从视频库移除',
-      deleteFailed: '有 {n} 个视频无法移除，请检查文件权限或是否正在使用中。'
+      deleteFailed: '有 {n} 个视频无法移除，请检查文件权限或是否正在使用中。',
+      autoEdit: '自动剪辑',
+      autoEditHint: '请选择至少一个已分析的视频',
+      montageRemoveManyConfirm: '要从视频库移除 {n} 个精华剪辑吗？剪辑文件会保留在磁盘上。',
+      montageNote: '精华剪辑只会从视频库移除，文件会保留在磁盘上。'
     }
   },
   queue: {
@@ -564,5 +573,82 @@ export const i18n: Messages['i18n'] = {
     preview: '预览',
     previewCurrent: '当前画面',
     previewNone: '没有预览画面'
+  },
+  autoEdit: {
+    open: '自动剪辑',
+    title: '自动剪辑',
+    intro: '根据检测到的击杀自动生成一个可编辑的精华项目。',
+    sources: '源视频',
+    sourcesHint: '按录像时间排序',
+    sourceLoading: '正在载入分析结果…',
+    sourceFailed: '无法载入分析结果',
+    sourceKills: '{n} 次击杀',
+    addOthers: '加入其他已分析的视频',
+    noOthers: '没有其他已分析的视频',
+    addSameDay: '加入同一天的所有视频',
+    target: '目标长度',
+    targetAll: '全部',
+    targetCustom: '自定义',
+    targetCustomLabel: '自定义长度（秒，或 分:秒）',
+    targetCustomHint: '{min} 秒到 {max} 分钟',
+    targetInvalid: '请输入 {min} 秒到 {max} 分钟之间的长度',
+    style: '风格',
+    styles: {
+      clean: '简洁',
+      cinematic: '电影感',
+      hype: '热血',
+      shorts: '短视频'
+    },
+    styleDesc: {
+      clean: '直接剪接，不加效果。',
+      cinematic: '淡出至黑转场、最后一杀慢动作、宽银幕黑边，加上片头和片尾。',
+      hype: '淡出至白转场、击杀时缩放和闪光，有音乐时按节拍剪接。',
+      shorts: '9:16 竖屏、大字幕，最长 60 秒。'
+    },
+    slowMoSilent: '慢动作片段播放时没有游戏音效。',
+    styleCap: '{style}风格最长 {sec} 秒，会缩短目标长度。',
+    music: '背景音乐',
+    musicLabel: '音乐文件路径（可选）',
+    musicPlaceholder: '粘贴音乐文件的完整路径',
+    musicBrowse: '选择…',
+    musicClear: '清除音乐',
+    musicHint: '暂无文件选择器，请直接输入路径。',
+    deaths: '保留以自己死亡结束的片段',
+    output: '输出格式',
+    presets: {
+      source: '原始',
+      youtube: 'YouTube',
+      shorts: 'Shorts',
+      tiktok: 'TikTok',
+      reels: 'Reels',
+      square: '方形'
+    },
+    presetForced: '{style}风格始终输出 9:16 竖屏，所以无法选择其他格式。',
+    estimate: '{n} 个片段 · {len} · 约 {size}',
+    estimating: '计算中…',
+    emptyNoKills: '所选视频中没有找到击杀',
+    emptyNoSelection: '请至少选择一个视频',
+    warnings: '注意事项',
+    create: '创建',
+    creating: '创建中…',
+    cancel: '取消',
+    createFailed: '无法创建项目，请再试一次。',
+    defaultName: '自动剪辑 · {style} · {date}',
+    badges: '效果',
+    badge: {
+      slowmo: '慢',
+      zoomPunch: '缩放',
+      flash: '闪光',
+      transition: '转场'
+    },
+    badgeAria: {
+      slowmo: '慢动作 ×{speed}',
+      zoomPunch: '缩放冲击',
+      flash: '闪光',
+      caption: '字幕：{text}',
+      speed: '速度 ×{speed}',
+      dipBlack: '淡出至黑转场',
+      dipWhite: '淡出至白转场'
+    }
   }
 }

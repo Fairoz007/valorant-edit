@@ -1,6 +1,7 @@
 // Single source of truth for recording quality options, shared by RecordingControl and onboarding.
 import { recordingI18n } from '../i18n'
 import { fillTemplate } from './settingsModel'
+import { MONTAGE_TIMINGS } from '../../shared/montage'
 
 export interface ChoiceOption {
   value: string
@@ -34,4 +35,10 @@ export function bitrateOptions(current?: number): ChoiceOption[] {
     options.push({ value: String(current), label: fillTemplate(recordingI18n.current, { value: current }) })
   }
   return options
+}
+
+/** Auto montage timing options (segmented control). */
+export function montageTimingOptions(): ChoiceOption[] {
+  const t = recordingI18n.autoMontage
+  return MONTAGE_TIMINGS.map((value) => ({ value, label: value === 'afterEachMatch' ? t.timingAfterEachMatch : t.timingAfterGameExit }))
 }

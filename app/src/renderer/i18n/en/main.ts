@@ -17,7 +17,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: 'Video files',
     selectFolderTitle: 'Select a folder containing recordings',
     addWatchFolderTitle: 'Select a folder to watch (new videos are imported automatically)',
-    selectOutDirTitle: 'Select an export destination folder'
+    selectOutDirTitle: 'Select an export destination folder',
+    selectMusicTitle: 'Choose background music',
+    audioFilesFilter: 'Audio files'
   },
   library: {
     title: 'Library',
@@ -101,7 +103,10 @@ export const i18n: Messages['i18n'] = {
       deleteSource: 'Delete source file',
       removeFromLibrary: 'Remove from library',
       cancel: 'Cancel',
-      removeFailed: 'Removal failed. Could not delete the source video file. Check its permissions or whether it is in use.'
+      removeFailed: 'Removal failed. Could not delete the source video file. Check its permissions or whether it is in use.',
+      montageTag: 'Montage',
+      montageRemoveConfirm: 'Remove the montage "{name}" from the library? The montage file stays on disk; its source recording and project are not affected.',
+      montageOpenFailed: 'Could not open the project of this montage.'
     },
     selection: {
       select: 'Select {name}',
@@ -118,7 +123,11 @@ export const i18n: Messages['i18n'] = {
       deleteChoiceRecordingNote: 'Source files of recordings are always deleted.',
       deleteSources: 'Delete source files',
       removeFromLibraryOnly: 'Remove from library only',
-      deleteFailed: '{n} videos could not be removed. Check file permissions or whether they are in use.'
+      deleteFailed: '{n} videos could not be removed. Check file permissions or whether they are in use.',
+      autoEdit: 'Auto edit',
+      autoEditHint: 'Select at least one analyzed video',
+      montageRemoveManyConfirm: 'Remove {n} montages from the library? The montage files stay on disk.',
+      montageNote: 'Montages are only removed from the library; their files stay on disk.'
     }
   },
   queue: {
@@ -562,5 +571,82 @@ export const i18n: Messages['i18n'] = {
     preview: 'Preview',
     previewCurrent: 'Current frame',
     previewNone: 'No preview image'
+  },
+  autoEdit: {
+    open: 'Auto edit',
+    title: 'Auto edit',
+    intro: 'Build an editable highlight project from the detected kills.',
+    sources: 'Source videos',
+    sourcesHint: 'In recording order',
+    sourceLoading: 'Loading analysis…',
+    sourceFailed: 'Could not load the analysis',
+    sourceKills: '{n} kills',
+    addOthers: 'Add other analyzed videos',
+    noOthers: 'No other analyzed videos',
+    addSameDay: 'All videos from this day',
+    target: 'Target length',
+    targetAll: 'All',
+    targetCustom: 'Custom',
+    targetCustomLabel: 'Custom length (seconds or m:ss)',
+    targetCustomHint: '{min} s to {max} min',
+    targetInvalid: 'Enter a length between {min} s and {max} min',
+    style: 'Style',
+    styles: {
+      clean: 'Clean',
+      cinematic: 'Cinematic',
+      hype: 'Hype',
+      shorts: 'Shorts'
+    },
+    styleDesc: {
+      clean: 'Straight cuts, no effects.',
+      cinematic: 'Dips to black, slow motion on the last kill, letterbox, title and end cards.',
+      hype: 'Dips to white, zoom punch and flash on kills, cuts on the beat when music is set.',
+      shorts: 'Vertical 9:16, big captions, 60 s at most.'
+    },
+    slowMoSilent: 'Slow-motion parts play without game audio.',
+    styleCap: '{style} is limited to {sec} s, so the target is shortened.',
+    music: 'Music',
+    musicLabel: 'Music file path (optional)',
+    musicPlaceholder: 'Paste the full path of a music file',
+    musicBrowse: 'Browse…',
+    musicClear: 'Clear music',
+    musicHint: 'There is no file picker yet; type the path.',
+    deaths: 'Keep clips that end in my death',
+    output: 'Output format',
+    presets: {
+      source: 'Original',
+      youtube: 'YouTube',
+      shorts: 'Shorts',
+      tiktok: 'TikTok',
+      reels: 'Reels',
+      square: 'Square'
+    },
+    presetForced: '{style} always exports vertical 9:16, so other formats cannot be chosen.',
+    estimate: '{n} clips · {len} · about {size}',
+    estimating: 'Calculating…',
+    emptyNoKills: 'No kills found in the selected videos',
+    emptyNoSelection: 'Select at least one video',
+    warnings: 'Notes',
+    create: 'Create',
+    creating: 'Creating…',
+    cancel: 'Cancel',
+    createFailed: 'Could not create the project. Try again.',
+    defaultName: 'Auto edit · {style} · {date}',
+    badges: 'Effects',
+    badge: {
+      slowmo: 'Slow',
+      zoomPunch: 'Zoom',
+      flash: 'Flash',
+      transition: 'Dip'
+    },
+    badgeAria: {
+      slowmo: 'Slow motion ×{speed}',
+      zoomPunch: 'Zoom punch',
+      flash: 'Flash',
+      caption: 'Caption: {text}',
+      speed: 'Speed ×{speed}',
+      dipBlack: 'Dip to black transition',
+      dipWhite: 'Dip to white transition'
+    }
   }
 }

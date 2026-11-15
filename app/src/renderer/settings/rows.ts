@@ -3,6 +3,7 @@
 // Array order determines display order; consecutive rows in the same category and card form one card.
 import { settingsI18n, recordingI18n, LOCALES, LOCALE_NAMES } from '../i18n'
 import type { RecordingSettings } from '../../shared/recording'
+import type { AutoMontageSettings } from '../../shared/montage'
 
 const t = settingsI18n
 
@@ -29,8 +30,14 @@ export const CATEGORIES: readonly CategoryDef[] = [
 
 export type BoolField = 'autoAnalyze' | 'lowPerfMode' | 'proxySuggest' | 'autoSuggestOnOpen' | 'projectAutosave' | 'autoUpdate' | 'telemetryEnabled'
 
+/** Fields of `settings.recording.autoMontage`, one settings row each. */
+export type AutoMontageField = keyof AutoMontageSettings
+
+export const AUTO_MONTAGE_FIELDS: readonly AutoMontageField[] = ['enabled', 'formatPreset', 'minClips', 'maxDurationSec', 'include', 'timing', 'keepSourceRecording', 'outputDir']
+
 export type ControlSpec =
   | { kind: 'recording'; field: keyof RecordingSettings }
+  | { kind: 'autoMontage'; field: AutoMontageField }
   | { kind: 'switch'; field: BoolField }
   | { kind: 'select'; field: 'decode' | 'cacheLocation' | 'language'; options: ReadonlyArray<{ value: string; label: string }> }
   | { kind: 'numberPair'; fields: readonly ['before', 'after'] }
@@ -96,6 +103,21 @@ const recordingRows = (card: string, fields: readonly RecordingField[]): Setting
 
 const rc = recordingI18n.cards
 
+/** Auto montage card: copy comes from recordingI18n.autoMontage.rows. */
+const autoMontageRows = (): SettingRow[] => AUTO_MONTAGE_FIELDS.map((field) => {
+  const text = recordingI18n.autoMontage.rows[field]
+  return {
+    id: `autoMontage-${field}`,
+    category: 'recording',
+    card: rc.autoMontage,
+    title: text.title,
+    desc: text.desc,
+    keywords: ['recording', 'montage', 'highlights', 'VALORANT', field, rc.autoMontage],
+    isNew: field === 'enabled' || undefined,
+    control: { kind: 'autoMontage', field }
+  }
+})
+
 export const SETTING_ROWS: SettingRow[] = [
   // ── General: app-wide preferences ──
   {
@@ -140,6 +162,7 @@ export const SETTING_ROWS: SettingRow[] = [
   },
   // ── Recording ──
   ...recordingRows(rc.basics, ['autoRecord', 'mode', 'postAnalysis']),
+  ...autoMontageRows(),
   ...recordingRows(rc.recorder, ['backend', 'obsHost', 'obsPort', 'obsPassword', 'obsFallbackBuiltin']),
   ...recordingRows(rc.video, ['height', 'bitrateKbps', 'fps', 'forceAspect', 'aspectMode', 'codec', 'gpu', 'encoder', 'preset', 'captureMethod', 'captureCursor']),
   ...recordingRows(rc.audio, ['systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono']),

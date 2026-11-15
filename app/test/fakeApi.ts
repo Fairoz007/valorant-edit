@@ -3,6 +3,7 @@
 import { vi } from 'vitest'
 import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings'
 import type { LibraryEntry } from '../src/main/library'
+import type { MontageStatus } from '../src/shared/montage'
 
 type Listener = (payload?: unknown) => unknown
 
@@ -27,6 +28,7 @@ export function createFakeApi(opts: FakeApiOptions = {}) {
   // Assume first-run setup is complete by default so its dialog does not cover the screen under test.
   let settings: Settings = { ...DEFAULT_SETTINGS, onboardingDone: true, ...opts.settings }
   let entries = opts.entries ?? []
+  let montage: MontageStatus = { active: null, jobs: [] }
 
   const ns = {
     engine: {
@@ -70,6 +72,8 @@ export function createFakeApi(opts: FakeApiOptions = {}) {
     },
     projects: {
       save: vi.fn(async () => true),
+      load: vi.fn(async (_id: string) => null),
+      markOpened: vi.fn(async (_id: string) => true),
       list: vi.fn(async () => []),
       remove: vi.fn(async () => true),
       flushSync: vi.fn(() => true),
@@ -97,6 +101,16 @@ export function createFakeApi(opts: FakeApiOptions = {}) {
       checkOutDir: vi.fn(async () => ({ ok: true })),
       onProgress: sub('export:progress'),
       onOpenH264Progress: sub('export:openh264Progress')
+    },
+    montage: {
+      getStatus: vi.fn(async () => montage),
+      open: vi.fn(async (jobId: string): Promise<{ projectId: string } | null> => ({ projectId: `p_${jobId}` })),
+      retry: vi.fn(async (_jobId: string) => true),
+      cancel: vi.fn(async (_jobId: string) => true),
+      onStatus: sub('montage:changed')
+    },
+    autoEdit: {
+      selectMusic: vi.fn(async (): Promise<string | null> => null)
     }
   }
   for (const [name, patch] of Object.entries(opts.overrides ?? {})) {
@@ -126,7 +140,12 @@ export function createFakeApi(opts: FakeApiOptions = {}) {
     setEntries(next: LibraryEntry[]): void {
       entries = next
     },
-    getSettings: () => settings
+    getSettings: () => settings,
+    /** Replace the montage status returned by getStatus and push it to montage:changed subscribers. */
+    setMontage(next: MontageStatus): void {
+      montage = next
+      for (const cb of [...(listeners.get('montage:changed') ?? [])]) cb(next)
+    }
   }
 }
 

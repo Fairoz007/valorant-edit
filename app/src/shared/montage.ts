@@ -7,6 +7,7 @@
  */
 import type { AutoClipParams, Clip, EngineEvent, Round } from './types'
 import { PRESET_IDS, type PresetId } from './exportFormat'
+import { compareHighlights, DEFAULT_MERGE_GAP_SEC, highlightWindows, type HighlightKind, type HighlightWindow } from './highlightScore'
 
 /** Export preset ids reused from `shared/exportPresets.ts` (16:9 YouTube, 9:16 Shorts/TikTok/Reels, 1:1 Square). */
 export type ExportPresetId = PresetId
@@ -215,20 +216,172 @@ export interface MontageSelection {
   skipped?: 'tooFew' | 'empty'
 }
 
+/** Chosen ranges closer than this are joined into one clip. */
+const MONTAGE_JOIN_GAP_SEC = 0.5
+/** When the best window alone is over the cap, its pre/post roll is trimmed down to this much around the kills. */
+const MONTAGE_TRIM_PAD_SEC = 0.5
+
+const finiteOr = (v: unknown, fb: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fb)
+
+/** Kind used for filtering and ranking, or null when the include settings exclude the window. */
+function effectiveKind(kind: HighlightKind, inc: MontageInclude): HighlightKind | null {
+  switch (kind) {
+    case 'ace':
+      return inc.aces ? 'ace' : null
+    case '4k':
+    case '3k':
+    case '2k':
+      return inc.multiKills ? kind : null
+    case 'clutch':
+      // A clutch is a 2k as well: with clutches off it still goes in (and ranks) as a multikill.
+      return inc.clutches ? 'clutch' : inc.multiKills ? '2k' : null
+    case 'single':
+      return inc.singleKills ? 'single' : null
+  }
+}
+
+/** Which existing clip names a montage clip when several meet in it: manual, then accepted, then suggested; then earliest. */
+const clipPriority = (c: Clip): number => (c.origin === 'manual' ? 0 : (c.status ?? 'accepted') === 'accepted' ? 1 : 2)
+const compareExisting = (a: Clip, b: Clip): number =>
+  clipPriority(a) - clipPriority(b) || a.start - b.start || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
+interface Candidate {
+  /** Window with its effective kind (ranked by `compareHighlights`). */
+  w: HighlightWindow
+  /** Window range united with the existing clips it overlaps. */
+  start: number
+  end: number
+  existing: Clip[]
+}
+
+interface Joined {
+  start: number
+  end: number
+  eventIds: string[]
+  existing: Clip[]
+}
+
+/** Join candidates whose ranges overlap or lie less than `MONTAGE_JOIN_GAP_SEC` apart; result is chronological. */
+function joinRanges(cands: Candidate[]): Joined[] {
+  const sorted = [...cands].sort((a, b) => a.start - b.start || a.end - b.end || a.w.firstKill - b.w.firstKill)
+  const out: Joined[] = []
+  for (const c of sorted) {
+    const last = out[out.length - 1]
+    if (last && c.start - last.end < MONTAGE_JOIN_GAP_SEC) {
+      last.end = Math.max(last.end, c.end)
+      last.eventIds.push(...c.w.eventIds)
+      last.existing.push(...c.existing)
+    } else {
+      out.push({ start: c.start, end: c.end, eventIds: [...c.w.eventIds], existing: [...c.existing] })
+    }
+  }
+  return out
+}
+
+const totalOf = (j: Joined[]): number => j.reduce((s, x) => s + (x.end - x.start), 0)
+
 /**
  * Pick and order the montage clips from a match's events and its clips (autoclip output plus existing cache clips).
- * Pure: no I/O, deterministic for the same input.
+ * Pure: no I/O, deterministic for the same input; inputs are never mutated.
+ *
+ * 1. Windows come from the shared ranker (`highlightWindows`) with `autoclip.before/after` as pre/post roll and
+ *    `autoclip.gap` as merge gap (`DEFAULT_MERGE_GAP_SEC` when not a positive number), so a multikill is never split.
+ *    `autoclip.n` and `autoclip.max_len` do not apply to montages.
+ * 2. Include filter: aces → ace; multiKills → 2k/3k/4k; clutches → clutch; singleKills → single. With clutches off and
+ *    multiKills on, a clutch is kept and ranked as a 2k.
+ * 3. Existing clips: a non-skipped clip overlapping a window is reused — the montage clip spans the union of both ranges
+ *    and keeps that clip's id, origin, status and other fields (manual beats accepted beats suggested when several meet
+ *    in one montage clip; the others are absorbed). Skipped clips are ignored entirely, so a window overlapping only a
+ *    skipped clip is still eligible. Stale AI suggestions are ignored too (their range comes from an older analysis;
+ *    the fresh window replaces them), while stale accepted/manual clips are reused because a user decision is attached.
+ *    Existing clips that overlap no eligible window are not part of the montage.
+ * 4. Ranges overlapping or less than 0.5 s apart are joined into one clip (event ids united, chronological).
+ * 5. Cap: while the total exceeds `maxDurationSec`, the lowest-value window (`compareHighlights`) is dropped. When only
+ *    the best window remains and it is still over the cap, its range is trimmed toward
+ *    [firstKill - 0.5, lastKill + 0.5] (half from each side where possible); a kill span longer than the cap is kept
+ *    whole, so the result exceeds the cap in that one case. A non-positive or non-finite cap means no cap.
+ * 6. `empty` when no eligible window exists; `tooFew` when fewer than `minClips` clips remain after joining and the cap.
  */
 export function selectMontageClips(events: EngineEvent[], clips: Clip[], settings: MontageSelectInput): MontageSelection {
-  // Contract stub: subagent C replaces this body. Keeps counted, chronological, non-skipped clips in range.
-  void events
-  const chosen = clips
-    .filter((c) => c.status !== 'skipped' && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start)
-    .map((c) => ({ ...c, start: Math.max(0, c.start), end: Math.min(settings.videoDurationSec, c.end) }))
+  const dur = Math.max(0, finiteOr(settings.videoDurationSec, 0))
+  const ac = settings.autoclip
+  const gap = finiteOr(ac?.gap, 0) > 0 ? ac.gap : DEFAULT_MERGE_GAP_SEC
+  const before = Math.max(0, finiteOr(ac?.before, 0))
+  const after = Math.max(0, finiteOr(ac?.after, 0))
+  const capRaw = finiteOr(settings.montage.maxDurationSec, 0)
+  const cap = capRaw > 0 ? capRaw : Number.POSITIVE_INFINITY
+  const minClips = finiteOr(settings.montage.minClips, 1)
+  const inc = settings.montage.include
+
+  const windows = highlightWindows(events, {
+    before,
+    after,
+    mergeGap: gap,
+    durationSec: dur,
+    ...(settings.rounds ? { rounds: settings.rounds } : {})
+  })
+  const eligible: HighlightWindow[] = []
+  for (const w of windows) {
+    const kind = effectiveKind(w.kind, inc)
+    if (kind && w.end > w.start) eligible.push({ ...w, kind })
+  }
+  if (eligible.length === 0) return { clips: [], totalSec: 0, skipped: 'empty' }
+
+  // Existing clips that may be reused, as clamped copies.
+  const usable = clips
+    .filter((c) => c.status !== 'skipped' && !(c.stale === true && c.origin === 'ai' && c.status === 'suggested'))
+    .filter((c) => Number.isFinite(c.start) && Number.isFinite(c.end))
+    .map((c) => ({ ...c, start: Math.max(0, c.start), end: Math.min(dur, c.end) }))
     .filter((c) => c.end > c.start)
-    .sort((a, b) => a.start - b.start)
-  if (chosen.length === 0) return { clips: [], totalSec: 0, skipped: 'empty' }
-  const totalSec = chosen.reduce((s, c) => s + (c.end - c.start), 0)
-  if (chosen.length < settings.montage.minClips) return { clips: [], totalSec: 0, skipped: 'tooFew' }
-  return { clips: chosen, totalSec }
+
+  const cands: Candidate[] = eligible.map((w) => {
+    const existing = usable.filter((c) => c.start < w.end && c.end > w.start)
+    return {
+      w,
+      start: Math.min(w.start, ...existing.map((c) => c.start)),
+      end: Math.max(w.end, ...existing.map((c) => c.end)),
+      existing
+    }
+  })
+
+  // Cap: drop the lowest-value window until the total fits (or only the best is left).
+  let kept = [...cands].sort((a, b) => compareHighlights(a.w, b.w) || a.w.firstKill - b.w.firstKill)
+  let joined = joinRanges(kept)
+  while (kept.length > 1 && totalOf(joined) > cap) {
+    kept = kept.slice(0, -1)
+    joined = joinRanges(kept)
+  }
+  if (joined.length === 1 && totalOf(joined) > cap) {
+    const j = joined[0]
+    const w = kept[0].w
+    const ks = Math.max(0, w.firstKill - MONTAGE_TRIM_PAD_SEC)
+    const ke = Math.min(dur, w.lastKill + MONTAGE_TRIM_PAD_SEC)
+    const excess = j.end - j.start - cap
+    const slackPre = Math.max(0, ks - j.start)
+    const slackPost = Math.max(0, j.end - ke)
+    const cutPre = Math.min(slackPre, Math.max(excess / 2, excess - slackPost))
+    const cutPost = Math.min(slackPost, excess - cutPre)
+    j.start += cutPre
+    j.end -= cutPost
+  }
+
+  if (joined.length < minClips) return { clips: [], totalSec: 0, skipped: 'tooFew' }
+
+  // After joining, an existing clip belongs to exactly one montage clip (its range is inside every candidate it touched).
+  const takenIds = new Set(clips.map((c) => c.id))
+  const out: Clip[] = joined.map((j) => {
+    const eventIds = [...new Set(j.eventIds)]
+    const reuse = [...j.existing].sort(compareExisting)[0]
+    if (reuse) {
+      const extra = j.existing.flatMap((c) => c.event_ids ?? [])
+      return { ...reuse, start: j.start, end: j.end, event_ids: [...new Set([...eventIds, ...extra])] }
+    }
+    const base = `mt_${Math.round(j.start * 1000)}`
+    let id = base
+    for (let n = 2; takenIds.has(id); n++) id = `${base}_${n}`
+    takenIds.add(id)
+    return { id, start: j.start, end: j.end, origin: 'ai', event_ids: eventIds, status: 'suggested' }
+  })
+  return { clips: out, totalSec: out.reduce((s, c) => s + (c.end - c.start), 0) }
 }
+

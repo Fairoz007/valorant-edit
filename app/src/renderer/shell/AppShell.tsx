@@ -8,6 +8,7 @@ import { useProject } from '../editor/ProjectProvider'
 import { useToast } from './ToastHost'
 import { i18n } from '../i18n'
 import { RecordingPanel } from './RecordingPanel'
+import type { MontageJob } from '../../shared/montage'
 import { useRecordingStatus } from './useRecordingStatus'
 import { useAppSettings } from './useAppSettings'
 import { useUpdateNotice } from './useUpdateStatus'
@@ -34,10 +35,12 @@ interface AppShellProps {
   onNavigate: (v: RailView, settingsCategory?: CategoryId) => void
   /** "Watch current match" in the recording panel: switch to the live recording view. */
   onOpenLive?: () => void
+  /** Open a video in Studio (the recording panel's Auto montage "Open" loads the montage project, then its source). */
+  onOpenVideo?: (path: string) => void
   children: React.ReactNode
 }
 
-export function AppShell({ active, projectCount, onNavigate, onOpenLive, children }: AppShellProps): JSX.Element {
+export function AppShell({ active, projectCount, onNavigate, onOpenLive, onOpenVideo, children }: AppShellProps): JSX.Element {
   const [queueOpen, setQueueOpen] = useState(false)
   const queueButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -50,6 +53,7 @@ export function AppShell({ active, projectCount, onNavigate, onOpenLive, childre
             projectCount={projectCount}
             onNavigate={onNavigate}
             onOpenLive={onOpenLive}
+            onOpenVideo={onOpenVideo}
             queueOpen={queueOpen}
             onToggleQueue={() => setQueueOpen((v) => !v)}
             onCloseQueue={() => setQueueOpen(false)}
@@ -69,6 +73,7 @@ function ShellFrame({
   projectCount,
   onNavigate,
   onOpenLive,
+  onOpenVideo,
   queueOpen,
   onToggleQueue,
   onCloseQueue,
@@ -82,6 +87,7 @@ function ShellFrame({
 }): JSX.Element {
   const overlay = useOverlay()
   const recording = useRecordingStatus()
+  const { openProject } = useProject()
   // First-run onboarding: overlay the entire app after settings load when onboardingDone is false.
   const settings = useAppSettings()
   const updateNotice = useUpdateNotice()
@@ -101,7 +107,13 @@ function ShellFrame({
         onRecording={() => {
           onCloseQueue()
           const watchLive = onOpenLive ? (): void => { overlay.close(); onOpenLive() } : undefined
-          overlay.open(<RecordingPanel onClose={overlay.close} onWatchLive={watchLive} />)
+          const openMontage = onOpenVideo
+            ? (projectId: string, job: MontageJob): void => {
+                overlay.close()
+                void openProject(projectId).then((ok) => { if (ok) onOpenVideo(job.sourcePath) })
+              }
+            : undefined
+          overlay.open(<RecordingPanel onClose={overlay.close} onWatchLive={watchLive} onOpenMontage={openMontage} />)
         }}
       />
       <main className="app-main">{children}</main>

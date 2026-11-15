@@ -69,6 +69,9 @@ describe('project schema v2', () => {
     }
     expect(validProjectStyle({ style: 'cinematic', letterbox: false })).toBe(true)
     expect(validProjectStyle({ style: 'retro' })).toBe(false)
+    expect(validProjectStyle({ presetId: 'shorts' })).toBe(true)
+    expect(validProjectStyle({ presetId: 'source' })).toBe(true)
+    expect(validProjectStyle({ presetId: 'vhs' })).toBe(false)
     expect(validProjectStyle({ music: { path: '', gain: 0.5, duck: true, fadeInSec: 0, fadeOutSec: 0 } })).toBe(false)
     expect(validProjectStyle({ intro: { text: 'Hi', durationSec: 2, background: 'pink' } })).toBe(false)
     expect(projectShapeError({ version: 2, name: 'n', items: [{ id: 'a', source: 's', start: 0, end: 1, speed: 5 }] })).toMatchObject({ kind: 'format' })
@@ -88,7 +91,7 @@ describe('autoEditToProject', () => {
       ]
     }
     const p = autoEditToProject(plan, 'p_ae1', 'Auto edit')
-    expect(p).toMatchObject({ id: 'p_ae1', version: 2, name: 'Auto edit', style: 'cinematic', letterbox: true, intro: plan.intro, music: plan.music })
+    expect(p).toMatchObject({ id: 'p_ae1', version: 2, name: 'Auto edit', style: 'cinematic', presetId: 'youtube', letterbox: true, intro: plan.intro, music: plan.music })
     expect(p.outro).toBeUndefined()
     expect(p.items).toEqual([
       { id: 'p_ae1_ae0', source: plan.clips[0].source, start: 10, end: 14 },
