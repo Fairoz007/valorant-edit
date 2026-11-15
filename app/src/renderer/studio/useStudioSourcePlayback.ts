@@ -9,7 +9,8 @@ import { reconcileMode, type ModeAction, type ModeState } from './mode'
 import { createAnnouncer } from './liveAnnouncer'
 import { eventAriaLabel } from './reasons'
 import { navReference, type NavAnchor } from './eventNav'
-import { fileUrl, planSeek } from './seekPlan'
+import { planSeek } from './seekPlan'
+import { mediaUrl } from '../../shared/media-url'
 
 interface SourcePlaybackOptions {
   videoRef: RefObject<HTMLVideoElement>
@@ -68,7 +69,7 @@ export function useStudioSourcePlayback({
   /** Seek to apply after the new src loads (never set currentTime on a <video> that is about to be replaced). */
   const pendingSeekRef = useRef<{ t: number; play: boolean } | null>(null)
 
-  const sourceSrc = useMemo(() => fileUrl(proxyPath ?? videoPath), [proxyPath, videoPath])
+  const sourceSrc = useMemo(() => mediaUrl(proxyPath ?? videoPath), [proxyPath, videoPath])
   const videoSrc = sourceSrc
   const sourceSrcRef = useRef(sourceSrc)
   sourceSrcRef.current = sourceSrc

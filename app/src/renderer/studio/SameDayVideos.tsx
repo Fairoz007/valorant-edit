@@ -2,7 +2,8 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'reac
 import type { LibraryEntry } from '../../main/library'
 import { formatTime } from '../../shared/time'
 import { ChevronDown, ImageOff, AlertTriangle, Loader2, Trash2 } from '../components/icons'
-import { cardStatusText, thumbnailUrl } from '../library/cardLogic'
+import { cardStatusText } from '../library/cardLogic'
+import { mediaUrl } from '../../shared/media-url'
 import { recordedTime, studioVideoTitle } from '../library/recordedTime'
 import { useQueueItemState } from '../queue/QueueProvider'
 import { useToast } from '../shell/ToastHost'
@@ -37,7 +38,7 @@ function SameDayCard({ entry, current, activeRef, onOpenVideo, onRemove, removeD
     <button type="button" className={`same-day-card${onRemove ? ' has-remove' : ''}`} aria-current={current ? 'true' : undefined}
       ref={current ? activeRef : undefined} onClick={() => { if (!current) onOpenVideo(entry.path) }}>
       <span className="same-day-thumb">
-        {entry.thumb ? <img src={thumbnailUrl(entry.thumb)} alt="" loading="lazy" decoding="async" /> : <ImageOff className="ic" aria-hidden="true" />}
+        {entry.thumb ? <img src={mediaUrl(entry.thumb)} alt="" loading="lazy" decoding="async" /> : <ImageOff className="ic" aria-hidden="true" />}
       </span>
       <span className="same-day-details">
         <span className="same-day-title" title={entry.path}>{studioVideoTitle(entry.path)}</span>

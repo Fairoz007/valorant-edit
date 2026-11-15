@@ -38,7 +38,7 @@ describe('Same-day video list', () => {
     expect(cards()[2].textContent).toContain('助攻 2')
     expect(cards()[2].textContent).toContain('1:05')
     expect(cards()[2].getAttribute('aria-current')).toBe('true')
-    expect(cards()[2].querySelector('img')?.getAttribute('src')).toContain('a%20%231.jpg')
+    expect(cards()[2].querySelector('img')?.getAttribute('src')).toBe(`aditor-media://local/D:/${encodeURIComponent('縮圖')}/a%20%231.jpg`)
     expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
     expect(cards().every((c) => c.tabIndex === 0)).toBe(true)
     focusEl(cards()[0])

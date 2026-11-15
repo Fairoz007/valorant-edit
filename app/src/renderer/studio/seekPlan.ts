@@ -1,8 +1,4 @@
-/** Video src and seek plan (pure function): apply the target time only after switching sources, never to the <video> being replaced. */
-
-export function fileUrl(path: string): string {
-  return `file://${encodeURI(path.replace(/\\/g, '/')).replace(/#/g, '%23').replace(/\?/g, '%3F')}`
-}
+/** Seek plan (pure function): apply the target time only after switching sources, never to the <video> being replaced. Video src URLs come from shared/media-url.ts. */
 
 /** Apply the seek immediately if its file is loaded; otherwise defer until loadedmetadata. */
 export function planSeek(i: { loadedSrc: string | null; wantedSrc: string }): 'now' | 'defer' {

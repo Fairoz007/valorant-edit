@@ -75,7 +75,8 @@ export function registerIpcHandlers(
   settings?: SettingsStore,
   watch?: WatchManager,
   projectStore?: ProjectStore,
-  onProjectFlushDone?: (ok: boolean) => void
+  onProjectFlushDone?: (ok: boolean) => void,
+  onProjectSources?: (sources: unknown[]) => void
 ): { cancelExport: () => Promise<void> } {
   // Read cache-location settings each time so changes take effect without a restart; follows the engine analyze beside rule.
   const cacheBeside = (): boolean => settings?.get().cacheLocation === 'besideVideo'
@@ -315,7 +316,7 @@ export function registerIpcHandlers(
   }
 
   if (projectStore) {
-    registerProjectHandlers(ipcMain, projectStore, settings, onProjectFlushDone)
+    registerProjectHandlers(ipcMain, projectStore, settings, onProjectFlushDone, onProjectSources)
   }
 
   ipcMain.handle('queue:enqueue', (_, videoPath: unknown, force?: unknown) => {

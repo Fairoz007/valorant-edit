@@ -9,7 +9,8 @@ import { currentLocale, i18n } from '../i18n'
 import { nextTrapIndex } from '../a11y/focusTrap'
 import { rovingStep } from '../a11y/roving'
 import { AlertTriangle, Check, ImageOff, MoreHorizontal, RefreshCw, Scissors, Star, Trash2 } from '../components/icons'
-import { cardStatusText, fileName, thumbnailUrl } from './cardLogic'
+import { cardStatusText, fileName } from './cardLogic'
+import { mediaUrl } from '../../shared/media-url'
 import { GAMES, SUPPORTED_GAME_IDS, gameOf, type GameId } from '../../shared/games'
 import { entryGame } from '../lib/libraryFilter'
 
@@ -209,7 +210,7 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
       >
         <span className="vcard-thumb">
           {entry.thumb ? (
-            <img src={thumbnailUrl(entry.thumb)} alt="" loading="lazy" decoding="async" />
+            <img src={mediaUrl(entry.thumb)} alt="" loading="lazy" decoding="async" />
           ) : (
             <span className="vcard-nothumb">
               <ImageOff className="ic lg" />
