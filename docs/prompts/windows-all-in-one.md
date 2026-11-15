@@ -76,7 +76,7 @@ Rules for subagents:
    is missing or wrong. If the tree has uncommitted changes, ask me whether to commit them first as their own commit.
 2. Create a branch: `git switch -c feature/windows-detection-export`.
 3. Toolchain check, and tell me what is missing instead of silently skipping:
-   - Node 22 (`node -v`), Rust (`cargo -V`), Git, `gh` (`gh auth status`).
+   - Node 22 or 24 (`node -v`; CI uses 22, the Windows dev machine 24.13.0), Rust (`cargo -V`), Git, `gh` (`gh auth status`).
    - FFmpeg: `powershell -ExecutionPolicy Bypass -File scripts\fetch-ffmpeg.ps1`, then confirm
      `build\ffmpeg\bin\ffmpeg.exe -version` and `ffprobe.exe -version`.
    - Engine: `powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -EngineOnly`

@@ -37,7 +37,13 @@ English string is missing or contains untranslated text.
 ## Requirements
 
 - Windows 10 / 11, 64-bit (the recorder and capture paths are Windows-only)
-- For building: Node.js 22, Rust (stable, MSVC toolchain), PowerShell 7
+- For building: Node.js 22 or 24 (CI uses 22; the Windows dev machine runs 24.13.0), Rust (stable, MSVC toolchain),
+  Windows PowerShell 5.1 or PowerShell 7
+- MSVC: Visual Studio 2022 or later, or the Build Tools, with "Desktop development with C++". `scripts/build.ps1` and
+  `scripts/test.ps1` load `vcvars64.bat` themselves (through vswhere, or by searching the standard Visual Studio
+  folders when vswhere lists nothing) and print which one they used. Set `ADITOR_VCVARS` to choose another one.
+- Python tools (`tools\`): `py -3 -m pip install -r tools/requirements.txt`. `ccl_chromium_reader` needs `zstd`,
+  which has no wheel for Python 3.14, so on 3.14 run pip after `vcvars64.bat` with `DISTUTILS_USE_SDK=1`
 - FFmpeg is bundled by the build script (`scripts/fetch-ffmpeg.ps1`); GPU decode/encode is used when available, with CPU fallback
 
 ## Build and run
