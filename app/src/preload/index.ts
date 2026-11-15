@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { RECORDING_CHANNELS, type LiveState, type LiveUpdate, type RecordingStatus, type RecorderCapabilities } from '../shared/recording'
 import { UPDATE_CHANNELS, type UpdateStatus } from '../shared/update'
+import { MONTAGE_CHANNELS, type MontageStatus } from '../shared/montage'
 import type { PlaybackDesyncReport } from '../shared/telemetry'
 
 type FlushResult = void | boolean | PromiseLike<unknown>
@@ -48,6 +49,17 @@ const api = {
       const handler = (_: unknown, update: LiveUpdate) => callback(update)
       ipcRenderer.on(RECORDING_CHANNELS.live, handler)
       return () => ipcRenderer.removeListener(RECORDING_CHANNELS.live, handler)
+    }
+  },
+  montage: {
+    getStatus: (): Promise<MontageStatus> => ipcRenderer.invoke(MONTAGE_CHANNELS.status),
+    open: (jobId: string): Promise<{ projectId: string } | null> => ipcRenderer.invoke(MONTAGE_CHANNELS.open, jobId),
+    retry: (jobId: string): Promise<boolean> => ipcRenderer.invoke(MONTAGE_CHANNELS.retry, jobId),
+    cancel: (jobId: string): Promise<boolean> => ipcRenderer.invoke(MONTAGE_CHANNELS.cancel, jobId),
+    onStatus: (callback: (status: MontageStatus) => void): (() => void) => {
+      const handler = (_: unknown, status: MontageStatus) => callback(status)
+      ipcRenderer.on(MONTAGE_CHANNELS.changed, handler)
+      return () => ipcRenderer.removeListener(MONTAGE_CHANNELS.changed, handler)
     }
   },
   engine: {

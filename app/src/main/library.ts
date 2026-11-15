@@ -12,7 +12,9 @@ export type LibraryStatus = 'pending' | 'analyzing' | 'done' | 'error'
 export interface LibraryEntry {
   path: string
   /** Only recordings added by the recording pipeline own their source file. Missing means legacy/unknown. */
-  source?: 'recording' | 'external'
+  source?: 'recording' | 'external' | 'montage'
+  /** Auto montage output: the per-match recording it was built from and its Studio project. */
+  montage?: { sourcePath: string; projectId: string; jobId: string }
   addedAt: number
   favorite: boolean
   status: LibraryStatus
@@ -168,7 +170,7 @@ export class Library {
     return n
   }
 
-  add(paths: string[], source: 'recording' | 'external' = 'external', game?: GameId): LibraryEntry[] {
+  add(paths: string[], source: 'recording' | 'external' | 'montage' = 'external', game?: GameId): LibraryEntry[] {
     // One normalized lookup: get() per path is O(n) each, which froze re-imports of large libraries.
     const existing = new Map(this.entries.map((e) => [normalizePath(e.path), e]))
     const added: LibraryEntry[] = []
@@ -184,7 +186,7 @@ export class Library {
       const entry = existing.get(norm)
       if (entry) {
         // A folder watcher may have imported the recording before finalization finishes.
-        if (source === 'recording' && entry.source !== 'recording') {
+        if ((source === 'recording' || source === 'montage') && entry.source !== source) {
           entry.source = source
           changed = true
         }

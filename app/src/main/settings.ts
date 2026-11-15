@@ -11,6 +11,7 @@ import {
 } from '../shared/settings'
 import { AutoClipParams } from '../shared/types'
 import { RECORDING_RANGES, type RecordingSettings } from '../shared/recording'
+import { coerceAutoMontage } from '../shared/montage'
 import { validateOutDir } from './settings-ipc'
 import { LANGUAGE_SETTINGS } from '../shared/locale'
 import { isSafeLocalDirPath } from './safe-path'
@@ -115,13 +116,14 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
     notifyMatch: pickBool(s.notifyMatch, base.notifyMatch),
     captureCursor: pickBool(s.captureCursor, base.captureCursor),
     captureMethod: pickEnum(s.captureMethod, ['auto', 'wgc', 'dda', 'hook'] as const, base.captureMethod),
-    openOnGameExit: pickBool(s.openOnGameExit, base.openOnGameExit)
+    openOnGameExit: pickBool(s.openOnGameExit, base.openOnGameExit),
+    autoMontage: coerceAutoMontage(s.autoMontage, base.autoMontage)
   }
 }
 
 /** Deep copy (prevent callers from mutating internal state or DEFAULT_SETTINGS). */
 function cloneSettings(s: Settings): Settings {
-  return { ...s, watchFolders: [...s.watchFolders], autoclip: { ...s.autoclip }, exportFormat: { ...s.exportFormat }, recording: { ...s.recording } }
+  return { ...s, watchFolders: [...s.watchFolders], autoclip: { ...s.autoclip }, exportFormat: { ...s.exportFormat }, recording: { ...s.recording, autoMontage: { ...s.recording.autoMontage, include: { ...s.recording.autoMontage.include } } } }
 }
 
 /**
