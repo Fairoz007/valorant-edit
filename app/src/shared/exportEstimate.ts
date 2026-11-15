@@ -1,5 +1,7 @@
 import type { StreamProbe } from './exportCompat'
 import { concatRenderSpec, peakBitrateKbps, sourceSpec, type VideoSpec } from './encodeQuality'
+import { formatRequiresPrecise, type ExportFormat } from './exportFormat'
+import { resolveOutputSpec } from './exportPresets'
 
 /** Rough export-size estimate (pure function shared by the export drawer and main disk-space check). */
 export type ExportQuality = 'copy' | 'precise'
@@ -21,9 +23,11 @@ export function estimateOutputBytes(
   project: { items: EstimateItem[] },
   quality: ExportQuality,
   probes: ReadonlyMap<string, StreamProbe> = new Map(),
-  mode: 'concat' | 'separate' = 'concat'
+  mode: 'concat' | 'separate' = 'concat',
+  /** Output format: the size/fps of the output spec drive the bitrate; formats that need re-encoding are estimated as precise. */
+  format?: ExportFormat
 ): number {
-  if (quality === 'copy') {
+  if (quality === 'copy' && !(format && formatRequiresPrecise(format))) {
     let totalDur = 0
     for (const item of project.items) {
       const d = item.end - item.start
@@ -39,7 +43,8 @@ export function estimateOutputBytes(
   for (const item of project.items) {
     const d = item.end - item.start
     if (!Number.isFinite(d) || d <= 0) continue
-    const bps = preciseBytesPerSecond(spec ?? sourceSpec(probeOf(item)))
+    const base = spec ?? sourceSpec(probeOf(item))
+    const bps = preciseBytesPerSecond(format ? resolveOutputSpec(base, format) : base)
     totalBytes += d * bps
   }
   return Math.ceil(totalBytes)

@@ -1,4 +1,5 @@
 import fs from 'fs'
+import { coerceExportFormat } from '../shared/exportFormat'
 import path from 'path'
 import { writeFileAtomicSync } from './atomic-write'
 import {
@@ -120,7 +121,7 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
 
 /** Deep copy (prevent callers from mutating internal state or DEFAULT_SETTINGS). */
 function cloneSettings(s: Settings): Settings {
-  return { ...s, watchFolders: [...s.watchFolders], autoclip: { ...s.autoclip }, recording: { ...s.recording } }
+  return { ...s, watchFolders: [...s.watchFolders], autoclip: { ...s.autoclip }, exportFormat: { ...s.exportFormat }, recording: { ...s.recording } }
 }
 
 /**
@@ -150,6 +151,7 @@ function applySettings(base: Settings, src: unknown): Settings {
     autoUpdate: pickBool(s.autoUpdate, base.autoUpdate),
     telemetryEnabled: pickBool(s.telemetryEnabled, base.telemetryEnabled),
     defaultOutDir: pickStringOrNull(s.defaultOutDir, base.defaultOutDir),
+    exportFormat: coerceExportFormat(s.exportFormat, base.exportFormat),
     projectTrackCollapsed: pickProjectTrackCollapsed(s.projectTrackCollapsed, base.projectTrackCollapsed),
     sameDayVideosCollapsed: pickBool(s.sameDayVideosCollapsed, base.sameDayVideosCollapsed),
     lastProjectId: pickStringOrNull(s.lastProjectId, base.lastProjectId),

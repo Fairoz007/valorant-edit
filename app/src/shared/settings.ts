@@ -1,6 +1,7 @@
 import { AutoClipParams } from './types'
 import { DEFAULT_RECORDING_SETTINGS, type RecordingSettings } from './recording'
 import type { LanguageSetting } from './locale'
+import { DEFAULT_EXPORT_FORMAT, type ExportFormat } from './exportFormat'
 
 /** Settings file format version; increment when the format changes and handle older versions in `migrateSettings`. */
 export const SETTINGS_VERSION = 2
@@ -52,6 +53,8 @@ export interface Settings {
   telemetryEnabled: boolean
   /** Default export folder (null prompts each time). */
   defaultOutDir: string | null
+  /** Last export format (preset, frame, reframe mode, offset, codec); the drawer restores it. Missing in older files → DEFAULT_EXPORT_FORMAT. */
+  exportFormat: ExportFormat
   /** Whether project tracks are collapsed by default: 'auto' collapses when the window is ≤800px tall, or use a fixed boolean. */
   projectTrackCollapsed: 'auto' | boolean
   /** Whether same-day video rows are collapsed in Studio. */
@@ -114,6 +117,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoUpdate: true,
   telemetryEnabled: false,
   defaultOutDir: null,
+  exportFormat: { ...DEFAULT_EXPORT_FORMAT },
   projectTrackCollapsed: 'auto',
   sameDayVideosCollapsed: false,
   lastProjectId: null,

@@ -36,6 +36,7 @@ const FIELD_CONSUMERS: Record<string, Array<[string, RegExp]>> = {
   autoUpdate: [['main/index.ts', /\.autoUpdate/]],
   telemetryEnabled: [['main/index.ts', /\.telemetryEnabled/]],
   defaultOutDir: [['renderer/studio/StudioScreen.tsx', /defaultOutDir/]],
+  exportFormat: [['renderer/studio/exportController.ts', /exportFormat/], ['main/settings.ts', /coerceExportFormat/]],
   projectTrackCollapsed: [['renderer/studio/StudioScreen.tsx', /cfg\.projectTrackCollapsed/]],
   sameDayVideosCollapsed: [['renderer/studio/SameDayVideos.tsx', /settings\.sameDayVideosCollapsed/]],
   lastProjectId: [['renderer/editor/projectIo.ts', /lastProjectId/], ['main/project-ipc.ts', /lastProjectId/]],
