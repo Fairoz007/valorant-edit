@@ -180,7 +180,8 @@ async function validateProjectStyle(r: Record<string, unknown>): Promise<Montage
     ...(s.music !== undefined ? { music: { path: s.music.path, gain: s.music.gain, duck: s.music.duck, fadeInSec: s.music.fadeInSec, fadeOutSec: s.music.fadeOutSec } } : {}),
     ...(s.intro !== undefined ? { intro: { text: s.intro.text, durationSec: s.intro.durationSec, background: s.intro.background } } : {}),
     ...(s.outro !== undefined ? { outro: { text: s.outro.text, durationSec: s.outro.durationSec, background: s.outro.background } } : {}),
-    ...(s.letterbox !== undefined ? { letterbox: s.letterbox } : {})
+    ...(s.letterbox !== undefined ? { letterbox: s.letterbox } : {}),
+    ...(s.presetId !== undefined ? { presetId: s.presetId } : {})
   }
   if (style.music) {
     const p = style.music.path

@@ -46,6 +46,7 @@ function styleFields(style: ProjectStyle | undefined): ProjectStyle {
   if (style.intro !== undefined) out.intro = style.intro
   if (style.outro !== undefined) out.outro = style.outro
   if (style.letterbox !== undefined) out.letterbox = style.letterbox
+  if (style.presetId !== undefined) out.presetId = style.presetId
   return out
 }
 

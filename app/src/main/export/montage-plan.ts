@@ -9,7 +9,7 @@
 import type { ProjectItem } from '../../renderer/editor/project'
 import { clipOutputSec, STYLE_PRESETS, type ClipEffect, type MontageStyle, type MusicBed, type TitleCard } from '../../shared/autoEdit'
 import type { StreamProbe } from '../../shared/exportCompat'
-import { DEFAULT_EXPORT_FORMAT, type ExportFormat } from '../../shared/exportFormat'
+import { DEFAULT_EXPORT_FORMAT, type ExportFormat, type PresetId } from '../../shared/exportFormat'
 import { resolveOutputSpec } from '../../shared/exportPresets'
 import { computeReframe, reframeFilter, type Size } from '../../shared/reframe'
 import { concatRenderSpec, videoEncodeArgs, type VideoSpec } from './encodeQuality'
@@ -29,6 +29,8 @@ export interface MontageProjectStyle {
   intro?: TitleCard
   outro?: TitleCard
   letterbox?: boolean
+  /** Preset chosen in the Auto edit dialog; informational here (the request's `format` is what gets rendered). */
+  presetId?: PresetId | 'source'
 }
 
 /** Interval in segment-local output seconds. */

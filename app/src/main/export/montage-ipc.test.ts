@@ -83,11 +83,13 @@ const tmpLeft = (): string[] => fs.readdirSync(tmpDir)
 
 describe('request validation', () => {
   it('accepts and copies the v2 item and project fields', async () => {
-    const v = await validateExportRequest(req({ intro: { text: 'Auto edit', durationSec: 2, background: 'blurFrame' }, letterbox: true }))
+    const v = await validateExportRequest(req({ intro: { text: 'Auto edit', durationSec: 2, background: 'blurFrame' }, letterbox: true, presetId: 'youtube' }))
+    expect(v.style?.presetId).toBe('youtube')
+    await expect(validateExportRequest(req({ presetId: 'vhs' }))).rejects.toThrow()
     expect(v.items[1]).toEqual(styledItems()[1])
     expect(v.items[0]).toEqual({ id: 'a', source, start: 1, end: 5 })
     expect(v.style).toEqual({
-      style: 'hype', letterbox: true, intro: { text: 'Auto edit', durationSec: 2, background: 'blurFrame' },
+      style: 'hype', letterbox: true, presetId: 'youtube', intro: { text: 'Auto edit', durationSec: 2, background: 'blurFrame' },
       outro: { text: 'GG', durationSec: 1.5, background: 'black' }, music: { path: music, gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1.5 }
     })
     expect(isMontageRequest(v)).toBe(true)
