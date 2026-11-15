@@ -140,7 +140,7 @@ impl FeedDetector {
         let raw = yellow(hsv, false);
         let pale = yellow(hsv, true);
         let mut outline = raw.clone();
-        for (a, b) in outline.data.iter_mut().zip(pale.data) {
+        for (a, b) in outline.data.iter_mut().zip(&pale.data) {
             *a |= b;
         }
         let kernel = Image::new(3, 3, 1, vec![1; 9])?;
@@ -148,14 +148,10 @@ impl FeedDetector {
         let comp = cv::connected_components(&opened)?;
         let mut sides: BTreeMap<usize, BTreeSet<bool>> = BTreeMap::new();
         for (i, &[x, y, w, h, area]) in comp.stats.iter().enumerate().skip(1) {
-            if !(18..=36).contains(&h) {
+            if !(14..=36).contains(&h) {
                 continue;
             }
             let death = x + w >= self.right - 26;
-            let (max_w, fill) = if death { (72, 0.18) } else { (60, 0.30) };
-            if !(14..=max_w).contains(&w) || (area as f64) < fill * (w * h) as f64 {
-                continue;
-            }
             let k =
                 ((y as f64 + h as f64 / 2. + self.cy as f64 - 112.) / 40.).round_ties_even() as i32;
             if !(0..6).contains(&k) {
@@ -166,7 +162,6 @@ impl FeedDetector {
             if y < b0 - 4 || y + h > b1 + 4 || (!death && x > self.right - 200) {
                 continue;
             }
-            let cols = self.outline(&outline, k, x, x + w, death);
             // Compressed or upscaled footage (e.g. 720p uploads) blurs the thin yellow row border away or leaves only part
             // of it, and shrinks the chevron below the size the rules further down expect. Accept a solid yellow chevron at
             // the row's outer end when the player's half of the row next to it is ally teal, which is what marks the local
@@ -175,6 +170,11 @@ impl FeedDetector {
                 sides.entry(k).or_default().insert(death);
                 continue;
             }
+            let (max_w, fill) = if death { (72, 0.18) } else { (60, 0.30) };
+            if h < 18 || !(14..=max_w).contains(&w) || (area as f64) < fill * (w * h) as f64 {
+                continue;
+            }
+            let cols = self.outline(&outline, k, x, x + w, death);
             if !death
                 && (area as f64) < 0.45 * (w * h) as f64
                 && self.outline(&raw, k, x, x + w, death) < 40
@@ -189,10 +189,28 @@ impl FeedDetector {
             if edge < if outlined { 25. } else { 45. } {
                 continue;
             }
-            if h < 28 && (!(outlined || compact) || w < 19) {
+            // 720p uploads shrink the kill-side chevron to 14-18 px wide; a row-length yellow outline still marks it.
+            if h < 28 && (!(outlined || compact) || (death && w < 19)) {
                 continue;
             }
             sides.entry(k).or_default().insert(death);
+        }
+        // Under the red death-screen tint the own-death chevron keeps its hue but loses saturation (S 60-95 on the
+        // 720p reference upload), so only the pale mask holds it. Such a chevron gets the same lone-chevron test
+        // (shape, fill, row edge, ally teal on the victim side), on the death side only.
+        let pale = cv::morphology(&pale, &kernel, Morphology::Open);
+        let comp = cv::connected_components(&pale)?;
+        for &[x, y, w, h, area] in comp.stats.iter().skip(1) {
+            if x + w < self.right - 26 {
+                continue;
+            }
+            let k =
+                ((y as f64 + h as f64 / 2. + self.cy as f64 - 112.) / 40.).round_ties_even() as i32;
+            if (0..6).contains(&k)
+                && self.lone_chevron(hsv, gray, k as usize, x, y, w, h, area, true)
+            {
+                sides.entry(k as usize).or_default().insert(true);
+            }
         }
         Ok(sides)
     }
@@ -211,9 +229,15 @@ impl FeedDetector {
         death: bool,
     ) -> bool {
         let (b0, b1) = self.band(k);
-        if !(10..=26).contains(&w)
-            || !(18..=34).contains(&h)
-            || (area as f64) < 0.35 * (w * h) as f64
+        let fill = area as f64 / (w * h) as f64;
+        // Measured on the 720p reference upload: real chevrons fill 0.36-0.53 of their box (0.67 when blurred small);
+        // a solid block (fill near 1) is some other yellow mark. The death chevron can shrink to ~15 px tall, so a
+        // shorter one is accepted on that side only, and only while it stays taller than wide like a chevron.
+        let min_h = if death && h as f64 >= 1.3 * w as f64 { 14 } else { 18 };
+        let min_w = if death { 10 } else { 14 };
+        if !(min_w..=26).contains(&w)
+            || !(min_h..=34).contains(&h)
+            || !(0.35..=0.80).contains(&fill)
             || y < b0 - 4
             || y + h > b1 + 4
             || self.edge(gray, k) < 45.
@@ -254,6 +278,19 @@ impl FeedDetector {
         let comp = cv::connected_components(&mask)?;
         let mut sides: BTreeMap<usize, BTreeSet<bool>> = BTreeMap::new();
         for (i, &[x, y, w, h, area]) in comp.stats.iter().enumerate().skip(1) {
+            // A pale (blurred) kill chevron as tall as the row, with the player's teal beside it: the lone-chevron
+            // rule on the faint mask, kill side only. Measured on the 720p reference upload: these chevrons are 21-32 px
+            // tall (rarely 19-20), while yellow assist badges left of a teammate's row stay at or below 19 px.
+            if faint && h >= 20 && x < self.right - 200 {
+                let k = ((y as f64 + h as f64 / 2. + self.cy as f64 - 112.) / 40.).round_ties_even()
+                    as i32;
+                if (0..6).contains(&k)
+                    && self.lone_chevron(hsv, gray, k as usize, x, y, w, h, area, false)
+                {
+                    sides.entry(k as usize).or_default().insert(false);
+                    continue;
+                }
+            }
             let (mw, mh, fill) = if faint {
                 (14, 26, 0.40)
             } else {

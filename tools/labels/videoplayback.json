@@ -1,0 +1,318 @@
+{
+ "clip": "videoplayback.mp4",
+ "source": "720p 60 fps compressed YouTube upload (edited montage with webcam cuts)",
+ "method": "Labelled by eye from 0.5 s kill-feed contact sheets plus single-frame checks; detector output was not consulted. Own rows only (yellow outline/chevron; the player is shown as 'Me'). t = first frame the row is visible.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "events": [
+  {
+   "t": 47.5,
+   "type": "death",
+   "killer": "Jett",
+   "victim": "Me (Yoru)",
+   "confidence": "high"
+  },
+  {
+   "t": 74.5,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Clove",
+   "confidence": "high"
+  },
+  {
+   "t": 103.5,
+   "type": "death",
+   "killer": "Jett",
+   "victim": "Me (Yoru)",
+   "confidence": "high"
+  },
+  {
+   "t": 155.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Jett",
+   "confidence": "high"
+  },
+  {
+   "t": 179.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Clove",
+   "confidence": "high"
+  },
+  {
+   "t": 251.75,
+   "type": "death",
+   "killer": "RedLight (Sova)",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 290.5,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "RedLight",
+   "confidence": "medium"
+  },
+  {
+   "t": 329.25,
+   "type": "death",
+   "killer": "RedLight (Sova)",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 371.75,
+   "type": "death",
+   "killer": "RedLight (Sova)",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 400.5,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Clove",
+   "confidence": "high"
+  },
+  {
+   "t": 415.0,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Neon",
+   "confidence": "high"
+  },
+  {
+   "t": 428.5,
+   "type": "death",
+   "killer": "Jett",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 446.75,
+   "type": "death",
+   "killer": "Neon (ability)",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 477.0,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Jett",
+   "confidence": "high"
+  },
+  {
+   "t": 518.5,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "RedLight",
+   "confidence": "high"
+  },
+  {
+   "t": 552.0,
+   "type": "death",
+   "killer": "Clove",
+   "victim": "Me (Yoru)",
+   "confidence": "high"
+  },
+  {
+   "t": 599.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Neon",
+   "confidence": "high"
+  },
+  {
+   "t": 601.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Jett",
+   "confidence": "high"
+  },
+  {
+   "t": 601.5,
+   "type": "death",
+   "killer": "Clove",
+   "victim": "Me (Yoru)",
+   "confidence": "high"
+  },
+  {
+   "t": 663.5,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "RedLight",
+   "confidence": "high"
+  },
+  {
+   "t": 690.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Clove",
+   "confidence": "high"
+  },
+  {
+   "t": 691.0,
+   "type": "death",
+   "killer": "Jett",
+   "victim": "Me (Yoru)",
+   "confidence": "high"
+  },
+  {
+   "t": 726.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Jett",
+   "confidence": "high"
+  },
+  {
+   "t": 746.0,
+   "type": "kill",
+   "killer": "Me (Yoru)",
+   "victim": "Clove",
+   "confidence": "high"
+  },
+  {
+   "t": 759.6,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Clove",
+   "confidence": "high"
+  },
+  {
+   "t": 766.2,
+   "type": "death",
+   "killer": "RedLight (Sova)",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 799.2,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Cypher",
+   "confidence": "high"
+  },
+  {
+   "t": 800.3,
+   "type": "death",
+   "killer": "RedLight (Sova)",
+   "victim": "Me",
+   "confidence": "high"
+  },
+  {
+   "t": 856.2,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "RedLight (Sova)",
+   "confidence": "high"
+  },
+  {
+   "t": 872.9,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Cypher",
+   "confidence": "high"
+  },
+  {
+   "t": 945.5,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "Jett",
+   "confidence": "high"
+  }
+ ],
+ "uncertain": [
+  {
+   "t": 252.0,
+   "note": "Row is under the red death vignette, so the yellow outline looks orange and the right chevron is faint. 'Me' plus the 'KILLED BY SOVA' banner confirm it is the player's death. The row reappears briefly around 255.5 after a webcam cut; that is the same event, not a new one.",
+   "source_segment": "seg0"
+  },
+  {
+   "t": 71.0,
+   "note": "Enemy Jett kills allied Jett. No yellow outline or chevron, so this is a teammate death and was not labelled.",
+   "source_segment": "seg0"
+  },
+  {
+   "t": 0.0,
+   "note": "0-24 s and about 120-150 s are edited intro/webcam zooms where the kill feed is not in frame. Any own events during those stretches could not be seen.",
+   "source_segment": "seg0"
+  },
+  {
+   "t": 0.5,
+   "note": "Timing: the fps=2 sheets sometimes run up to 0.5 s ahead of a direct -ss seek. The t values are first appearance in direct single-frame seeks on the 0.5 s grid; the sheets were used only to find candidates.",
+   "source_segment": "seg0"
+  },
+  {
+   "t": 251.75,
+   "note": "RedLight->Me death row appears three times in the edit (251.75, 329.25, 371.75), each with a KILLED BY SOVA banner; likely the same in-game death replayed/re-cut. Labeled each separate on-screen appearance as its own event.",
+   "source_segment": "seg1"
+  },
+  {
+   "t": 295.0,
+   "note": "Clove (teal) -> Neon row with a yellow-bordered assist pill to the left (pill holds what looks like the player's portrait). The row itself has no yellow outline, so read as a teammate kill with player assist. NOT labeled.",
+   "source_segment": "seg1"
+  },
+  {
+   "t": 309.0,
+   "note": "Jett (teal) -> Neon, same yellow assist pill at left, no yellow outline on the row. NOT labeled.",
+   "source_segment": "seg1"
+  },
+  {
+   "t": 366.0,
+   "note": "Clove (teal, pistol) -> Neon, same yellow assist pill, no row outline. NOT labeled.",
+   "source_segment": "seg1"
+  },
+  {
+   "t": 496.5,
+   "note": "Clove (teal) -> Cypher, same yellow assist pill, no row outline. NOT labeled.",
+   "source_segment": "seg1"
+  },
+  {
+   "t": 290.5,
+   "note": "Kill row arrives with a cut, so the true kill moment is probably earlier than its first on-screen time.",
+   "source_segment": "seg1"
+  },
+  {
+   "t": 500.0,
+   "note": "Row 'Clove (teal) -> Cypher (red)' already on screen at segment start (appeared before 500). Small yellow-bordered portrait at its left is the player's assist icon, not an own-kill chevron; the row has no yellow outline. Not labelled. The labeller for the previous segment should check it.",
+   "source_segment": "seg2"
+  },
+  {
+   "t": 518.5,
+   "note": "Yellow outline/chevron on the Me->RedLight row is fainter than on later rows, but visible when zoomed and the name is 'Me'. Kept as high confidence.",
+   "source_segment": "seg2"
+  },
+  {
+   "t": 521.5,
+   "note": "Combat report and scoreboard appear around 521-524 with no own-death row in the feed. Most likely the round ended; nothing labelled.",
+   "source_segment": "seg2"
+  },
+  {
+   "t": 746.0,
+   "note": "Own kill Me->Clove already on screen at segment start (750.0); it first appears ~746.0, before this segment, so not counted here (previous segment should have it).",
+   "source_segment": "seg3"
+  },
+  {
+   "t": 832.0,
+   "note": "Sova->RedLight teal row with a 'III' marker while player was spectating; zoomed: no yellow outline/chevron -> teammate row, not labelled.",
+   "source_segment": "seg3"
+  },
+  {
+   "t": 781.0,
+   "note": "Jett->Jett (teal killer) row; zoomed, no yellow marking -> teammate, not labelled.",
+   "source_segment": "seg3"
+  },
+  {
+   "t": 930.5,
+   "note": "Clove->Clove (teal killer) row; zoomed, no yellow marking -> teammate, not labelled.",
+   "source_segment": "seg3"
+  },
+  {
+   "t": 759.6,
+   "note": "General timing note: times given at ~0.1 s precision from 10 fps strips; the 2 fps sheet sampling appeared ~0.1-0.25 s late vs direct -ss seeks (e.g. row absent at -ss 759.5, present at 759.75). At 766.2, 799.2, 800.3, 945.5 the first visible frame is the row's slide-in (solid colour bar) animation.",
+   "source_segment": "seg3"
+  }
+ ]
+}

@@ -19,8 +19,9 @@ Editor" upgrade specification. Date: 2026-11-15.
 ### VALORANT detection pipeline (as implemented)
 
 1. FFmpeg decodes only two small crops per frame: the kill-feed banner and the round scoreboard (`ValorantProfile.capture_banner/spec`).
-2. `valorant/feed.rs` — connected-component and outline analysis on the grayscale kill feed finds rows and decides whether
-   each row is the player's **kill** or the player's **death** (ally/enemy side by outline colour/position).
+2. `valorant/feed.rs` — connected-component analysis of yellow masks on the kill feed finds the player's own rows and decides
+   whether each is the player's **kill** (yellow mark on the killer side) or **death** (yellow mark at the right, victim end).
+   The yellow row outline is used when it is visible but is not required (see "Own kill/death rows" below).
 3. `valorant/tracker.rs` — de-duplicates rows across frames (slot movement, 1.5 s windows, 6 s death debounce) into events.
 4. `valorant_rounds.rs` — glyph tracking of the scoreboard digits produces **round won/lost** with start/end times.
 5. `round_highlights()` — kills inside one round become a **multikill** (2–4) or **ace** (5+) highlight event.
@@ -28,6 +29,63 @@ Editor" upgrade specification. Date: 2026-11-15.
 
 Detection is pixel/template based — there is no OCR engine, no ML model and no game API/injection. Audio detection exists only as
 offline experiments (`docs/valorant-audio-comparison.md`, `docs/valorant-av-experiment.md`), not in the shipped pipeline.
+
+#### Own kill/death rows
+
+The player's own rows are marked by a thin yellow outline and a solid yellow chevron at the row's outer end. On compressed or
+upscaled footage (e.g. 720p YouTube uploads) the outline blurs away or survives only in part, so a row is also accepted on the
+chevron alone (`lone_chevron`): a solid yellow chevron at the row's outer end with ally teal on the player's side next to it.
+
+- **Size.** The chevron box must be 14–26 px wide on the kill side and 10–26 px on the death side, and 18–34 px tall. A shorter
+  death-side chevron (down to 14 px tall) is accepted while it stays taller than wide (h ≥ 1.3 × w). Earlier, a box-size gate
+  (w ≥ 14, h ≥ 18) ran before `lone_chevron` and rejected these small death chevrons.
+- **Fill.** The chevron must fill 0.35–0.80 of its box. Real chevrons measured 0.36–0.53 (0.67 when tiny); a solid yellow
+  block (fill near 1) is some other mark and is rejected.
+- **Death-screen tint.** The red death-screen tint desaturates the death chevron so it survives only in the pale yellow mask;
+  death-side components from that mask get the same `lone_chevron` test.
+- **Kill side, faint mask.** `lone_chevron` also runs on faint-mask components at least 20 px tall. Yellow assist badges left of
+  a teammate's row measured at most 19 px and are also rejected by `lone_chevron`'s own checks. An outlined kill-side box
+  (≥ 40 outline columns) no longer needs w ≥ 19.
+
+All thresholds are in 1080p reference pixels of the restored 600×256 feed crop. The decoder rescales every input resolution to
+that crop, so the thresholds apply to any input resolution. `templates_version` is `valorant-feed@10`
+(`templates/valorant/icons/profile.json`), so analyses cached by older builds are redone.
+
+#### Measured accuracy
+
+Hand labels in `tools/labels/videoplayback.json` were made by eye from 0.5 s kill-feed contact sheets without consulting
+detector output, and are scored with `tools/eval_feed_labels.py` (±1.0 s tolerance, per event type, one-to-one matching).
+Reference clip: `videoplayback.mp4`, a 720p 60 fps compressed YouTube upload (~16:23, edited montage) with 19 own kills and
+12 own deaths labelled.
+
+| Build | Kills detected / true positives | Deaths detected / true positives | Precision | Recall |
+|---|---|---|---|---|
+| Aditor import, before `lone_chevron` (67d211e) | 4 detected (not scored) | 1 detected (not scored) | — | — |
+| First `lone_chevron` fix (fa348ce) | 19 / 17 | 10 / 10 | 0.931 | 0.871 |
+| Current | 19 / 19 | 12 / 12 | 1.000 | 1.000 |
+
+fa348ce missed deaths at 47.5 s (10×15 px chevron) and 251.75 s (red death-screen tint), and confirmed kills at 290.5 s and
+799.2 s 1.5 s / 1.0 s late (outside ±1 s), so each counted as a miss plus an extra detection. fa348ce also confirmed a solid
+yellow square and broke the golden test `python_feed_detection_and_tracking_cases`; the fill limit fixes it. On the current
+build, matched-pair timing errors are within −0.50 to +0.75 s.
+
+In the app (macOS, `npm run dev` build, real engine) the library card and Studio show 19 kills / 12 deaths for this clip, the
+cache records `valorant-feed@10`, and there are 4 round multikill highlights (rounds with 2, 2, 3 and 2 kills). AI auto-clip with
+minimum kills 2 suggests 4 two-kill clips; the default (minimum 3, max gap 20 s) suggests none, because the 3-kill round has a
+20.5 s gap.
+
+Tests in `engine/tests/valorant.rs`: `own_rows_on_compressed_footage_are_confirmed`, `rows_that_are_not_the_players_are_rejected`
+(teammate kill, enemy kills ally, Clove resurrect, two teammate kills with a yellow assist badge, empty feed, fade to dark,
+partially faded row, yellow clothing at 1080p) and `native_1080p_player_rows_stay_detected` (the existing 1080p fixtures in
+`engine/tests/fixtures/valorant`, which no test used before). Real-crop fixtures are in `engine/tests/fixtures/valorant_feed/`.
+
+Limitations:
+
+- Only one labelled clip (720p, compressed). There are no full-clip labels for native 1080p, 1440p or 30 fps footage yet;
+  1080p coverage is single-frame fixtures only.
+- Different HUD scales are untested.
+- Not run on Windows (the analysis code has no Windows-only paths).
+- Thresholds were tuned on this clip; the assist-badge height guard has about 1 px of margin on it.
 
 ## 2. Localization status (requirement 13) — done in this fork
 
@@ -50,10 +108,10 @@ Legend: ✅ exists · 🟡 partial · ❌ missing
 
 | Event | Status | Notes |
 |---|---|---|
-| Single kill | ✅ | Kill-feed CV |
+| Single kill | ✅ | Kill-feed CV; 19/19 on the one labelled 720p clip (see "Measured accuracy" above) |
 | Double / triple / quadra kill | ✅ | Derived per round (`multikill`, score = kill count); UI labels them as multi-kills, not by name |
 | Ace | ✅ | 5+ kills in one round |
-| Death | ✅ | Kill-feed CV |
+| Death | ✅ | Kill-feed CV; 12/12 on the same clip |
 | Round won / lost | ✅ | Scoreboard glyph tracker |
 | Match victory | 🟡 | Rounds are known; the final score / match result is not emitted as an event |
 | Headshot | ❌ | Needs headshot-icon template in kill-feed rows |
