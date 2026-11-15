@@ -2,6 +2,27 @@
 
 ## Valorant Editor (fork of Aditor 0.4.6)
 
+### Unreleased
+
+#### Added
+
+- **Vertical and square export**: an output frame choice (Source, 16:9, 9:16, 1:1) with three reframe modes — crop (with a
+  left/right offset), blurred-background fit and black bars. One shared geometry function (`app/src/shared/reframe.ts`) drives both
+  the FFmpeg filter and the live preview in the export drawer, so the preview matches the exported file pixel for pixel.
+- **Platform presets**: YouTube (source size, capped at 4K), YouTube Shorts, TikTok, Instagram Reels (1080×1920) and Square post
+  (1080×1080) with frame-rate caps and a length warning that can trim the export to the platform limit
+  (`app/src/shared/exportPresets.ts`).
+- **H.265 (HEVC) export** with NVENC, Quick Sync and AMF, detected with the same test encode as H.264; MP4 output is tagged
+  `hvc1` for Apple devices and web players. No libx265 (the bundled FFmpeg stays LGPL-only).
+- Export format choices are remembered in settings; reframing, presets and H.265 automatically switch to precise export with a notice.
+
+#### Changed
+
+- **Export drawer redesign**: preset cards, live crop preview, grouped Format / Quality / Output sections with an Advanced section,
+  a summary line (size · fps · codec · estimated size · duration) and inline reasons for disabled options.
+- **UI polish pass** across Library, Studio, Settings and the shell: consistent spacing and radii, stronger hover/focus/selected
+  states, AA-contrast text and subtle motion that respects reduced motion and low-performance mode.
+
 ### Changed
 
 - **Renamed to Valorant Editor**: product name, window title, tray, notifications, installer names (`ValorantEditor-Setup-<version>.exe`),

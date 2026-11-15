@@ -93,9 +93,9 @@ Legend: ✅ exists · 🟡 partial · ❌ missing
 | Background queue, cancel, resume, crash recovery, temp cleanup | ✅ | |
 | Batch processing | ✅ | Watch folders and multi-file import |
 | H.264 export, HW encoders | ✅ | NVENC / QSV / AMF, OpenH264 fallback |
-| H.265 export | ❌ | |
-| 9:16 / 1:1 reframing | ❌ | Normalize filter pads to a fixed size only |
-| Platform presets (YouTube, Shorts, TikTok, Reels) | ❌ | |
+| H.265 export | ✅ | `hevc_nvenc` / `hevc_qsv` / `hevc_amf`, `hvc1` tag; no libx265 (LGPL build) |
+| 9:16 / 1:1 reframing | ✅ | Crop with offset, blurred background (scale-only blur, no extra FFmpeg filters), black bars; `shared/reframe.ts` shared by preview and export |
+| Platform presets (YouTube, Shorts, TikTok, Reels) | ✅ | Plus Square post; data table in `shared/exportPresets.ts`, length warning with trim |
 | Project save / reopen / autosave / reprocess | ✅ | JSON projects |
 | Multiple montages from one recording | ✅ | Multiple projects can reference the same source |
 | Detection confidence + manual correction | 🟡 | Manual add/delete/override exist; per-event confidence is not shown |
