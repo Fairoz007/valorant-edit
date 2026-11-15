@@ -113,6 +113,14 @@ export function AutoEditDialog({ origin, initialPaths, preloaded, tuning: givenT
     setError(null)
     setDraft((d) => ({ ...d, ...patch }))
   }
+  const pickMusic = async (): Promise<void> => {
+    try {
+      const picked = await window.api.autoEdit.selectMusic()
+      if (picked) update({ musicPath: picked })
+    } catch {
+      // Dialog failures leave the typed path as is.
+    }
+  }
   const toggleSource = (path: string, on: boolean): void => {
     setDraft((d) => ({ ...d, sources: on ? [...d.sources.filter((p) => norm(p) !== norm(path)), path] : d.sources.filter((p) => norm(p) !== norm(path)) }))
   }
@@ -300,6 +308,9 @@ export function AutoEditDialog({ origin, initialPaths, preloaded, tuning: givenT
                 spellCheck={false}
                 onChange={(e) => update({ musicPath: e.target.value })}
               />
+              <button type="button" className="btn-ghost sm" onClick={() => void pickMusic()}>
+                {t.musicBrowse}
+              </button>
               <button type="button" className="btn-ghost sm" disabled={draft.musicPath === ''} onClick={() => update({ musicPath: '' })}>
                 {t.musicClear}
               </button>

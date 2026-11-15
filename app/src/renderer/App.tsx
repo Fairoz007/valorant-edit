@@ -130,7 +130,7 @@ function AppContent(): JSX.Element {
   }
 
   return (
-    <AppShell active={view === 'live' ? null : view} projectCount={project.items.length} onNavigate={handleNavigate} onOpenLive={handleOpenLive}>
+    <AppShell active={view === 'live' ? null : view} projectCount={project.items.length} onNavigate={handleNavigate} onOpenLive={handleOpenLive} onOpenVideo={handleSelectVideo}>
       <LowPerfNotice />
       {page}
     </AppShell>

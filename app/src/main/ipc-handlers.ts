@@ -448,6 +448,17 @@ export function registerIpcHandlers(
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })
 
+  // Auto edit: optional music bed for the montage (path only; the file is read by the export when rendering).
+  ipcMain.handle('autoEdit:selectMusic', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const res = await dialog.showOpenDialog(win || (undefined as unknown as BrowserWindow), {
+      title: dialogText().selectMusicTitle,
+      properties: ['openFile'],
+      filters: [{ name: dialogText().audioFilesFilter, extensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'] }]
+    })
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  })
+
   // Export: start/cancel/diskSpace (validation, single-export enforcement, and cancel-on-window-close are in export-ipc.ts).
   const exportService = createExportService({
     // Set only for E2E (ADITOR_E2E_FAKE_FFMPEG=1); undefined in production to use the default ffmpeg.

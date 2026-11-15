@@ -17,7 +17,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: 'Video files',
     selectFolderTitle: 'Select a folder containing recordings',
     addWatchFolderTitle: 'Select a folder to watch (new videos are imported automatically)',
-    selectOutDirTitle: 'Select an export destination folder'
+    selectOutDirTitle: 'Select an export destination folder',
+    selectMusicTitle: 'Choose background music',
+    audioFilesFilter: 'Audio files'
   },
   library: {
     title: 'Library',
@@ -606,6 +608,7 @@ export const i18n: Messages['i18n'] = {
     music: 'Music',
     musicLabel: 'Music file path (optional)',
     musicPlaceholder: 'Paste the full path of a music file',
+    musicBrowse: 'Browse…',
     musicClear: 'Clear music',
     musicHint: 'There is no file picker yet; type the path.',
     deaths: 'Keep clips that end in my death',

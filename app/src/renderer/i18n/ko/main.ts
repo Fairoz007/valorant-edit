@@ -19,7 +19,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: '동영상 파일',
     selectFolderTitle: '녹화 파일이 들어 있는 폴더 선택',
     addWatchFolderTitle: '감시할 폴더 선택(새 영상은 자동으로 가져오기)',
-    selectOutDirTitle: '내보내기 대상 폴더 선택'
+    selectOutDirTitle: '내보내기 대상 폴더 선택',
+    selectMusicTitle: '배경 음악 선택',
+    audioFilesFilter: '오디오 파일'
   },
   library: {
     title: '라이브러리',
@@ -609,6 +611,7 @@ export const i18n: Messages['i18n'] = {
     music: '음악',
     musicLabel: '음악 파일 경로(선택)',
     musicPlaceholder: '음악 파일의 전체 경로를 붙여 넣으세요',
+    musicBrowse: '찾아보기…',
     musicClear: '음악 지우기',
     musicHint: '아직 파일 선택기가 없으니 경로를 입력하세요.',
     deaths: '내 데스로 끝나는 클립도 유지',

@@ -18,7 +18,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: '動画ファイル',
     selectFolderTitle: '録画が入っているフォルダーを選択',
     addWatchFolderTitle: '監視するフォルダーを選択（新しい動画は自動で取り込み）',
-    selectOutDirTitle: '書き出し先のフォルダーを選択'
+    selectOutDirTitle: '書き出し先のフォルダーを選択',
+    selectMusicTitle: 'BGM を選択',
+    audioFilesFilter: 'オーディオファイル'
   },
   library: {
     title: 'ライブラリ',
@@ -608,6 +610,7 @@ export const i18n: Messages['i18n'] = {
     music: '音楽',
     musicLabel: '音楽ファイルのパス（任意）',
     musicPlaceholder: '音楽ファイルのフルパスを貼り付け',
+    musicBrowse: '参照…',
     musicClear: '音楽をクリア',
     musicHint: 'ファイル選択はまだないため、パスを入力してください。',
     deaths: '自分のデスで終わるクリップも残す',

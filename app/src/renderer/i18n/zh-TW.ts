@@ -17,7 +17,9 @@ const i18n = {
     videoFilter: '影片檔案',
     selectFolderTitle: '選擇包含錄影的資料夾',
     addWatchFolderTitle: '選擇要監看的資料夾（新影片自動匯入）',
-    selectOutDirTitle: '選擇匯出目標資料夾'
+    selectOutDirTitle: '選擇匯出目標資料夾',
+    selectMusicTitle: '選擇背景音樂',
+    audioFilesFilter: '音訊檔案'
   },
   library: {
     title: '影片庫',
@@ -607,6 +609,7 @@ const i18n = {
     music: '背景音樂',
     musicLabel: '音樂檔案路徑（選填）',
     musicPlaceholder: '貼上音樂檔案的完整路徑',
+    musicBrowse: '選擇…',
     musicClear: '清除音樂',
     musicHint: '尚無檔案選擇器，請直接輸入路徑。',
     deaths: '保留以自己死亡結束的片段',

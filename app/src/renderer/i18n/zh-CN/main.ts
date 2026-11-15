@@ -18,7 +18,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: '视频文件',
     selectFolderTitle: '选择包含录像的文件夹',
     addWatchFolderTitle: '选择要监控的文件夹（新视频自动导入）',
-    selectOutDirTitle: '选择导出目标文件夹'
+    selectOutDirTitle: '选择导出目标文件夹',
+    selectMusicTitle: '选择背景音乐',
+    audioFilesFilter: '音频文件'
   },
   library: {
     title: '视频库',
@@ -608,6 +610,7 @@ export const i18n: Messages['i18n'] = {
     music: '背景音乐',
     musicLabel: '音乐文件路径（可选）',
     musicPlaceholder: '粘贴音乐文件的完整路径',
+    musicBrowse: '选择…',
     musicClear: '清除音乐',
     musicHint: '暂无文件选择器，请直接输入路径。',
     deaths: '保留以自己死亡结束的片段',

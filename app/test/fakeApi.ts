@@ -72,6 +72,8 @@ export function createFakeApi(opts: FakeApiOptions = {}) {
     },
     projects: {
       save: vi.fn(async () => true),
+      load: vi.fn(async (_id: string) => null),
+      markOpened: vi.fn(async (_id: string) => true),
       list: vi.fn(async () => []),
       remove: vi.fn(async () => true),
       flushSync: vi.fn(() => true),
@@ -106,6 +108,9 @@ export function createFakeApi(opts: FakeApiOptions = {}) {
       retry: vi.fn(async (_jobId: string) => true),
       cancel: vi.fn(async (_jobId: string) => true),
       onStatus: sub('montage:changed')
+    },
+    autoEdit: {
+      selectMusic: vi.fn(async (): Promise<string | null> => null)
     }
   }
   for (const [name, patch] of Object.entries(opts.overrides ?? {})) {

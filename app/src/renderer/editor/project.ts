@@ -1,5 +1,6 @@
 import { tr } from '../../shared/locale'
 import type { ClipEffect, ClipOverlay, MontageStyle, MusicBed, TitleCard, TransitionKind } from '../../shared/autoEdit'
+import type { PresetId } from '../../shared/exportFormat'
 import { validProjectItemStyle, validProjectStyle } from '../../shared/autoEditProject'
 
 /**
@@ -37,6 +38,8 @@ export interface ProjectStyle {
   intro?: TitleCard
   outro?: TitleCard
   letterbox?: boolean
+  /** Output preset chosen in the Auto edit dialog ('source' keeps the source frame); the export drawer starts from it. */
+  presetId?: PresetId | 'source'
 }
 
 export interface Project extends ProjectStyle {

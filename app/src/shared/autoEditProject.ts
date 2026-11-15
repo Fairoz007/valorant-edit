@@ -4,6 +4,7 @@
  */
 import type { Project, ProjectItem } from '../renderer/editor/project'
 import { MONTAGE_STYLES, TRANSITION_KINDS, type AutoEditPlan, type ClipEffect } from './autoEdit'
+import { PRESET_IDS } from './exportFormat'
 
 const num = (v: unknown, min: number, max: number): boolean => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -52,7 +53,8 @@ export function validProjectStyle(d: Record<string, unknown>): boolean {
     optional(d.music, validMusic) &&
     optional(d.intro, validCard) &&
     optional(d.outro, validCard) &&
-    optional(d.letterbox, (v) => typeof v === 'boolean')
+    optional(d.letterbox, (v) => typeof v === 'boolean') &&
+    optional(d.presetId, (v) => v === 'source' || PRESET_IDS.includes(v as never))
   )
 }
 
@@ -88,6 +90,7 @@ export function autoEditToProject(plan: AutoEditPlan, projectId: string, name: s
     name,
     items,
     style: plan.style,
+    presetId: plan.presetId,
     ...(plan.music ? { music: { ...plan.music } } : {}),
     ...(plan.intro ? { intro: { ...plan.intro } } : {}),
     ...(plan.outro ? { outro: { ...plan.outro } } : {}),

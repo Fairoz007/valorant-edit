@@ -125,6 +125,21 @@ describe('Auto edit from Studio', () => {
     expect(checked[0].closest('label')?.querySelector('.ae-source-name')?.getAttribute('title')).toBe(STUDIO_VIDEO)
   })
 
+  test('Browse picks a music file through the native dialog; cancelling keeps the current path', async () => {
+    await openFromStudio()
+    const pick = vi.fn(async (): Promise<string | null> => 'C:\\Users\\Jane Doe\\Music\\Hype – ä.mp3')
+    window.api.autoEdit.selectMusic = pick
+    const input = (): HTMLInputElement => dialog()!.querySelector<HTMLInputElement>('.ae-section input.ae-input')!
+    click(buttonByText(dialog()!, t.musicBrowse)!)
+    await flush(5)
+    expect(pick).toHaveBeenCalledTimes(1)
+    expect(input().value).toBe('C:\\Users\\Jane Doe\\Music\\Hype – ä.mp3')
+    pick.mockResolvedValueOnce(null)
+    click(buttonByText(dialog()!, t.musicBrowse)!)
+    await flush(5)
+    expect(input().value).toBe('C:\\Users\\Jane Doe\\Music\\Hype – ä.mp3')
+  })
+
   test('keyboard: focus starts inside, Tab stays inside, Esc closes and returns focus to the button', async () => {
     const { trigger } = await openFromStudio()
     const d = dialog()!
