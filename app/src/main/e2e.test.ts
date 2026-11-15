@@ -10,7 +10,9 @@ describe('resolveE2EConfig (environment variables do not affect production behav
   })
 
   test('E2E enabled: unspecified variables retain all production settings', () => {
-    expect(resolveE2EConfig({ ADITOR_E2E: '1' }, '/t', false)).toEqual({ appData: null, fakeEngine: null, exportFfmpeg: null })
+    expect(resolveE2EConfig({ ADITOR_E2E: '1' }, '/t', false)).toEqual({ appData: null, fakeEngine: null, exportFfmpeg: null, recordingStatus: null })
+    expect(resolveE2EConfig({ ADITOR_E2E: '1', ADITOR_E2E_RECORDING_STATUS: '{"phase":"recording"}' }, '/t', false)?.recordingStatus).toEqual({ phase: 'recording' })
+    expect(resolveE2EConfig({ ADITOR_E2E: '1', ADITOR_E2E_RECORDING_STATUS: 'not json' }, '/t', false)?.recordingStatus).toBeNull()
   })
 
   test('resolves fake engine, temporary appData, and fake ffmpeg', () => {

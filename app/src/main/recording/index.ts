@@ -116,6 +116,8 @@ export interface LiveAnalysisSummary {
   codec: string
   /** Live results are equivalent to offline analysis (the cache has the official version), so a full analysis is unnecessary. */
   trusted: boolean
+  /** Final score when the file is exactly one match (VALORANT). */
+  score?: { ally: number; enemy: number } | null
 }
 
 export function createRecordingService(_deps: RecordingDeps): RecordingService {

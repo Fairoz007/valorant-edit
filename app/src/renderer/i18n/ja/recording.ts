@@ -4,7 +4,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: '録画',
   card: 'ゲーム録画',
-  cards: { basics: '基本', recorder: 'レコーダー', video: '映像', audio: '音声', disk: 'ディスク容量と通知', autoMontage: '自動モンタージュ' },
+  cards: { basics: '録画する内容', recorder: 'キャプチャ', video: '画質', audio: 'オーディオ', disk: '保存と通知', autoMontage: '自動モンタージュ' },
   advanced: '詳細オプション',
   current: '現在：{value}',
   fit: 'フィット',
@@ -214,5 +214,24 @@ export const recordingI18n: Messages['recordingI18n'] = {
     previewTitle: 'ACE',
     previewDetail: 'ラウンド 7',
     offHint: 'ゲーム内オーバーレイをオンにすると、これらのオプションを変更できます。'
+  },
+  panel: {
+    title: 'レコーダー',
+    states: { idle: '待機中', paused: '一時停止中', starting: '起動中', waiting: 'マッチ待ち', recording: '録画中', recordingMatch: '録画中・第 {n} 試合', obsWaiting: 'マッチ待ち（OBS）', detectionOnly: 'ライブ検出のみ', saving: '保存中', error: 'エラー' },
+    elapsed: '経過時間',
+    kills: 'この試合のキル',
+    score: 'ラウンドスコア',
+    match: '試合',
+    disk: 'ディスク残り',
+    capture: '{method} キャプチャ',
+    overlayOn: 'オーバーレイ：オン',
+    overlayOff: 'オーバーレイ：オフ',
+    pause: '一時停止',
+    resume: '再開',
+    pauseHint: '自動録画を一時停止／再開',
+    details: '技術的な詳細',
+    fixTitle: '対処方法',
+    hints: { no_hw_encoder: 'グラフィックドライバーを更新するか、「設定 → 録画 → 画質」で H.264 を選んでください。', disk_full: 'ディスクの空きを増やすか、「設定 → 一般 → 保存場所」で別のドライブを選んでください。', audio_failed: '「設定 → 録画 → オーディオ」でデバイスを選び直してから「開始」を押してください。', restart_limit: 'Valorant Editor を再起動してください。再発する場合は「設定 → 録画 → キャプチャ」で別の方式を選んでください。', finalize_failed: '録画セグメントは保持されています。次回の起動時に自動で保存を再試行します。', default: '「設定 → 録画」でキャプチャと画質の設定を確認してから「開始」を押してください。' },
+    openSettings: '録画設定'
   }
 }

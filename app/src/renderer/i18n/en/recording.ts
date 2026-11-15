@@ -3,7 +3,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: 'Recording',
   card: 'Game recording',
-  cards: { basics: 'Basics', recorder: 'Recorder', video: 'Video', audio: 'Audio', disk: 'Disk space and notifications', autoMontage: 'Auto montage' },
+  cards: { basics: 'What to record', recorder: 'Capture', video: 'Quality', audio: 'Audio', disk: 'Storage and notifications', autoMontage: 'Auto montage' },
   advanced: 'Advanced options',
   current: 'Current: {value}',
   fit: 'Fit',
@@ -213,5 +213,24 @@ export const recordingI18n: Messages['recordingI18n'] = {
     previewTitle: 'ACE',
     previewDetail: 'Round 7',
     offHint: 'Turn on the in-game overlay to change these options.'
+  },
+  panel: {
+    title: 'Recorder',
+    states: { idle: 'Idle', paused: 'Paused', starting: 'Starting', waiting: 'Waiting for match', recording: 'Recording', recordingMatch: 'Recording match {n}', obsWaiting: 'Waiting for match (OBS)', detectionOnly: 'Live detection only', saving: 'Saving', error: 'Error' },
+    elapsed: 'Elapsed',
+    kills: 'Kills this match',
+    score: 'Round score',
+    match: 'Match',
+    disk: 'Disk left',
+    capture: '{method} capture',
+    overlayOn: 'Overlay on',
+    overlayOff: 'Overlay off',
+    pause: 'Pause',
+    resume: 'Resume',
+    pauseHint: 'Pause or resume auto-record',
+    details: 'Technical details',
+    fixTitle: 'How to fix',
+    hints: { no_hw_encoder: 'Update your graphics driver, or choose H.264 in Settings → Recording → Quality.', disk_full: 'Free up disk space, or choose another drive in Settings → General → Storage location.', audio_failed: 'Choose the audio devices again in Settings → Recording → Audio, then press Start.', restart_limit: 'Restart Valorant Editor. If it happens again, choose another capture method in Settings → Recording → Capture.', finalize_failed: 'The recorded segments are kept; saving is retried automatically the next time the app starts.', default: 'Check the capture and quality settings in Settings → Recording, then press Start.' },
+    openSettings: 'Recording settings'
   }
 }

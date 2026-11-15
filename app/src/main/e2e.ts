@@ -1,5 +1,6 @@
 import path from 'path'
 import { app } from 'electron'
+import type { RecordingService, RecordingStatus } from '../shared/recording'
 
 /**
  * E2E test hooks (enabled only by `ADITOR_E2E=1`; returns null when the environment variable is absent, leaving production behavior unchanged).
@@ -7,11 +8,13 @@ import { app } from 'electron'
  * - `ADITOR_ENGINE=fake`: run `app/test/fake-engine.mjs` with node (FAKE_ENGINE_MODE=e2e) instead of the analysis engine
  * - `ADITOR_E2E_FAKE_FFMPEG=1`: use `app/test/fake-ffmpeg.mjs` (a real child process for cancellation tests) for exports
  * - `ADITOR_E2E_NODE`: node executable used to run the scripts above (the test runner's process.execPath)
+ * - `ADITOR_E2E_RECORDING_STATUS`: JSON merged into every recording status the UI sees (UI screenshots of a live recording)
  */
 export interface E2EConfig {
   appData: string | null
   fakeEngine: { command: string; args: string[]; env: Record<string, string> } | null
   exportFfmpeg: { bin: string; prefixArgs: string[] } | null
+  recordingStatus?: Partial<RecordingStatus> | null
 }
 
 /** Always disabled when `isPackaged` is true (installed production build): environment variables cannot change appData, engine, or ffmpeg executables. */
@@ -25,8 +28,38 @@ export function resolveE2EConfig(env: NodeJS.ProcessEnv, testDir: string, isPack
       env.ADITOR_ENGINE === 'fake'
         ? { command: node, args: [path.join(testDir, 'fake-engine.mjs')], env: { FAKE_ENGINE_MODE: 'e2e' } }
         : null,
-    exportFfmpeg: env.ADITOR_E2E_FAKE_FFMPEG === '1' ? { bin: node, prefixArgs: [path.join(testDir, 'fake-ffmpeg.mjs')] } : null
+    exportFfmpeg: env.ADITOR_E2E_FAKE_FFMPEG === '1' ? { bin: node, prefixArgs: [path.join(testDir, 'fake-ffmpeg.mjs')] } : null,
+    recordingStatus: parseStatus(env.ADITOR_E2E_RECORDING_STATUS)
   }
+}
+
+function parseStatus(text: string | undefined): Partial<RecordingStatus> | null {
+  if (!text) return null
+  try {
+    const value = JSON.parse(text)
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+/** E2E only: the service as the UI sees it, with `patch` merged into every status (start/stop still reach the real service). */
+export function withStatusPatch(service: RecordingService, patch: Partial<RecordingStatus>): RecordingService {
+  const status = (): RecordingStatus => ({ ...service.status(), ...patch })
+  return new Proxy(service, {
+    get(target, key, receiver) {
+      if (key === 'status') return status
+      if (key === 'onStatus') {
+        return (listener: (s: RecordingStatus) => void) => {
+          const off = target.onStatus(() => listener(status()))
+          setTimeout(() => listener(status()), 0)
+          return off
+        }
+      }
+      const value = Reflect.get(target, key, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
 }
 
 /** `app/test` directory in development or packaged builds (out/main → app/test). */

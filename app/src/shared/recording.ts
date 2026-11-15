@@ -212,6 +212,10 @@ export interface RecordingStatus {
   kills: number
   /** Match number (starting at 1); null before match data is available. */
   matchIndex: number | null
+  /** A match is being played right now (false in the menus, queue and agent select). */
+  inMatch?: boolean
+  /** Round score of the current match (VALORANT, Riot Client); 0–0 at match start, null when unknown. */
+  score?: { ally: number; enemy: number } | null
 }
 
 export const IDLE_RECORDING_STATUS: RecordingStatus = {
@@ -232,7 +236,9 @@ export const IDLE_RECORDING_STATUS: RecordingStatus = {
   paused: false,
   error: null,
   kills: 0,
-  matchIndex: null
+  matchIndex: null,
+  inMatch: false,
+  score: null
 }
 
 /** A recording GPU reported by aditorrec `hello`. */

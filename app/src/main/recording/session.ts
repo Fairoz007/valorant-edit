@@ -379,11 +379,12 @@ export class RecordingSessionService implements RecordingService {
     })
     live.on('update', (update: LiveUpdate) => { if (this.active?.live === live) this.events.emit('live', update) })
     live.on('stats', () => {
-      if (this.active?.live === live) this.update({ kills: live.kills(), matchIndex: live.matchIndex() })
+      if (this.active?.live === live) this.update({ kills: live.kills(), matchIndex: live.matchIndex(), inMatch: live.inMatch() })
     })
     live.on('match', (ev: 'match_start' | 'match_end' | 'match_pending' | 'match_cancel', index: number, time: number) => {
       if (this.active?.live !== live) return
       this.activity({ type: 'match', ev: ev === 'match_start' ? 'start' : ev === 'match_end' ? 'end' : ev === 'match_pending' ? 'pending' : 'cancel', index, kills: live.kills() })
+      if (ev === 'match_start') this.update({ score: { ally: 0, enemy: 0 } })
       if (ev === 'match_start') this.notice('matchStart', tr('第 {index} 局開始', { index }))
       else if (ev === 'match_end') this.notice('matchEnd', tr('第 {index} 局結束（計入擊殺 {kills}）', { index, kills: live.kills() }))
       const session = this.active
@@ -540,7 +541,10 @@ export class RecordingSessionService implements RecordingService {
       if (clientReachable && gameClient) {
         gameClient.on('event', (ev: PresenceEvent) => {
           if ((ev.type === 'match_start' || ev.type === 'match_end') && this.active === session && !session!.ending) session!.live.clientMatch(ev.type, ev.at)
-          if (ev.type === 'round_end' && this.active === session && !session!.ending) this.activity({ type: 'round', winner: ev.winner, ally: ev.ally, enemy: ev.enemy })
+          if (ev.type === 'round_end' && this.active === session && !session!.ending) {
+            this.update({ score: { ally: ev.ally, enemy: ev.enemy } })
+            this.activity({ type: 'round', winner: ev.winner, ally: ev.ally, enemy: ev.enemy })
+          }
         })
         gameClient.on('unavailable', (error: Error) => {
           this.log(`riot client unavailable: ${error.message}`)

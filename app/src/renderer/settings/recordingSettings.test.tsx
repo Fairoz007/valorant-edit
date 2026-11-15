@@ -160,19 +160,21 @@ describe('Recording settings screen and controller', () => {
   test('Full row order and labels, enabled one-file-per-match, and encoder/device options matching the selected format', async () => {
     await show()
     // Launch-at-login and minimize-to-tray are app-wide settings under General; OBS rows appear only for the OBS backend.
+    // What to record · Auto montage · Capture · In-game overlay · Quality · Audio · Storage; advanced rows follow the others in a card.
     const fields = [
       'autoRecord', 'mode', 'trimBuyPhase', 'postAnalysis',
-      'backend',
-      'height', 'bitrateKbps', 'fps', 'captureCursor', 'forceAspect', 'aspectMode', 'codec', 'gpu', 'encoder', 'preset', 'captureMethod',
+      'backend', 'captureCursor', 'captureMethod', 'gpu',
+      'height', 'bitrateKbps', 'fps', 'codec', 'encoder', 'preset', 'forceAspect', 'aspectMode',
       'systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono',
       'diskWarnGb', 'diskStopGb', 'notifyMatch', 'openOnGameExit'
     ]
     const montageRows = AUTO_MONTAGE_FIELDS.map((field) => `autoMontage-${field}`)
     const overlayRows = OVERLAY_FIELDS.map((field) => `overlay-${field}`)
     expect(Array.from(document.querySelectorAll<HTMLElement>('[data-row]')).map((el) => el.dataset.row))
-      .toEqual([...fields.slice(0, 4).map((field) => `recording-${field}`), ...montageRows, ...overlayRows, ...fields.slice(4).map((field) => `recording-${field}`)])
+      .toEqual([...fields.slice(0, 4).map((field) => `recording-${field}`), ...montageRows, ...fields.slice(4, 8).map((field) => `recording-${field}`),
+        ...overlayRows.filter((id) => id !== 'overlay-opacity'), 'overlay-opacity', ...fields.slice(8).map((field) => `recording-${field}`)])
     expect(Array.from(document.querySelectorAll('.set-card h2')).map((el) => el.textContent))
-      .toEqual([t.cards.basics, t.cards.autoMontage, t.overlay.card, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
+      .toEqual([t.cards.basics, t.cards.autoMontage, t.cards.recorder, t.overlay.card, t.cards.video, t.cards.audio, t.cards.disk])
     for (const field of fields) {
       const label = document.getElementById(`set-recording-${field}-title`)
       expect(label?.textContent).toBe(t.rows[field as keyof typeof t.rows].title)
@@ -271,7 +273,9 @@ describe('Recording settings screen and controller', () => {
   test('Advanced settings are collapsed by default and expand on search; bitrate preserves custom values and audio-source disabled state', async () => {
     const r = await show()
     const sections = Array.from(document.querySelectorAll('details'))
-    expect(sections).toHaveLength(2)
+    // Capture (method, GPU), In-game overlay (opacity), Quality (format details) and Audio each fold their advanced rows.
+    expect(sections.map((el) => el.closest('.set-card')?.querySelector('h2')?.textContent))
+      .toEqual([t.cards.recorder, t.overlay.card, t.cards.video, t.cards.audio])
     expect(sections.every((el) => !el.open)).toBe(true)
     expect(options('bitrateKbps')).toEqual(['5000', '8000', '10000', '15000', '20000', '30000', '40000', '50000', '60000', '80000', '100000', '150000'])
     expect(Array.from(control('aspectMode').querySelectorAll('input')).every((el) => el.disabled)).toBe(true)

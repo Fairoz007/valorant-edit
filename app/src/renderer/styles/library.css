@@ -344,6 +344,13 @@
 .vbadge.assist { color: var(--ev-assist-knock); }
 .vbadge.death { color: var(--ev-death); }
 .vbadge.hl { color: var(--text-1); }
+/* Match result (W/L + score) and Montage tag, top-right on the thumbnail, left of the favourite star. */
+.vcard-tags { position: absolute; right: 40px; top: 8px; display: flex; gap: 4px; z-index: 3; }
+.vbadge.result { font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+.vbadge.result.win { color: var(--success); }
+.vbadge.result.loss { color: var(--danger); }
+.vbadge.result.draw { color: var(--text-2); }
+.vbadge.montage { color: var(--text-1); background: var(--accent); }
 .vcard-dur { position: absolute; right: 8px; bottom: 8px; z-index: 3; font-size: var(--fs-caption); padding: 2px 6px; border-radius: var(--r-xs); background: var(--bg-scrim); color: var(--text-1); }
 
 .vcard-overlay {

@@ -29,6 +29,8 @@ export interface LibraryEntry {
   thumb?: string
   /** Number of highlight clips available with default parameters (Task 11 lazy write, used by card badges and the "has highlights" filter). */
   hl?: number
+  /** Final score of a single-match VALORANT recording (from its analysis rounds); absent otherwise. */
+  score?: { ally: number; enemy: number }
   /** Video codec (written after analysis, used by the card's proxy suggestion badge). */
   codec?: string
   /** Analysis start time recorded by main (epoch ms; set only while analyzing, used for ETA = now - analyzingSince). */

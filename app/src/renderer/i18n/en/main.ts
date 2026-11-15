@@ -105,6 +105,10 @@ export const i18n: Messages['i18n'] = {
       cancel: 'Cancel',
       removeFailed: 'Removal failed. Could not delete the source video file. Check its permissions or whether it is in use.',
       montageTag: 'Montage',
+      resultWin: 'W',
+      resultLoss: 'L',
+      resultDraw: 'D',
+      resultLabel: '{result} {ally}–{enemy}',
       montageRemoveConfirm: 'Remove the montage "{name}" from the library? The montage file stays on disk; its source recording and project are not affected.',
       montageOpenFailed: 'Could not open the project of this montage.'
     },

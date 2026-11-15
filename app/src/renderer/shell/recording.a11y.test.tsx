@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { IDLE_RECORDING_STATUS, type RecordingStatus } from '../../shared/recording'
 import type { RecordingApi } from '../global'
 import { Rail } from './Rail'
-import { RecordingPanel } from './RecordingPanel'
+import { RecordingPanel, errorHint, panelState } from './RecordingPanel'
 import { useRecordingStatus } from './useRecordingStatus'
 import { recordingI18n as t } from '../i18n'
 import { cleanupMounted, click, flush, focusEl, installDomShims, mount, press } from '../../../test/dom'
@@ -66,6 +66,14 @@ describe('Recording rail and panel', () => {
     expect(onRecording).toHaveBeenCalledOnce()
   })
 
+  test.each([['recording', 'live'], ['starting', 'busy'], ['finalizing', 'busy'], ['error', 'error']] as const)(
+    'the rail indicator shows %s from every screen as a %s dot with its state as the accessible name', (phase, tone) => {
+      mount(<Rail active="settings" projectCount={0} onNavigate={() => undefined} recordingPhase={phase} onRecording={() => undefined} />)
+      const trigger = document.querySelector(`[aria-label="${t.phases[phase]}"]`)!
+      expect(trigger.querySelector(`.rec-dot.${tone}`)).not.toBeNull()
+      expect(trigger.getAttribute('data-tip')).toBe(t.phases[phase])
+    })
+
   test('Status, elapsed time, encoder info, segments, dropped frames, and disk space update; unmount clears subscriptions and timers', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-18T00:01:05Z'))
@@ -86,22 +94,27 @@ describe('Recording rail and panel', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  test('Manual start/stop and pause; operation failures and service errors are visible', async () => {
+  test('One primary Start/Stop button, a Pause toggle, and visible failures with a fix hint', async () => {
     const r = rig()
-    mount(<RecordingPanel onClose={() => undefined} />)
+    const openSettings = vi.fn()
+    mount(<RecordingPanel onClose={() => undefined} onOpenSettings={openSettings} />)
     await flush()
+    // Idle: the primary action is Start; there is no Stop button to miss-click.
+    expect(Array.from(document.querySelectorAll('button')).some((el) => el.textContent === t.stop)).toBe(false)
     click(button(t.start))
     await flush()
     expect(r.api.startManual).toHaveBeenCalledOnce()
-    expect(button(t.stop).disabled).toBe(true)
     r.emit({ phase: 'recording' })
+    expect(button(t.stop).classList.contains('primary')).toBe(true)
     click(button(t.stop))
     await flush()
     expect(r.api.stopManual).toHaveBeenCalledOnce()
-    click(document.querySelector('input[type="checkbox"]')!)
+    const pause = button(t.panel.pause)
+    expect(pause.getAttribute('aria-pressed')).toBe('false')
+    click(pause)
     await flush()
     expect(r.api.setPaused).toHaveBeenCalledWith(true)
-    expect((document.querySelector('input') as HTMLInputElement).checked).toBe(true)
+    expect(button(t.panel.resume).getAttribute('aria-pressed')).toBe('true')
     r.emit({ phase: 'idle' })
     r.api.startManual = vi.fn(async () => false)
     click(button(t.start))
@@ -112,10 +125,35 @@ describe('Recording rail and panel', () => {
     await flush()
     expect(document.querySelector('[role="alert"]')?.textContent).toContain('錄影器無法啟動')
     cleanupMounted()
-    mount(<RecordingPanel onClose={() => undefined} />)
+    mount(<RecordingPanel onClose={() => undefined} onOpenSettings={openSettings} />)
     await flush()
     r.emit({ phase: 'error', error: { code: 'no_hw_encoder', message: '沒有硬體編碼器' } })
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('沒有硬體編碼器')
+    const alert = document.querySelector('[role="alert"]')!
+    expect(alert.textContent).toContain('沒有硬體編碼器')
+    // Inline banner with a fix hint and a way to the settings, not only a toast.
+    expect(alert.textContent).toContain(t.panel.hints.no_hw_encoder)
+    click(button(t.panel.openSettings))
+    expect(openSettings).toHaveBeenCalledOnce()
+    expect(document.querySelector('.rec-pill')?.textContent).toBe(t.panel.states.error)
+  })
+
+  test('The state pill says Idle / Waiting for match / Recording match N / Saving / Error, with capture and overlay chips', async () => {
+    rig()
+    mount(<RecordingPanel onClose={() => undefined} />)
+    await flush()
+    const pill = (): string | null | undefined => document.querySelector('.rec-pill')?.textContent
+    expect(pill()).toBe(t.panel.states.idle)
+    expect(panelState({ ...IDLE_RECORDING_STATUS, phase: 'recording', inMatch: false }, 'match').label).toBe(t.panel.states.waiting)
+    expect(panelState({ ...IDLE_RECORDING_STATUS, phase: 'recording', inMatch: true, matchIndex: 3 }, 'match').label)
+      .toBe(t.panel.states.recordingMatch.replace('{n}', '3'))
+    expect(panelState({ ...IDLE_RECORDING_STATUS, phase: 'recording' }, 'session').label).toBe(t.panel.states.recording)
+    expect(panelState({ ...IDLE_RECORDING_STATUS, phase: 'finalizing' }).label).toBe(t.panel.states.saving)
+    expect(panelState({ ...IDLE_RECORDING_STATUS, paused: true }).label).toBe(t.panel.states.paused)
+    expect(errorHint('unknown_code')).toBe(t.panel.hints.default)
+    expect(document.querySelector('.rec-hero')?.classList.contains('tone-idle')).toBe(true)
+    expect(Array.from(document.querySelectorAll('.rec-chip')).map((el) => el.textContent)).toContain(t.panel.overlayOn)
+    expect(Array.from(document.querySelectorAll('.rec-tile dt')).map((el) => el.textContent))
+      .toEqual([t.panel.kills, t.panel.score, t.panel.match, t.panel.disk])
   })
 
   test('Named dialog traps focus and returns it to the trigger button after Esc closes it', async () => {

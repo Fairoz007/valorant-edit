@@ -81,6 +81,23 @@
     remake, a dodge, Riot Client unreachable (healthy and incomplete), Riot Client dropping out, and trim buy phase.
     Not yet checked on a real VALORANT recording. The OBS backend still records each match from INGAME.
 
+- **Recording UI**:
+  - Recording panel: a status header with a big state pill (Idle / Paused / Waiting for match / Recording match N /
+    Saving / Error, with a pulsing red dot while recording), elapsed time, and Capture-method and Overlay on/off chips.
+    It has stat tiles (kills this match, round score, match, disk left), one primary Start/Stop button plus Pause/Resume,
+    and an inline error banner with a fix hint and a link to Recording settings. Technical details are folded away.
+  - New status fields `inMatch` and `score` (Riot Client round results) feed it.
+  - Rail: the recording icon shows a pulsing red dot while recording, blue while starting or saving and amber after an
+    error, on every screen, with the state as its name.
+  - Settings → Recording is grouped into What to record (mode, trim buy phase, analysis), Auto montage, Capture,
+    In-game overlay (with a live preview card and a test button), Quality, Audio, and Storage and notifications.
+    Advanced rows are folded under "Advanced options".
+  - Library cards show the match result and score (W 13–9 / L 8–13, from the analysis rounds of single-match
+    recordings), kills, and a Montage badge.
+  - Onboarding has a new step explaining Windowed Fullscreen for the overlay, with an on/off choice.
+  - Before/after screenshots are in `docs/screenshots/` (`before-*` from `main`, `after-*` from this branch), taken
+    with `app/e2e/screenshots.spec.ts` (fake engine, E2E-only status hook `ADITOR_E2E_RECORDING_STATUS`).
+
 #### Known limitations
 
 - The pinned LGPL FFmpeg is a minimal build (no `xfade`, `fade`, `drawtext`, `amix`, `sidechaincompress`, `atempo`, `zoompan`).
@@ -108,6 +125,9 @@
 
 ### Fixed
 
+- The overlay preload no longer shares a module with the main preload. A shared chunk would be `require`d by the
+  sandboxed main preload, which cannot load it, so `window.api` disappeared. This came in with the overlay and was
+  caught by the e2e run before release; `overlay-preload.test.ts` guards it.
 - **Mouse stops working after a recording starts** (details in `docs/recording-mouse-input-fix.md`):
   - The game watcher no longer opens the game process. It used `process.kill(pid, 0)` every 3 s, which on Windows is
     `OpenProcess(PROCESS_TERMINATE | …)` on the Vanguard-protected VALORANT process; it now only asks `tasklist` by image name.

@@ -51,6 +51,14 @@ export const shellI18n: Messages['shellI18n'] = {
       fps: '帧率',
       bitrate: '码率（kbps）'
     },
+    overlay: {
+      title: '游戏内通知',
+      intro: 'Valorant Editor 会在游戏画面角落显示录制状态、击杀与保存通知。通知不会抢走鼠标或焦点，也不会出现在录像中。',
+      step1: '在 VALORANT 打开“设置 → 视频 → 常规”',
+      step2: '把“显示模式”设为“窗口化全屏”',
+      note: '使用独占“全屏”时无法在游戏上显示通知，通知会在离开游戏后改用 Windows 通知。',
+      toggle: '显示游戏内通知'
+    },
     done: {
       title: '都设置好了',
       summaryStorage: '储存位置：{dir}',

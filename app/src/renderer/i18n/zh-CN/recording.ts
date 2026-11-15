@@ -4,7 +4,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: '录制',
   card: '游戏录制',
-  cards: { basics: '基本', recorder: '录制器', video: '画面', audio: '音频', disk: '磁盘空间与通知', autoMontage: '自动精华视频' },
+  cards: { basics: '录什么', recorder: '捕获', video: '画质', audio: '音频', disk: '存储与通知', autoMontage: '自动精华视频' },
   advanced: '高级选项',
   current: '当前：{value}',
   fit: '适配',
@@ -214,5 +214,24 @@ export const recordingI18n: Messages['recordingI18n'] = {
     previewTitle: 'ACE',
     previewDetail: '第 7 回合',
     offHint: '开启“游戏内通知”后才能调整这些选项。'
+  },
+  panel: {
+    title: '录制器',
+    states: { idle: '待命', paused: '已暂停', starting: '启动中', waiting: '等待对局', recording: '录制中', recordingMatch: '录制中・第 {n} 局', obsWaiting: '等待对局（OBS）', detectionOnly: '仅实时检测', saving: '保存中', error: '错误' },
+    elapsed: '录制时间',
+    kills: '本局击杀',
+    score: '回合比分',
+    match: '对局',
+    disk: '磁盘剩余',
+    capture: '{method} 捕获',
+    overlayOn: '游戏内通知：开',
+    overlayOff: '游戏内通知：关',
+    pause: '暂停',
+    resume: '继续',
+    pauseHint: '暂停／继续自动录制',
+    details: '技术细节',
+    fixTitle: '解决方法',
+    hints: { no_hw_encoder: '更新显卡驱动，或在“设置 → 录制 → 画质”改用 H.264。', disk_full: '清理磁盘空间，或在“设置 → 常规 → 存储位置”改用其他磁盘。', audio_failed: '在“设置 → 录制 → 音频”重新选择设备，再点击“开始录制”。', restart_limit: '重新启动 Valorant Editor；若仍发生，请在“设置 → 录制 → 捕获”改用其他捕获方式。', finalize_failed: '录制片段已保留，下次启动时会自动重试保存。', default: '在“设置 → 录制”检查捕获与画质设置，然后再点击“开始录制”。' },
+    openSettings: '录制设置'
   }
 }

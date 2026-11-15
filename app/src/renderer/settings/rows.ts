@@ -132,6 +132,7 @@ const overlayRows = (): SettingRow[] => OVERLAY_FIELDS.map((field) => {
     desc: text.desc,
     keywords: ['recording', 'overlay', 'notification', 'in-game', 'VALORANT', field, recordingI18n.overlay.card],
     isNew: field === 'enabled' || undefined,
+    advanced: field === 'opacity' || undefined,
     control: { kind: 'overlay', field }
   }
 })
@@ -181,9 +182,11 @@ export const SETTING_ROWS: SettingRow[] = [
   // ── Recording ──
   ...recordingRows(rc.basics, ['autoRecord', 'mode', 'trimBuyPhase', 'postAnalysis']),
   ...autoMontageRows(),
+  // Capture: which recorder and how the screen is captured.
+  ...recordingRows(rc.recorder, ['backend', 'obsHost', 'obsPort', 'obsPassword', 'obsFallbackBuiltin', 'captureCursor', 'captureMethod', 'gpu']),
   ...overlayRows(),
-  ...recordingRows(rc.recorder, ['backend', 'obsHost', 'obsPort', 'obsPassword', 'obsFallbackBuiltin']),
-  ...recordingRows(rc.video, ['height', 'bitrateKbps', 'fps', 'forceAspect', 'aspectMode', 'codec', 'gpu', 'encoder', 'preset', 'captureMethod', 'captureCursor']),
+  // Quality: resolution, bitrate, frame rate, then format details under Advanced.
+  ...recordingRows(rc.video, ['height', 'bitrateKbps', 'fps', 'codec', 'encoder', 'preset', 'forceAspect', 'aspectMode']),
   ...recordingRows(rc.audio, ['systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono']),
   ...recordingRows(rc.disk, ['diskWarnGb', 'diskStopGb', 'notifyMatch', 'openOnGameExit']),
   // ── Import and analysis ──

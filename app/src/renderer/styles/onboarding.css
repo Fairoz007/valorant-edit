@@ -70,3 +70,9 @@
 @media (max-width: 640px) {
   .ob-grid, .ob-modes { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* In-game overlay step: the two VALORANT steps next to a preview card. */
+.ob-overlay { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+.ob-overlay .ob-next { flex: 1 1 220px; color: var(--text-1); }
+.ob-note { font-size: var(--fs-small); }
+.ob-check { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--text-1); }

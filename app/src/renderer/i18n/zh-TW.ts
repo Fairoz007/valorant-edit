@@ -106,6 +106,10 @@ const i18n = {
       cancel: '取消',
       removeFailed: '移除失敗，無法刪除來源影片檔案，請確認檔案權限或是否正被使用。',
       montageTag: '精華剪輯',
+      resultWin: '勝',
+      resultLoss: '敗',
+      resultDraw: '平',
+      resultLabel: '{result} {ally}–{enemy}',
       montageRemoveConfirm: '要從影片庫移除精華剪輯「{name}」嗎？剪輯檔案會保留在磁碟上，來源錄影與專案不受影響。',
       montageOpenFailed: '無法開啟這個精華剪輯的專案。'
     },
@@ -703,6 +707,14 @@ const shellI18n = {
       fps: '影格率',
       bitrate: '位元率（kbps）'
     },
+    overlay: {
+      title: '遊戲內通知',
+      intro: 'Valorant Editor 會在遊戲畫面角落顯示錄影狀態、擊殺與存檔通知。通知不會搶走滑鼠或焦點，也不會出現在錄影中。',
+      step1: '在 VALORANT 開啟「設定 → 影像 → 一般」',
+      step2: '把「顯示模式」設為「無邊框視窗」（Windowed Fullscreen）',
+      note: '使用獨佔「全螢幕」時無法在遊戲上顯示通知，通知會在離開遊戲後改用 Windows 通知。',
+      toggle: '顯示遊戲內通知'
+    },
     done: {
       title: '都設定好了',
       summaryStorage: '儲存位置：{dir}',
@@ -996,7 +1008,7 @@ const settingsI18n = {
 const recordingI18n = {
   title: '錄影',
   card: '遊戲錄影',
-  cards: { basics: '基本', recorder: '錄影器', video: '影像', audio: '音訊', disk: '磁碟空間與通知', autoMontage: '自動精華影片' },
+  cards: { basics: '錄什麼', recorder: '擷取', video: '畫質', audio: '音訊', disk: '儲存與通知', autoMontage: '自動精華影片' },
   advanced: '進階選項',
   current: '目前：{value}',
   fit: '適配',
@@ -1206,6 +1218,25 @@ const recordingI18n = {
     previewTitle: 'ACE',
     previewDetail: '第 7 回合',
     offHint: '開啟「遊戲內通知」後才能調整這些選項。'
+  },
+  panel: {
+    title: '錄影器',
+    states: { idle: '待命', paused: '已暫停', starting: '啟動中', waiting: '等待對局', recording: '錄影中', recordingMatch: '錄影中・第 {n} 局', obsWaiting: '等待對局（OBS）', detectionOnly: '僅即時偵測', saving: '儲存中', error: '錯誤' },
+    elapsed: '錄影時間',
+    kills: '本局擊殺',
+    score: '回合比分',
+    match: '對局',
+    disk: '磁碟剩餘',
+    capture: '{method} 擷取',
+    overlayOn: '遊戲內通知：開',
+    overlayOff: '遊戲內通知：關',
+    pause: '暫停',
+    resume: '繼續',
+    pauseHint: '暫停／繼續自動錄影',
+    details: '技術細節',
+    fixTitle: '解決方法',
+    hints: { no_hw_encoder: '更新顯示卡驅動，或在「設定 → 錄影 → 畫質」改用 H.264。', disk_full: '清出磁碟空間，或在「設定 → 一般 → 儲存位置」改用其他磁碟。', audio_failed: '在「設定 → 錄影 → 音訊」重新選擇裝置，再按「開始錄影」。', restart_limit: '重新啟動 Valorant Editor；若仍發生，請在「設定 → 錄影 → 擷取」改用其他擷取方式。', finalize_failed: '錄影段落已保留，下次啟動時會自動重試儲存。', default: '在「設定 → 錄影」檢查擷取與畫質設定，然後再按「開始錄影」。' },
+    openSettings: '錄影設定'
   }
 }
 

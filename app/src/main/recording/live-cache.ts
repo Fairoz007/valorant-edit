@@ -10,6 +10,7 @@
 import fs from 'fs'
 import path from 'path'
 import { countEvents, type Clip, type EngineEvent } from '../../shared/types'
+import { matchScore } from '../../shared/matchResult'
 import { mergeOnReanalyze } from '../../shared/clips'
 import { mergeSavedEvents } from '../../shared/events'
 import { DEFAULT_GAME, gameOf, gameProfileDir, type GameId } from '../../shared/games'
@@ -183,5 +184,5 @@ export async function writeLiveCache(dir: string, outputPath: string, deps: Reco
   // Keep the final read/merge/write/rename synchronous so main-process cache IPC cannot interleave it.
   const committed = commitLiveCache(cachePath, doc, !!options.overwriteLive)
   if (!committed) return null
-  return { counts: liveCounts(committed.events), durationSec: duration, codec, trusted: isTrusted(live), game }
+  return { counts: liveCounts(committed.events), durationSec: duration, codec, trusted: isTrusted(live), game, score: matchScore(doc.rounds as { ally: number; enemy: number }[] | undefined) }
 }

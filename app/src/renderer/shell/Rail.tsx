@@ -52,11 +52,14 @@ export function Rail({ active, projectCount, onNavigate, onShortcuts, onQueue, q
       <LogoMark className="logo" />
       {btn('library', t.library, t.library, <LayoutGrid className="ic lg" />)}
       {btn('studio', t.studio, t.studioLabel, <Film className="ic lg" />, projectCount)}
-      <button type="button" className="rail-btn" data-tip={recordingI18n.title}
-        aria-label={recordingPhase === 'recording' || recordingPhase === 'error' ? recordingI18n.phases[recordingPhase] : recordingI18n.title}
+      {/* Recording indicator, visible from every screen: pulsing while recording, blue while starting or saving, amber after an error. */}
+      <button type="button" className="rail-btn" data-tip={recordingPhase === 'idle' ? recordingI18n.title : recordingI18n.phases[recordingPhase]}
+        aria-label={recordingPhase === 'idle' ? recordingI18n.title : recordingI18n.phases[recordingPhase]}
         aria-haspopup="dialog" onClick={onRecording}>
         <Video className="ic lg" />
-        {(recordingPhase === 'recording' || recordingPhase === 'error') && <span className={`rec-dot${recordingPhase === 'error' ? ' error' : ''}`} aria-hidden="true" />}
+        {recordingPhase !== 'idle' && (
+          <span className={`rec-dot ${recordingPhase === 'recording' ? 'live' : recordingPhase === 'error' ? 'error' : 'busy'}`} aria-hidden="true" />
+        )}
       </button>
       <div className="rail-spacer" />
       {updateLabel !== null && (

@@ -27,18 +27,19 @@ describe('defaultDraft', () => {
       mode: DEFAULT_RECORDING_SETTINGS.mode,
       height: 1080,
       fps: 60,
-      bitrateKbps: 10_000
+      bitrateKbps: 10_000,
+      overlay: true
     })
   })
 })
 
 describe('Submitted settings', () => {
-  test('Completion writes storageRoot, onboardingDone, and four recording fields in one update', () => {
-    const draft = { storageRoot: 'E:/Apex', mode: 'match' as const, height: 1440 as const, fps: 120 as const, bitrateKbps: 30_000 }
+  test('Completion writes storageRoot, onboardingDone, the four recording fields and the overlay choice in one update', () => {
+    const draft = { storageRoot: 'E:/Apex', mode: 'match' as const, height: 1440 as const, fps: 120 as const, bitrateKbps: 30_000, overlay: false }
     expect(buildFinishPatch(draft)).toEqual({
       storageRoot: 'E:/Apex',
       onboardingDone: true,
-      recording: { mode: 'match', height: 1440, fps: 120, bitrateKbps: 30_000 }
+      recording: { mode: 'match', height: 1440, fps: 120, bitrateKbps: 30_000, overlay: { enabled: false } }
     })
   })
   test('Completion omits storageRoot when the suggested location is still empty', () => {

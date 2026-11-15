@@ -107,6 +107,10 @@ export const i18n: Messages['i18n'] = {
       cancel: '取消',
       removeFailed: '移除失败，无法删除源视频文件，请检查文件权限或是否正在使用。',
       montageTag: '精华剪辑',
+      resultWin: '胜',
+      resultLoss: '负',
+      resultDraw: '平',
+      resultLabel: '{result} {ally}–{enemy}',
       montageRemoveConfirm: '要从视频库移除精华剪辑“{name}”吗？剪辑文件会保留在磁盘上，源录像和项目不受影响。',
       montageOpenFailed: '无法打开这个精华剪辑的项目。'
     },

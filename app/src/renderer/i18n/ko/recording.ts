@@ -4,7 +4,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: '녹화',
   card: '게임 녹화',
-  cards: { basics: '기본', recorder: '녹화기', video: '영상', audio: '오디오', disk: '디스크 공간과 알림', autoMontage: '자동 몽타주' },
+  cards: { basics: '녹화할 내용', recorder: '캡처', video: '화질', audio: '오디오', disk: '저장 및 알림', autoMontage: '자동 몽타주' },
   advanced: '고급 옵션',
   current: '현재: {value}',
   fit: '맞춤',
@@ -214,5 +214,24 @@ export const recordingI18n: Messages['recordingI18n'] = {
     previewTitle: 'ACE',
     previewDetail: '7라운드',
     offHint: '게임 내 오버레이를 켜야 이 옵션을 변경할 수 있습니다.'
+  },
+  panel: {
+    title: '녹화기',
+    states: { idle: '대기 중', paused: '일시 중지됨', starting: '시작 중', waiting: '매치 대기 중', recording: '녹화 중', recordingMatch: '{n}번째 매치 녹화 중', obsWaiting: '매치 대기 중(OBS)', detectionOnly: '실시간 감지만', saving: '저장 중', error: '오류' },
+    elapsed: '경과 시간',
+    kills: '이번 매치 킬',
+    score: '라운드 점수',
+    match: '매치',
+    disk: '남은 디스크',
+    capture: '{method} 캡처',
+    overlayOn: '오버레이 켜짐',
+    overlayOff: '오버레이 꺼짐',
+    pause: '일시 중지',
+    resume: '재개',
+    pauseHint: '자동 녹화 일시 중지/재개',
+    details: '기술 세부 정보',
+    fixTitle: '해결 방법',
+    hints: { no_hw_encoder: '그래픽 드라이버를 업데이트하거나 「설정 → 녹화 → 화질」에서 H.264를 선택하세요.', disk_full: '디스크 공간을 확보하거나 「설정 → 일반 → 저장 위치」에서 다른 드라이브를 선택하세요.', audio_failed: '「설정 → 녹화 → 오디오」에서 장치를 다시 선택한 뒤 「시작」을 누르세요.', restart_limit: 'Valorant Editor를 다시 시작하세요. 다시 발생하면 「설정 → 녹화 → 캡처」에서 다른 캡처 방식을 선택하세요.', finalize_failed: '녹화 세그먼트는 보존되었습니다. 다음 실행 시 저장을 자동으로 다시 시도합니다.', default: '「설정 → 녹화」에서 캡처와 화질 설정을 확인한 뒤 「시작」을 누르세요.' },
+    openSettings: '녹화 설정'
   }
 }

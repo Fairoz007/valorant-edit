@@ -3,6 +3,7 @@ import { EngineClient, EngineError } from './engine'
 import { tr } from '../shared/locale'
 import { Library, normalizePath } from './library'
 import { CacheDoc, countEvents } from '../shared/types'
+import { matchScore } from '../shared/matchResult'
 import { cacheFilePath, loadCacheDoc } from './cache-io'
 import { PRODUCT_GAME, gameOf } from '../shared/games'
 import type { QueuePayload, QueueSnapshot } from '../shared/queueState'
@@ -245,6 +246,7 @@ export class AnalysisQueue extends EventEmitter {
         progress: 1,
         analyzingSince: undefined,
         counts: countEvents(doc.events || []),
+        score: matchScore(doc.rounds) ?? undefined,
         game: gameOf(doc.game),
         durationSec: duration,
         // A failed generation keeps the thumbnail the entry already has.

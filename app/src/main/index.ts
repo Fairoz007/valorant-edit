@@ -12,7 +12,7 @@ import { WatchManager } from './watch'
 import { ProjectStore } from './projects'
 import { registerIpcHandlers } from './ipc-handlers'
 import { createCloseGate } from './project-ipc'
-import { currentE2EConfig } from './e2e'
+import { currentE2EConfig, withStatusPatch } from './e2e'
 import { applyWindowSecurity } from './window-security'
 import { applyAppUserModelId } from './app-identity'
 import { sanitizeAnalyzeArgs, sanitizeAutoclipArgs, sanitizeProbeArgs } from './ipc-guards'
@@ -420,19 +420,21 @@ async function initEngineAndServices(): Promise<void> {
     // Live cache is already done, so the library entry can open immediately; if full analysis is queued next, the queue returns it to pending and replaces it when complete.
     onLiveAnalysis: (videoPath, summary) => {
       if (summary.trusted) toOverlay({ type: 'analysis', kills: summary.counts.kill ?? null })
-      if (library!.update(videoPath, { status: 'done', progress: 1, counts: summary.counts, game: summary.game, durationSec: summary.durationSec, codec: summary.codec || undefined, hl: undefined })) pushLibrary()
+      if (library!.update(videoPath, { status: 'done', progress: 1, counts: summary.counts, score: summary.score ?? undefined, game: summary.game, durationSec: summary.durationSec, codec: summary.codec || undefined, hl: undefined })) pushLibrary()
       void generateThumbnail(videoPath, summary.durationSec).then((thumb) => {
         if (!thumb || library!.get(videoPath)?.status !== 'done') return
         if (library!.update(videoPath, { thumb })) pushLibrary()
       }, (error) => console.error('Failed to generate recording thumbnail:', error))
     }
   })
-  unregisterRecordingIpc = registerRecordingIpc(recordingService, () => BrowserWindow.getAllWindows())
+  // E2E screenshots only (ADITOR_E2E_RECORDING_STATUS): the UI sees a fixed live status; production passes the service as is.
+  const uiRecording = e2e?.recordingStatus ? withStatusPatch(recordingService, e2e.recordingStatus) : recordingService
+  unregisterRecordingIpc = registerRecordingIpc(uiRecording, () => BrowserWindow.getAllWindows())
   const unsubscribeOverlayStatus = recordingService.onStatus((status) => toOverlay({ type: 'status', status }))
   toOverlay({ type: 'status', status: recordingService.status() })
   const unsubscribeOverlayLive = recordingService.onLive?.((update) => toOverlay({ type: 'live', update })) ?? (() => {})
   tray = createRecordingTray({
-    service: recordingService,
+    service: uiRecording,
     iconDir: join(app.isPackaged ? process.resourcesPath : resolve(__dirname, '../..'), 'resources'),
     openWindow: () => showMainWindow(true),
     quit: () => app.quit(),
