@@ -43,6 +43,7 @@ const messages: MessageTable = {
   'OpenH264 檔案雜湊校驗失敗，已拒絕使用': 'OpenH264 文件哈希校验失败，已拒绝使用',
   '無法更新開機啟動設定：{error}': '无法更新开机启动设置：{error}',
   'Valorant Editor {version} 有新版本可用，可在設定中選擇「下載更新」。': 'Valorant Editor {version} 有新版本可用，可在设置中选择“下载更新”。',
+  '無效的精華合輯工作 id': '无效的精华合辑任务 id',
   '影片路徑不正確': '视频路径不正确',
   'OpenH264 正在下載中': 'OpenH264 正在下载中',
   '無效的專案 id：{id}': '无效的项目 id：{id}',
