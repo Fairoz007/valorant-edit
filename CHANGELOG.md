@@ -70,6 +70,13 @@
 
 ### Fixed
 
+- **A Sage resurrect of the player is no longer counted as a death** (`valorant-feed@11`, so cached analyses are redone).
+  Measured on 6 newly labelled 960×720 30 fps clips (21 events, ±1 s):
+  - before: 17 correct / 2 false / 4 missed;
+  - after: 18 / 1 / 3. Deaths are 12/12 at precision 1.0.
+  The remaining misses are long kill rows wider than the kill-feed crop, so the killer-side chevron is cut off; a wider
+  capture area is not part of this change. The 720p reference clip's fixtures still pass; the clip itself was not re-run.
+- **Recorder test fixtures** (`init-*.mp4`) are committed with their generator, so the recorder tests run on a clean checkout.
 - **Windows build and tests:**
   - `scripts\build.ps1` / `test.ps1` find `vcvars64.bat` when `vswhere` lists no Visual Studio, and print which one they use.
   - Engine debug builds and tests find the pinned FFmpeg in `build\ffmpeg` without it being on PATH.
