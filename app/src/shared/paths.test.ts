@@ -14,12 +14,14 @@ describe('chromiumUserDataDir', () => {
   })
 })
 
+const ENGINE = `aditor${process.platform === 'win32' ? '.exe' : ''}`
+
 describe('liveEngineCommand', () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
   it('falls back to the debug engine', () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(false)
-    expect(engineCommand(false).command).toBe(path.join(root, 'engine/target/debug/aditor.exe'))
+    expect(engineCommand(false).command).toBe(path.join(root, `engine/target/debug/${ENGINE}`))
   })
   const root = path.resolve(__dirname, '../../..')
   const resources = process as unknown as { resourcesPath?: string }
@@ -31,9 +33,9 @@ describe('liveEngineCommand', () => {
 
   it('Development: prefers release and shares the executable with live', () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(true)
-    expect(engineCommand(false)).toEqual({ command: path.join(root, 'engine/target/release/aditor.exe'), args: ['ipc'] })
+    expect(engineCommand(false)).toEqual({ command: path.join(root, `engine/target/release/${ENGINE}`), args: ['ipc'] })
     expect(liveEngineCommand(false)).toEqual({
-      command: path.join(root, 'engine/target/release/aditor.exe'), args: ['live']
+      command: path.join(root, `engine/target/release/${ENGINE}`), args: ['live']
     })
     expect(sceneDir(false)).toBe(path.join(root, 'templates/scene'))
   })

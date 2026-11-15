@@ -1,7 +1,7 @@
 import React from 'react'
 import { Search, Star } from '../components/icons'
 import type { LibraryGame, LibraryKind } from '../lib/libraryFilter'
-import { GAMES, GAME_IDS, type GameId } from '../../shared/games'
+import { GAMES, SUPPORTED_GAME_IDS, type GameId } from '../../shared/games'
 import { i18n } from '../i18n'
 
 const t = i18n.library
@@ -86,9 +86,9 @@ export function LibraryToolbar({
       {chip('recording', t.chips.recording)}
       {chip('external', t.chips.external)}
       {chip('hl', t.chips.hl, <span className="lib-pill accent lib-slant">{t.chips.isNew}</span>)}
-      <span className="sep" />
-      <span className="lib-game-group" role="group" aria-label={t.gameFilter}>
-        {GAME_IDS.map((id) => (
+      {SUPPORTED_GAME_IDS.length > 1 && <span className="sep" />}
+      {SUPPORTED_GAME_IDS.length > 1 && <span className="lib-game-group" role="group" aria-label={t.gameFilter}>
+        {SUPPORTED_GAME_IDS.map((id) => (
           <button
             key={id}
             type="button"
@@ -101,7 +101,7 @@ export function LibraryToolbar({
             <span className="n">{counts[id]}</span>
           </button>
         ))}
-      </span>
+      </span>}
     </div>
   )
 }

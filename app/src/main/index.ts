@@ -159,6 +159,10 @@ async function initEngineAndServices(): Promise<void> {
     process.env.ADITOR_FFMPEG = ffmpegPath
     const binDir = resolve(join(ffmpegPath, '..'))
     process.env.PATH = `${binDir}${delimiter}${process.env.PATH || ''}`
+  } else if (!process.env.ADITOR_FFMPEG) {
+    // Development: use FFmpeg staged in build/ffmpeg/bin when present (engine, thumbnails, keyframe probes and export).
+    const devFfmpeg = ffmpegExecutable(false)
+    if (devFfmpeg !== 'ffmpeg') process.env.ADITOR_FFMPEG = devFfmpeg
   }
 
   const cmd = e2e?.fakeEngine ?? engineCommand(app.isPackaged)

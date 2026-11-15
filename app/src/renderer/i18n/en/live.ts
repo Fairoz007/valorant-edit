@@ -23,7 +23,7 @@ export const liveI18n: Messages['liveI18n'] = {
   matchOngoing: 'In progress',
   released: 'Footage older than 30 minutes has been cleared from memory. You can watch it in Studio after finalizing.',
   events: 'Live events',
-  noEvents: 'No events yet. Knockdowns and eliminations will appear here as they are detected.',
+  noEvents: 'No events yet. Kills and deaths will appear here as they are detected.',
   eventItem: '{type} · {time}',
   uncounted: ' (not counted)',
   newKill: 'New event: {type} · {time}',

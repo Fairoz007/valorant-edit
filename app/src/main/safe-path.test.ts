@@ -24,7 +24,7 @@ describe('isSafeLocalVideoPath', () => {
     expect(isSafeLocalVideoPath('a.mp4')).toBe(false)
     expect(isSafeLocalVideoPath('..\\a.mp4')).toBe(false)
     expect(isSafeLocalVideoPath('C:a.mp4')).toBe(false)
-    expect(isSafeLocalVideoPath('/a.mp4')).toBe(false)
+    expect(isSafeLocalVideoPath('/a.mp4', 'win32')).toBe(false)
   })
   test('rejects wrong extension and NUL bytes', () => {
     expect(isSafeLocalVideoPath('C:\\a.txt')).toBe(false)
@@ -59,5 +59,24 @@ describe('fileExistsSafe', () => {
     expect(called).toBe(0)
     expect(await fileExistsSafe('C:\\ok.mp4', stat)).toBe(false) // A stat error returns false.
     expect(called).toBe(1)
+  })
+})
+
+describe('isSafeLocalVideoPath per platform', () => {
+  test('Windows needs a drive letter and rejects POSIX and UNC paths', () => {
+    expect(isSafeLocalVideoPath('D:\\Videos\\match.mp4', 'win32')).toBe(true)
+    expect(isSafeLocalVideoPath('/Users/me/match.mp4', 'win32')).toBe(false)
+    expect(isSafeLocalVideoPath('\\\\server\\share\\match.mp4', 'win32')).toBe(false)
+  })
+
+  test('macOS/Linux accept absolute POSIX paths with allowed extensions only', () => {
+    expect(isSafeLocalVideoPath('/Users/me/Movies/Valorant Ranked Match.mp4', 'darwin')).toBe(true)
+    expect(isSafeLocalVideoPath('/home/me/clip.MKV', 'linux')).toBe(true)
+    expect(isSafeLocalVideoPath('relative/match.mp4', 'darwin')).toBe(false)
+    expect(isSafeLocalVideoPath('//server/share/match.mp4', 'darwin')).toBe(false)
+    expect(isSafeLocalVideoPath('/Users/me/notes.txt', 'darwin')).toBe(false)
+    expect(isSafeLocalVideoPath('/Users/me/a\\b.mp4', 'darwin')).toBe(false)
+    // Drive-letter paths keep their original behavior on every platform.
+    expect(isSafeLocalVideoPath('D:/Videos/match.mp4', 'darwin')).toBe(true)
   })
 })

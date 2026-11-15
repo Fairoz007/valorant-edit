@@ -4,7 +4,7 @@ import { tr } from '../shared/locale'
 import { Library, normalizePath } from './library'
 import { CacheDoc, countEvents } from '../shared/types'
 import { cacheFilePath, loadCacheDoc } from './cache-io'
-import { gameOf } from '../shared/games'
+import { PRODUCT_GAME, gameOf } from '../shared/games'
 import type { QueuePayload, QueueSnapshot } from '../shared/queueState'
 import { analyzeSettingArgs, AnalyzeSettings } from './settings-derived'
 import { capturePriorCache, preserveClipsAfterReanalysis } from './reanalysis'
@@ -196,8 +196,8 @@ export class AnalysisQueue extends EventEmitter {
           cache_dir: this.opts.cacheDir,
           hwaccel: extra.hwaccel,
           beside: extra.beside,
-          // A game the user chose, or one recognised before; absent means the engine recognises it.
-          game: this.library.get(videoPath)?.game,
+          // Valorant Editor analyzes every video as VALORANT, so the engine never has to guess (and reject) the game.
+          game: PRODUCT_GAME,
           ...(force ? { force: true } : {})
         },
         (progress) => {

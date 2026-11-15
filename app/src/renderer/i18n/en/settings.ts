@@ -220,8 +220,8 @@ export const settingsI18n: Messages['settingsI18n'] = {
     },
     trademark: {
       title: 'Trademark notice',
-      desc: 'Apex Legends is a trademark of Electronic Arts / Respawn. This project is not affiliated with EA or Respawn.',
-      keywords: ['trademark', 'apex legends', 'ea', 'respawn', 'notice']
+      desc: 'VALORANT is a trademark of Riot Games, Inc. Valorant Editor is not affiliated with or endorsed by Riot Games.',
+      keywords: ['trademark', 'valorant', 'riot games', 'notice']
     }
   }
 }

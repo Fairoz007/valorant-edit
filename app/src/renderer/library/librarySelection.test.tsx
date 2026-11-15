@@ -131,13 +131,13 @@ describe('library selection mode', () => {
   })
 
   test('entries hidden by a filter leave the selection, so Delete never removes unseen videos', async () => {
-    const { container, fake } = await setup()
+    const { container, fake } = await setup({ recordings: ['b'] })
     click(checkbox(container, 'a'))
     click(checkbox(container, 'b'))
     expect(count(container)).toBe('2')
 
-    // Only the finished legacy entry "a" counts as Apex; pending "b" has no game yet and is filtered out.
-    click(Array.from(container.querySelectorAll<HTMLButtonElement>('.lib-chip')).find((b) => b.textContent?.includes('Apex Legends'))!)
+    // The Imported filter hides recording "b".
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('.lib-chip')).find((b) => b.textContent?.startsWith(i18n.library.chips.external))!)
     await flush()
     expect(count(container)).toBe('1')
 

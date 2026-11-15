@@ -192,7 +192,7 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
       options = [{ value: 'speed', label: t.speed }, { value: 'balanced', label: t.balanced }, { value: 'quality', label: t.quality }]
       break
     case 'captureMethod':
-      options = [{ value: 'auto', label: t.captureAuto }, { value: 'wgc', label: t.captureWgc }, { value: 'dda', label: t.captureDda }, { value: 'hook', label: t.captureHook }]
+      options = [{ value: 'auto', label: t.captureAuto }, { value: 'wgc', label: t.captureWgc }, { value: 'dda', label: t.captureDda }]
       break
     case 'postAnalysis':
       options = [{ value: 'none', label: t.analysisNone }, { value: 'afterExit', label: t.analysisAfterExit }, { value: 'perMatch', label: t.analysisPerMatch }]

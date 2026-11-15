@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { GAMES, GAME_IDS, type GameId } from '../../shared/games'
+import { GAMES, GAME_IDS, SUPPORTED_GAME_IDS, type GameId } from '../../shared/games'
 
 export interface GameProcess {
   game: GameId
@@ -42,17 +42,26 @@ function runTasklist(game: GameId): Promise<GameProcess | null> {
     execFile('tasklist', ['/FO', 'CSV', '/NH', '/FI', `IMAGENAME eq ${GAMES[game].tasklistImageFilter}`],
       { windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
         if (error) reject(error)
-        else resolve(parseGameProcess(stdout))
+        else {
+          // Only accept the queried game, even if the filtered output somehow lists another one.
+          const found = parseGameProcess(stdout)
+          resolve(found?.game === game ? found : null)
+        }
       })
   })
 }
 
 /**
- * One `tasklist` at a time, in GAME_IDS priority order. Spawning one per game concurrently made
+ * One `tasklist` at a time, in SUPPORTED_GAME_IDS priority order. Spawning one per game concurrently made
  * tasklist fail with 0xC0000142 (DLL initialization failed) on several machines since v0.4.5.
  */
-export async function findGameProcess(): Promise<GameProcess | null> {
-  for (const game of GAME_IDS) {
+export async function findGameProcess(
+  games: readonly GameId[] = SUPPORTED_GAME_IDS,
+  platform: NodeJS.Platform = process.platform
+): Promise<GameProcess | null> {
+  // Process detection uses Windows `tasklist`; recording is Windows-only, so other platforms never see a running game.
+  if (platform !== 'win32') return null
+  for (const game of games) {
     const match = await queryGame(game)
     if (match) return match
   }

@@ -167,6 +167,14 @@ impl FeedDetector {
                 continue;
             }
             let cols = self.outline(&outline, k, x, x + w, death);
+            // Compressed or upscaled footage (e.g. 720p uploads) blurs the thin yellow row border away or leaves only part
+            // of it, and shrinks the chevron below the size the rules further down expect. Accept a solid yellow chevron at
+            // the row's outer end when the player's half of the row next to it is ally teal, which is what marks the local
+            // player's own kill (left end) or death (right end).
+            if self.lone_chevron(hsv, gray, k, x, y, w, h, area, death) {
+                sides.entry(k).or_default().insert(death);
+                continue;
+            }
             if !death
                 && (area as f64) < 0.45 * (w * h) as f64
                 && self.outline(&raw, k, x, x + w, death) < 40
@@ -187,6 +195,54 @@ impl FeedDetector {
             sides.entry(k).or_default().insert(death);
         }
         Ok(sides)
+    }
+    /// A solid yellow chevron at the outer end of feed row `k`, with ally teal on the player's side next to it.
+    #[allow(clippy::too_many_arguments)]
+    fn lone_chevron(
+        &self,
+        hsv: &Image<u8>,
+        gray: &Image<u8>,
+        k: usize,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        area: i32,
+        death: bool,
+    ) -> bool {
+        let (b0, b1) = self.band(k);
+        if !(10..=26).contains(&w)
+            || !(18..=34).contains(&h)
+            || (area as f64) < 0.35 * (w * h) as f64
+            || y < b0 - 4
+            || y + h > b1 + 4
+            || self.edge(gray, k) < 45.
+        {
+            return false;
+        }
+        // Kill: chevron left of the killer portrait (player name on teal further right). Death: chevron right of the
+        // victim portrait, so only the narrow name strip just left of the portrait is the player's teal (short names
+        // such as "Me" leave little teal before the killer's red half).
+        let (a, b) = if death {
+            ((x - 95).max(0), (x - 58).max(0))
+        } else if x + w + 150 < self.right - 140 {
+            (x + w + 60, x + w + 150)
+        } else {
+            return false;
+        };
+        let region = crop(hsv, a, b0 + 5, b, b1 - 5);
+        if region.data.is_empty() {
+            return false;
+        }
+        let teal = region
+            .data
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .filter(|p| (55..=100).contains(&p[0]) && p[1] >= 25 && p[2] >= 110)
+            .count() as f64
+            / (region.width * region.height) as f64;
+        teal >= 0.40
     }
     fn chevrons(
         &self,

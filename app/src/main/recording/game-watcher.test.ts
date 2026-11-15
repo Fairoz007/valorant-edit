@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GAME_IDS } from '../../shared/games'
 import { createGameProcessFinder, findGameProcess, GAME_PROCESS_RECHECK_POLLS, GameWatcher, parseGameProcess, sameProcess } from './game-watcher'
 
 const tasklist = vi.hoisted(() => vi.fn<(file: string, args: string[], options: unknown, callback: (error: Error | null, stdout: string) => void) => void>())
@@ -14,7 +15,7 @@ describe('Filtered game process queries', () => {
 
   it('queries games one at a time with their image filters and preserves execution limits', async () => {
     tasklist.mockImplementation((_file, _args, _options, callback) => callback(null, ''))
-    await expect(findGameProcess()).resolves.toBeNull()
+    await expect(findGameProcess(GAME_IDS, 'win32')).resolves.toBeNull()
     const options = { windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024 }
     expect(tasklist.mock.calls).toEqual([
       ['tasklist', ['/FO', 'CSV', '/NH', '/FI', 'IMAGENAME eq r5apex*'], options, expect.any(Function)],
@@ -22,8 +23,17 @@ describe('Filtered game process queries', () => {
     ])
   })
 
+  it('by default detects only VALORANT, and never queries off Windows', async () => {
+    tasklist.mockImplementation((_file, _args, _options, callback) => callback(null, '"r5apex.exe","123"'))
+    await expect(findGameProcess(undefined, 'win32')).resolves.toBeNull()
+    expect(tasklist.mock.calls.map((call) => call[1].at(-1))).toEqual(['IMAGENAME eq VALORANT-Win64-Shipping.exe'])
+    tasklist.mockClear()
+    await expect(findGameProcess(undefined, 'darwin')).resolves.toBeNull()
+    expect(tasklist).not.toHaveBeenCalled()
+  })
+
   it('never runs two tasklist processes at once', async () => {
-    const pending = findGameProcess()
+    const pending = findGameProcess(GAME_IDS, 'win32')
     expect(tasklist).toHaveBeenCalledTimes(1)
     tasklist.mock.calls[0][3](null, '')
     await vi.waitFor(() => expect(tasklist).toHaveBeenCalledTimes(2))
@@ -33,7 +43,7 @@ describe('Filtered game process queries', () => {
 
   it('stops after the first matching game', async () => {
     tasklist.mockImplementation((_file, _args, _options, callback) => callback(null, '"r5apex_dx12.exe","123"'))
-    await expect(findGameProcess()).resolves.toEqual({ game: 'apex', pid: 123 })
+    await expect(findGameProcess(GAME_IDS, 'win32')).resolves.toEqual({ game: 'apex', pid: 123 })
     expect(tasklist).toHaveBeenCalledTimes(1)
   })
 
@@ -41,7 +51,7 @@ describe('Filtered game process queries', () => {
     tasklist
       .mockImplementationOnce((_file, _args, _options, callback) => callback(null, 'INFO: 沒有符合指定準則的工作。\r\n"r5apex_launcher.exe","55"'))
       .mockImplementationOnce((_file, _args, _options, callback) => callback(null, '"VALORANT-Win64-Shipping.exe","456"'))
-    await expect(findGameProcess()).resolves.toEqual({ game: 'valorant', pid: 456 })
+    await expect(findGameProcess(GAME_IDS, 'win32')).resolves.toEqual({ game: 'valorant', pid: 456 })
   })
 
   it('rejects when a query fails, so a failed query is never read as "no game"', async () => {
@@ -49,7 +59,7 @@ describe('Filtered game process queries', () => {
     tasklist
       .mockImplementationOnce((_file, _args, _options, callback) => callback(null, ''))
       .mockImplementationOnce((_file, _args, _options, callback) => callback(error, ''))
-    await expect(findGameProcess()).rejects.toBe(error)
+    await expect(findGameProcess(GAME_IDS, 'win32')).rejects.toBe(error)
   })
 
   it.each([0xC0000142, 0x40010004])('retries a query once when tasklist exits with transient code %i, and rejects if it fails again', async (code) => {
@@ -58,14 +68,14 @@ describe('Filtered game process queries', () => {
     tasklist
       .mockImplementationOnce((_file, _args, _options, callback) => callback(dllInit, ''))
       .mockImplementationOnce((_file, _args, _options, callback) => callback(null, '"r5apex.exe","77"'))
-    const found = findGameProcess()
+    const found = findGameProcess(GAME_IDS, 'win32')
     await vi.runAllTimersAsync()
     await expect(found).resolves.toEqual({ game: 'apex', pid: 77 })
     expect(tasklist).toHaveBeenCalledTimes(2)
 
     tasklist.mockReset()
     tasklist.mockImplementation((_file, _args, _options, callback) => callback(dllInit, ''))
-    const failed = findGameProcess()
+    const failed = findGameProcess(GAME_IDS, 'win32')
     const assertion = expect(failed).rejects.toBe(dllInit)
     await vi.runAllTimersAsync()
     await assertion

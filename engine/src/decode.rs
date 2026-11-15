@@ -27,8 +27,12 @@ impl fmt::Display for DecodeError {
     }
 }
 impl std::error::Error for DecodeError {}
+/// The D3D11VA zero-copy path is Windows-only; elsewhere `-hwaccel auto` (VideoToolbox on macOS, CUDA/VAAPI on Linux)
+/// decodes on the GPU and hands frames to the software crop filters.
 pub fn is_gpu_path(codec: Option<&str>, hwaccel: bool) -> bool {
-    hwaccel && codec.is_some_and(|c| ["av1", "h264", "hevc", "vp9"].contains(&c))
+    hwaccel
+        && cfg!(windows)
+        && codec.is_some_and(|c| ["av1", "h264", "hevc", "vp9"].contains(&c))
 }
 pub fn build_input_args(codec: Option<&str>, hwaccel: bool, start: f64) -> Vec<String> {
     let mut args: Vec<String> = [

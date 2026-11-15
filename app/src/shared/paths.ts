@@ -53,11 +53,21 @@ export function engineCommand(isPackaged: boolean): {
   }
 
   const root = path.resolve(__dirname, '../../..')
-  const release = path.join(root, 'engine', 'target', 'release', 'aditor.exe')
+  const exe = `aditor${EXE_SUFFIX}`
+  const release = path.join(root, 'engine', 'target', 'release', exe)
   return {
-    command: fs.existsSync(release) ? release : path.join(root, 'engine', 'target', 'debug', 'aditor.exe'),
+    command: fs.existsSync(release) ? release : path.join(root, 'engine', 'target', 'debug', exe),
     args: ['ipc']
   }
+}
+
+/** `.exe` on Windows, nothing elsewhere (development builds on macOS/Linux). */
+const EXE_SUFFIX = process.platform === 'win32' ? '.exe' : ''
+
+/** FFmpeg staged in the repo's `build/ffmpeg/bin` (by fetch-ffmpeg.ps1 on Windows, or manually on macOS), if present. */
+function devFfmpegExecutable(root: string): string | null {
+  const candidate = path.join(root, 'build', 'ffmpeg', 'bin', `ffmpeg${EXE_SUFFIX}`)
+  return fs.existsSync(candidate) ? candidate : null
 }
 
 /** Match-scene templates (`templates/scene`, live engine `--scene-dir`); location follows the same rule as `profileDir`. */
@@ -131,6 +141,6 @@ export function ffmpegExecutable(isPackaged: boolean): string {
     const exe = path.join(resPath, 'ffmpeg', 'bin', 'ffmpeg.exe')
     return exe
   }
-  return 'ffmpeg'
+  return devFfmpegExecutable(path.resolve(__dirname, '../../..')) ?? 'ffmpeg'
 }
 

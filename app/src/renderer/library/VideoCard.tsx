@@ -10,7 +10,7 @@ import { nextTrapIndex } from '../a11y/focusTrap'
 import { rovingStep } from '../a11y/roving'
 import { AlertTriangle, Check, ImageOff, MoreHorizontal, RefreshCw, Scissors, Star, Trash2 } from '../components/icons'
 import { cardStatusText, fileName, thumbnailUrl } from './cardLogic'
-import { GAMES, GAME_IDS, gameOf, type GameId } from '../../shared/games'
+import { GAMES, SUPPORTED_GAME_IDS, gameOf, type GameId } from '../../shared/games'
 import { entryGame } from '../lib/libraryFilter'
 
 export { fileName } from './cardLogic'
@@ -98,7 +98,8 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
   const done = entry.status === 'done'
   const error = entry.status === 'error'
   const unknownGame = error && entry.errorCode === 'unknown_game'
-  const gameTag = entryGame(entry)
+  // With a single supported game (VALORANT) every card would carry the same tag, so it is only shown for multiple games.
+  const gameTag = SUPPORTED_GAME_IDS.length > 1 ? entryGame(entry) : null
   // Waiting refers only to main's real queue; pending items not in the queue (imported but not queued, or canceled) are not analyzed yet.
   const queueState = useQueueItemState(entry.path)
   const notQueued = entry.status === 'pending' && queueState === 'idle'
@@ -327,7 +328,7 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
       {!selectionMode && error && (
         <div className="vcard-error-actions">
           {unknownGame && onSetGame ? (
-            GAME_IDS.map((game) => (
+            SUPPORTED_GAME_IDS.map((game) => (
               <button key={game} type="button" className="lib-btn sm primary" tabIndex={tab} onClick={() => onSetGame(entry.path, game)}>
                 {GAMES[game].displayName}
               </button>
@@ -374,7 +375,7 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
                   {t.reanalyze}
                 </button>
               )}
-              {(done || error) && onSetGame && !unknownGame && GAME_IDS.filter((game) => game !== gameOf(entry.game)).map((game) => (
+              {(done || error) && onSetGame && !unknownGame && SUPPORTED_GAME_IDS.filter((game) => game !== gameOf(entry.game)).map((game) => (
                 <button
                   key={game}
                   type="button"

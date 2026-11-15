@@ -6,7 +6,7 @@ import { LibraryToolbar } from './LibraryToolbar'
 import { QueueStrip } from './QueueStrip'
 import { VideoCard, fileName } from './VideoCard'
 import { RemoveChoiceDialog } from './RemoveChoiceDialog'
-import { GAME_IDS, type GameId } from '../../shared/games'
+import { SUPPORTED_GAME_IDS, type GameId } from '../../shared/games'
 import { resolveCardActivation, resolveLibraryEscape } from './cardLogic'
 import { VirtualGrid } from './VirtualGrid'
 import { isAllSelected, pruneSelection, selectAll, toggleGroup, toggleOne } from './selection'
@@ -123,7 +123,7 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
   const counts = useMemo(() => {
     const base = { query: '', favoriteOnly: false, kind: 'all' as const, game: 'all' as const }
     const gameCounts = Object.fromEntries(
-      GAME_IDS.map((id) => [id, filterEntries(entries, { ...base, game: id }).length])
+      SUPPORTED_GAME_IDS.map((id) => [id, filterEntries(entries, { ...base, game: id }).length])
     ) as Record<GameId, number>
     return {
       all: entries.length,

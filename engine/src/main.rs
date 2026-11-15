@@ -49,6 +49,11 @@ fn run(cmd: aditor::cli::Command) -> anyhow::Result<()> {
         return aditor::ipc::run();
     }
     let value = |key: &str| cmd.options.get(key).and_then(|v| v.as_deref());
+    #[cfg(not(windows))]
+    if cmd.name == "live" {
+        anyhow::bail!("live analysis needs Windows shared memory and is not available on this platform");
+    }
+    #[cfg(windows)]
     if cmd.name == "live" {
         std::process::exit(aditor::live::run(
             value("--shm").unwrap(),

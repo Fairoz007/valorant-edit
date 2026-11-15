@@ -474,6 +474,8 @@ export class RecordingSessionService implements RecordingService {
   private async begin(pid: number, builtin = false): Promise<boolean> {
     const settings = { ...this.deps.getSettings() }
     if (builtin || this.builtinFallbackPid === pid) settings.backend = 'builtin'
+    // Loading OBS graphics-hook into a Vanguard-protected VALORANT process risks anti-cheat action; capture the screen instead.
+    if (this.game === 'valorant' && settings.captureMethod === 'hook') settings.captureMethod = 'auto'
     let capture = settings.backend === 'obs' || (settings.captureMethod === 'hook' && (this.hookFallbackPid === pid || !this.deps.obsHookDir))
       ? 'dda' : resolveCaptureMethod(settings.captureMethod, this.deps.borderlessCapture)
     if (capture === 'dda' && this.ddaFallbackPid === pid) capture = 'wgc'

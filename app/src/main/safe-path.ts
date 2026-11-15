@@ -9,9 +9,14 @@ export const ALLOWED_VIDEO_EXTS: ReadonlySet<string> = new Set(['.mp4', '.mkv', 
  * it must be a string, an absolute path with a drive letter, not a UNC/network/device path (`\\server`, `//`, `\\?\`, `\\.\`),
  * and have an allowlisted extension. UNC paths can trigger SMB connections (NTLM leakage or hangs), so never access them.
  */
-export function isSafeLocalVideoPath(p: unknown): p is string {
+export function isSafeLocalVideoPath(p: unknown, platform: NodeJS.Platform = process.platform): p is string {
   if (typeof p !== 'string' || p.length === 0 || p.length > 4096 || p.includes('\0')) return false
   if (p.startsWith('\\\\') || p.startsWith('//') || p.startsWith('\\/') || p.startsWith('/\\')) return false
+  if (platform !== 'win32' && p.startsWith('/')) {
+    // macOS/Linux: a plain absolute POSIX path (development builds; recording itself is Windows-only).
+    if (p.includes('\\')) return false
+    return ALLOWED_VIDEO_EXTS.has(path.posix.extname(p).toLowerCase())
+  }
   if (!/^[A-Za-z]:[\\/]/.test(p)) return false
   if (!path.win32.isAbsolute(p)) return false
   return ALLOWED_VIDEO_EXTS.has(path.win32.extname(p).toLowerCase())

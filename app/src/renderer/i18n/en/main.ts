@@ -13,7 +13,7 @@ export const i18n: Messages['i18n'] = {
     editor: 'Editor'
   },
   dialog: {
-    selectFilesTitle: 'Select Apex Legends recording files',
+    selectFilesTitle: 'Select VALORANT recording files',
     videoFilter: 'Video files',
     selectFolderTitle: 'Select a folder containing recordings',
     addWatchFolderTitle: 'Select a folder to watch (new videos are imported automatically)',
@@ -41,12 +41,12 @@ export const i18n: Messages['i18n'] = {
     },
     videoCount: 'Videos: {n}',
     empty: {
-      title: 'Drag Apex recordings here',
+      title: 'Drag VALORANT recordings here',
       desc: 'Supports mp4 / mkv / mov / webm. New videos are queued for analysis automatically, one at a time.',
       step1Title: 'Import',
       step1Desc: 'Drag and drop files, or set a watch folder',
       step2Title: 'Auto-analyze',
-      step2Desc: 'Marks knockdowns, assists, and multi-kill highlights',
+      step2Desc: 'Marks kills, deaths, multi-kills and aces',
       step3Title: 'Pick and export',
       step3Desc: 'Review highlights, trim, and export',
       openSettings: 'Set watch folder'
@@ -234,7 +234,7 @@ export const i18n: Messages['i18n'] = {
       videoMissingText: 'This video file was not found or cannot be played. Relink the file or go back to the library.',
       relink: 'Relink file',
       back: 'Back to library',
-      noEventsTitle: 'No knockdowns or assists detected in this video',
+      noEventsTitle: 'No kills or deaths detected in this video',
       noEventsText: 'Press M to add events manually. If the recording is from an older game version or the HUD is scaled very small, the banners may not be detected.'
     },
     toast: {

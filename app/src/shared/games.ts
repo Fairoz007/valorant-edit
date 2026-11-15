@@ -20,8 +20,15 @@ export const GAMES: Record<GameId, GameDescriptor> = {
   valorant: { id: 'valorant', displayName: 'VALORANT', process: /^VALORANT-Win64-Shipping\.exe$/i, tasklistImageFilter: 'VALORANT-Win64-Shipping.exe', filePrefix: 'Valorant', templateDir: 'valorant' }
 }
 
+/** Every game id the engine and stored data know about (Apex is inherited from Aditor). */
 export const GAME_IDS = Object.keys(GAMES) as GameId[]
+/** Legacy default: older recordings, caches and library entries without a game were all Apex. */
 export const DEFAULT_GAME: GameId = 'apex'
+
+/** The game Valorant Editor is built for: every import is analyzed as VALORANT and only VALORANT is recorded. */
+export const PRODUCT_GAME: GameId = 'valorant'
+/** Games offered in the UI, detected for recording and analyzed. */
+export const SUPPORTED_GAME_IDS: readonly GameId[] = [PRODUCT_GAME]
 
 export function isGameId(value: unknown): value is GameId {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(GAMES, value)
