@@ -21,3 +21,6 @@ engine/target/
 
 # Frozen Rust engine reference videos and optional Python tool environment.
 !engine/tests/parity/media/*.mp4
+
+# Recorder init-segment test fixtures (~1 KB each; regenerate with app/scripts/make-init-fixtures.cjs)
+!app/src/main/recording/__fixtures__/init-*.mp4
