@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'vitest'
-import { fileUrl, onVideoError, planSeek, routeTimeUpdate } from './seekPlan'
+import { onVideoError, planSeek, routeTimeUpdate } from './seekPlan'
+import { mediaUrl } from '../../shared/media-url'
 
-describe('fileUrl', () => {
+describe('video src URLs', () => {
+  // Was fileUrl() → 'file://C:/v/…' (non-canonical, and blocked from the http://localhost dev page); see shared/media-url.test.ts.
   test('percent-encodes characters that would break the URL (#, ?, %, space) (Minor 1)', () => {
-    expect(fileUrl('C:\\v\\a#1 100%?.mp4')).toBe('file://C:/v/a%231%20100%25%3F.mp4')
+    expect(mediaUrl('C:\\v\\a#1 100%?.mp4')).toBe('aditor-media://local/C:/v/a%231%20100%25%3F.mp4')
   })
-  test('converts backslashes', () => expect(fileUrl('C:\\v\\a.mp4')).toBe('file://C:/v/a.mp4'))
+  test('converts backslashes', () => expect(mediaUrl('C:\\v\\a.mp4')).toBe('aditor-media://local/C:/v/a.mp4'))
 })
 
 describe('planSeek', () => {
-  const a = 'file://C:/v/a.mp4'
-  const b = 'file://C:/v/b.mp4'
+  const a = 'aditor-media://local/C:/v/a.mp4'
+  const b = 'aditor-media://local/C:/v/b.mp4'
   test('applies now only when the wanted file is already loaded', () => {
     expect(planSeek({ loadedSrc: a, wantedSrc: a })).toBe('now')
   })
@@ -23,8 +25,8 @@ describe('planSeek', () => {
 })
 
 describe('routeTimeUpdate', () => {
-  const src = 'file://C:/v/a.mp4'
-  const foreign = 'file://C:/v/b.mp4'
+  const src = 'aditor-media://local/C:/v/a.mp4'
+  const foreign = 'aditor-media://local/C:/v/b.mp4'
   test('source mode: updates the source time when the source is loaded', () => {
     expect(routeTimeUpdate({ previewSrc: null, sourceSrc: src, loadedSrc: src, pending: false })).toBe('source')
   })
@@ -41,7 +43,7 @@ describe('routeTimeUpdate', () => {
 })
 
 describe('onVideoError', () => {
-  const a = 'file://C:/v/a.mp4'
+  const a = 'aditor-media://local/C:/v/a.mp4'
   test('clears the pending seek, the loaded marker and the playing flag', () => {
     const r = onVideoError({ loadedSrc: a, pending: { t: 12, play: true } })
     expect(r).toEqual({ loadedSrc: null, pending: null, playing: false })

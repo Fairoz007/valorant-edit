@@ -7,8 +7,6 @@ export function fileName(path: string): string {
   return path.split(/[/\\]/).pop() || path
 }
 
-export { fileUrl as thumbnailUrl } from '../studio/seekPlan'
-
 /** Distinguish pending items that are not queued from items actually waiting for analysis. */
 export function cardStatusText(entry: Pick<LibraryEntry, 'status'>, queueState: QueueItemState): string {
   const t = i18n.library.card

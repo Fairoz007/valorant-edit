@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { proxyBusyNotice, studioNotice } from './notices'
+import { catalogFor, i18n, LOCALES } from '../i18n'
 
 const okPlayability = { supported: true, smooth: true, powerEfficient: true }
 const weakPlayability = { supported: false, smooth: false, powerEfficient: false }
@@ -57,16 +58,45 @@ describe('error code vs message', () => {
   })
 })
 
-describe('video-missing notice (I13)', () => {
+describe('video load failure notices (I13): missing vs undecodable', () => {
   const base = { analysis: 'done' as const, playability: { supported: true, smooth: true, powerEfficient: true }, proxyState: 'none' as const }
-  test('a missing / unplayable video yields an error notice with relink and back actions', () => {
-    const n = studioNotice({ ...base, videoMissing: true })!
+  const t = i18n.studio.notices
+  test('file not on disk → "not found" notice with relink and back', () => {
+    const n = studioNotice({ ...base, videoFault: 'missing' })!
     expect(n.id).toBe('video-missing')
     expect(n.kind).toBe('error')
+    expect(n.title).toBe(t.videoNotFoundTitle)
+    expect(n.text).toBe(t.videoNotFoundText)
     expect(n.actions).toEqual(['relink', 'back'])
   })
-  test('engine errors still win; video-missing wins over language / proxy hints', () => {
-    expect(studioNotice({ ...base, analysis: 'error', videoMissing: true })!.id).toBe('engine-error')
-    expect(studioNotice({ ...base, videoMissing: true })!.id).toBe('video-missing')
+  test('file exists but cannot be decoded → suggests generating a proxy instead of relinking', () => {
+    const n = studioNotice({ ...base, videoFault: 'undecodable' })!
+    expect(n.id).toBe('video-undecodable')
+    expect(n.title).toBe(t.videoUndecodableTitle)
+    expect(n.text).toBe(t.videoUndecodableText)
+    expect(n.actions).toEqual(['generateProxy', 'back'])
+    expect(n.actions).not.toContain('relink')
+  })
+  test('undecodable while a proxy is generating → no error notice (the progress notice shows instead)', () => {
+    expect(studioNotice({ ...base, videoFault: 'undecodable', proxyState: 'generating' })).toBeNull()
+  })
+  test('undecodable even with a proxy, or existence unknown → the generic notice', () => {
+    for (const n of [studioNotice({ ...base, videoFault: 'undecodable', proxyState: 'available' })!, studioNotice({ ...base, videoFault: 'unknown' })!]) {
+      expect(n.id).toBe('video-unplayable')
+      expect(n.title).toBe(t.videoMissingTitle)
+      expect(n.actions).toEqual(['relink', 'back'])
+    }
+  })
+  test('every locale has distinct, non-empty texts for both cases', () => {
+    for (const locale of LOCALES) {
+      const c = catalogFor(locale).i18n.studio.notices
+      for (const k of ['videoNotFoundTitle', 'videoNotFoundText', 'videoUndecodableTitle', 'videoUndecodableText'] as const) expect(c[k].trim()).not.toBe('')
+      expect(c.videoNotFoundTitle).not.toBe(c.videoUndecodableTitle)
+      expect(c.videoNotFoundText).not.toBe(c.videoMissingText)
+    }
+  })
+  test('engine errors still win; no fault → no video notice', () => {
+    expect(studioNotice({ ...base, analysis: 'error', videoFault: 'missing' })!.id).toBe('engine-error')
+    expect(studioNotice({ ...base, videoFault: null })).toBeNull()
   })
 })

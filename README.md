@@ -16,16 +16,16 @@ Valorant Editor is a fork of [Aditor](https://github.com/ShiQu1218/Aditor) by Sh
 
 ## What it does today
 
-| Feature | Description |
-|---|---|
-| Import and analyze | Drag in recordings (MP4 / MKV / MOV / WebM) or add a watch folder; new videos are queued and analyzed one at a time in the background |
-| VALORANT event detection | Kills and deaths from the kill feed (computer vision on the HUD), round wins/losses from the scoreboard |
-| Highlights | Multi-kill (2–4 kills in a round) and ace (5) highlights, plus auto-compilation of dense kill sequences |
-| Studio / timeline | Event markers, project track, trim and split, add or correct events manually, undo/redo |
-| Built-in recorder | Starts recording when a supported game launches; live replay while the match is still recording |
-| Export | Fast lossless cut or precise re-encode in H.264 or H.265 (NVENC / QSV / AMF hardware encoders, OpenH264 CPU fallback for H.264) |
+| Feature                  | Description                                                                                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Import and analyze       | Drag in recordings (MP4 / MKV / MOV / WebM) or add a watch folder; new videos are queued and analyzed one at a time in the background                            |
+| VALORANT event detection | Kills and deaths from the kill feed (computer vision on the HUD), round wins/losses from the scoreboard                                                          |
+| Highlights               | Multi-kill (2–4 kills in a round) and ace (5) highlights, plus auto-compilation of dense kill sequences                                                         |
+| Studio / timeline        | Event markers, project track, trim and split, add or correct events manually, undo/redo                                                                          |
+| Built-in recorder        | Starts recording when a supported game launches; live replay while the match is still recording                                                                  |
+| Export                   | Fast lossless cut or precise re-encode in H.264 or H.265 (NVENC / QSV / AMF hardware encoders, OpenH264 CPU fallback for H.264)                                  |
 | Vertical / square export | 9:16 and 1:1 reframing (crop with offset, blurred background or black bars) with a live preview, and presets for YouTube, Shorts, TikTok, Reels and square posts |
-| Projects | Autosaved projects, cached analysis results, re-analysis that preserves manual edits |
+| Projects                 | Autosaved projects, cached analysis results, re-analysis that preserves manual edits                                                                             |
 
 ## Language
 

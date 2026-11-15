@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { recordedTime, studioVideoTitle } from './recordedTime'
-import { thumbnailUrl, cardStatusText } from './cardLogic'
+import { cardStatusText } from './cardLogic'
+import { mediaUrl } from '../../shared/media-url'
 import { i18n } from '../i18n'
 
 const addedAt = new Date(2026, 9, 20, 12).getTime()
@@ -24,7 +25,7 @@ describe('Recording time and studio title', () => {
 
 describe('Shared card display logic', () => {
   test('Thumbnail URL encodes Chinese, spaces, reserved characters, and percent signs', () => {
-    expect(thumbnailUrl('C:\\縮圖\\一場 #1? 50%.jpg')).toBe('file://C:/%E7%B8%AE%E5%9C%96/%E4%B8%80%E5%A0%B4%20%231%3F%2050%25.jpg')
+    expect(mediaUrl('C:\\縮圖\\一場 #1? 50%.jpg')).toBe('aditor-media://local/C:/%E7%B8%AE%E5%9C%96/%E4%B8%80%E5%A0%B4%20%231%3F%2050%25.jpg')
   })
   test('Pending status distinguishes not queued from waiting in the queue', () => {
     expect(cardStatusText({ status: 'pending' }, 'idle')).toBe('尚未分析')

@@ -3,6 +3,12 @@ import { i18n } from '../i18n'
 
 export type NoticeAction = 'resume' | 'copyError' | 'generateProxy' | 'later' | 'relink' | 'back'
 
+/**
+ * Why the source `<video>` failed to load: `missing` = the file is not on disk (moved/renamed/deleted/drive gone),
+ * `undecodable` = the file exists but Chromium cannot play it, `unknown` = the existence check itself failed.
+ */
+export type VideoFault = 'missing' | 'undecodable' | 'unknown'
+
 export interface StudioNotice {
   id: string
   kind: 'error' | 'warn' | 'info'
@@ -13,8 +19,8 @@ export interface StudioNotice {
 
 export interface StudioNoticeInput {
   analysis: 'done' | 'error'
-/** Video file is missing or unplayable (source-mode `<video>` load failure). */
-  videoMissing?: boolean
+/** Source-mode `<video>` load failure, classified by whether the file exists (see VideoFault). */
+  videoFault?: VideoFault | null
   playability: PlayabilityResult
 /** Proxy status: none means not generated (eligible for suggestion), available means present, generating means in progress (UI shows progress). */
   proxyState: 'none' | 'available' | 'generating'
@@ -39,14 +45,16 @@ export function studioNotice(input: StudioNoticeInput): StudioNotice | null {
       actions: ['resume', 'copyError']
     }
   }
-  if (input.videoMissing) {
-    return {
-      id: 'video-missing',
-      kind: 'error',
-      title: t.videoMissingTitle,
-      text: t.videoMissingText,
-      actions: ['relink', 'back']
-    }
+  if (input.videoFault === 'missing') {
+    return { id: 'video-missing', kind: 'error', title: t.videoNotFoundTitle, text: t.videoNotFoundText, actions: ['relink', 'back'] }
+  }
+  // The file is there but cannot be decoded: a proxy (H.264 copy) is the fix, unless one is already in use or being made.
+  if (input.videoFault === 'undecodable' && input.proxyState === 'none') {
+    return { id: 'video-undecodable', kind: 'error', title: t.videoUndecodableTitle, text: t.videoUndecodableText, actions: ['generateProxy', 'back'] }
+  }
+  if (input.videoFault === 'undecodable' && input.proxyState === 'generating') return null // The progress notice takes over.
+  if (input.videoFault) {
+    return { id: 'video-unplayable', kind: 'error', title: t.videoMissingTitle, text: t.videoMissingText, actions: ['relink', 'back'] }
   }
   if (input.proxyState === 'none' && input.proxySuggest !== false) {
     const p = input.playability

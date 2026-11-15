@@ -220,7 +220,7 @@ describe('Project clips stay in sync with studio sources', () => {
     time(video, 105)
     ready('D:/proxy-b.mp4')
     await flush()
-    expect(video.getAttribute('src')).toBe('file://D:/proxy-b.mp4')
+    expect(video.getAttribute('src')).toBe('aditor-media://local/D:/proxy-b.mp4')
     metadata()
     expect(video.currentTime).toBe(105)
     expect(video.paused).toBe(false)
