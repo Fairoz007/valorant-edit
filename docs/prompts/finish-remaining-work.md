@@ -72,6 +72,19 @@ For every agent branch: `git log --oneline <base>..<branch>` and `git diff --sta
 | Docs (CHANGELOG, README, audit rows, `docs\windows-readiness-results.md`), PR, Windows build + install | ❌ |
 | Audit roadmap items: headshot, wallbang, clutch 1vN from HUD, team wipe, spike plant/defuse, match result/MVP, confidence display, dashboard | ❌. Out of scope unless the user asks. Each needs labelled footage before any detector is enabled |
 
+### 1.4 Test snapshot (measured on `feature/finish-montage-autoedit` at `e041150`, FFmpeg on PATH, MSVC via vcvars)
+
+| Suite | Result |
+|---|---|
+| `npx vitest run` (all, incl. real FFmpeg) | 229 files: 225 passed, 4 failed. 2758 tests: 2738 passed, 18 failed, 2 skipped. The 18 failures are exactly issue I1 |
+| `npm run test:fast` (at `8277f51`) | 2686 passed, 18 failed (I1), 2 skipped |
+| `npm run typecheck` | pass |
+| `npm run lint` | pass (renderer only, see I9) |
+| `cargo test --no-fail-fast` | 215 passed, 0 failed, 14 ignored |
+| `cargo clippy --all-targets` | pass, no warnings |
+| Playwright e2e | not run yet |
+| Detection evaluator | not run: reference clip missing (I6) |
+
 ## 2. Phase 0: Prepare
 
 1. Run `git status`, `git worktree list`, `git branch -a --list "*agent*"` and `git log --oneline -10` on `feature/finish-montage-autoedit`. List any dirty files and ask before going on.
