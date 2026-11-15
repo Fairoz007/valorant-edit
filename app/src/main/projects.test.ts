@@ -253,7 +253,7 @@ describe('ProjectStore', () => {
       outro: { text: 'GG', durationSec: 2, background: 'black' },
       items: [{ id: 'a', source: 'C:/v/a.mp4', start: 1, end: 5, speed: 0.75, gain: 1.5,
         effects: [{ kind: 'slowmo', at: 3, durationSec: 0.6, speed: 0.5 }, { kind: 'zoomPunch', at: 3, durationSec: 0.3, scale: 1.2 }, { kind: 'flash', at: 3, durationSec: 0.1 }],
-        overlay: { text: 'DOUBLE KILL', at: 3, durationSec: 1.5 }, transitionIn: 'crossfade', transitionSec: 0.5 }]
+        overlay: { text: 'DOUBLE KILL', at: 3, durationSec: 1.5 }, transitionIn: 'dipBlack', transitionSec: 0.5 }]
     }
     await store.save(p)
     expect(await store.load('p_styled')).toEqual(p)

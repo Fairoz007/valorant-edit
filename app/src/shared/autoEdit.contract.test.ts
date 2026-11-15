@@ -21,7 +21,8 @@ describe('style presets', () => {
       }
     }
     expect(STYLE_PRESETS.clean).toMatchObject({ transition: 'cut', overlays: false, slowMo: null, zoomPunch: null, flash: false })
-    expect(STYLE_PRESETS.cinematic).toMatchObject({ transition: 'crossfade', letterbox: true })
+    expect(STYLE_PRESETS.cinematic).toMatchObject({ transition: 'dipBlack', letterbox: true })
+    expect(STYLE_PRESETS.hype).toMatchObject({ transition: 'dipWhite' })
     expect(STYLE_PRESETS.cinematic.slowMo).not.toBeNull()
     expect(STYLE_PRESETS.hype).toMatchObject({ beatSync: true, flash: true })
     expect(STYLE_PRESETS.hype.zoomPunch).not.toBeNull()
@@ -38,10 +39,10 @@ describe('planned length', () => {
     expect(clipOutputSec(clip({ effects: [{ kind: 'slowmo', at: 14, durationSec: 0.6, speed: 0.5 }] }))).toBeCloseTo(4.3, 10)
   })
 
-  it('subtracts transition overlaps (not before the first clip) and adds cards', () => {
-    const clips = [clip({ transitionIn: 'crossfade', transitionSec: 0.5 }), clip({ id: 'ae_1', transitionIn: 'crossfade', transitionSec: 0.5 }), clip({ id: 'ae_2' })]
-    expect(planTotalSec(clips, null, null)).toBeCloseTo(11.5, 10)
-    expect(planTotalSec(clips, { text: 'x', durationSec: 2, background: 'black' }, { text: 'y', durationSec: 1.5, background: 'blurFrame' })).toBeCloseTo(15, 10)
+  it('dip transitions do not change the length; cards are added', () => {
+    const clips = [clip({ transitionIn: 'dipBlack', transitionSec: 0.5 }), clip({ id: 'ae_1', transitionIn: 'dipWhite', transitionSec: 0.5 }), clip({ id: 'ae_2' })]
+    expect(planTotalSec(clips, null, null)).toBeCloseTo(12, 10)
+    expect(planTotalSec(clips, { text: 'x', durationSec: 2, background: 'black' }, { text: 'y', durationSec: 1.5, background: 'blurFrame' })).toBeCloseTo(15.5, 10)
   })
 })
 
@@ -62,7 +63,7 @@ describe('project schema v2', () => {
   it('validates the optional v2 item and project fields', () => {
     expect(validProjectItemStyle({})).toBe(true)
     expect(validProjectItemStyle({ speed: 0.25, gain: 2, transitionIn: 'dipWhite', transitionSec: 0.6 })).toBe(true)
-    for (const bad of [{ speed: 0 }, { speed: 3 }, { gain: -1 }, { transitionIn: 'wipe' }, { effects: [{ kind: 'spin', at: 1, durationSec: 1 }] },
+    for (const bad of [{ speed: 0 }, { speed: 3 }, { gain: -1 }, { transitionIn: 'wipe' }, { transitionIn: 'crossfade' }, { effects: [{ kind: 'spin', at: 1, durationSec: 1 }] },
       { effects: [{ kind: 'slowmo', at: 1, durationSec: 1, speed: 2 }] }, { overlay: { text: '', at: 0, durationSec: 1 } }, { effects: 'x' }]) {
       expect(validProjectItemStyle(bad)).toBe(false)
     }
@@ -81,8 +82,8 @@ describe('autoEditToProject', () => {
       music: { path: 'C:\\Music\\a.mp3', gain: 0.4, duck: true, fadeInSec: 1, fadeOutSec: 1 },
       intro: { text: 'Match', durationSec: 2, background: 'blurFrame' }, outro: null,
       clips: [
-        clip({ transitionIn: 'crossfade', transitionSec: 0.5 }),
-        clip({ id: 'ae_1', in: 30, out: 36, speed: 0.75, gain: 1.2, transitionIn: 'crossfade', transitionSec: 0.5,
+        clip({ transitionIn: 'dipBlack', transitionSec: 0.5 }),
+        clip({ id: 'ae_1', in: 30, out: 36, speed: 0.75, gain: 1.2, transitionIn: 'dipBlack', transitionSec: 0.5,
           effects: [{ kind: 'slowmo', at: 34, durationSec: 0.6, speed: 0.5 }], overlay: { text: 'TRIPLE KILL', at: 34, durationSec: 1.5 } })
       ]
     }
@@ -92,7 +93,7 @@ describe('autoEditToProject', () => {
     expect(p.items).toEqual([
       { id: 'p_ae1_ae0', source: plan.clips[0].source, start: 10, end: 14 },
       { id: 'p_ae1_ae1', source: plan.clips[1].source, start: 30, end: 36, speed: 0.75, gain: 1.2, effects: plan.clips[1].effects,
-        overlay: plan.clips[1].overlay, transitionIn: 'crossfade', transitionSec: 0.5 }
+        overlay: plan.clips[1].overlay, transitionIn: 'dipBlack', transitionSec: 0.5 }
     ])
     expect(projectShapeError(p)).toBeNull()
     expect(projectHasStyling(p)).toBe(true)

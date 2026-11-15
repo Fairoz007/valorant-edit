@@ -11,8 +11,13 @@ import { DEFAULT_MERGE_GAP_SEC, DEFAULT_SCORE_WEIGHTS, type HighlightKind, type 
 export type MontageStyle = 'clean' | 'cinematic' | 'hype' | 'shorts'
 export const MONTAGE_STYLES: readonly MontageStyle[] = ['clean', 'cinematic', 'hype', 'shorts']
 
-export type TransitionKind = 'cut' | 'crossfade' | 'dipBlack' | 'dipWhite' | 'zoomBlur'
-export const TRANSITION_KINDS: readonly TransitionKind[] = ['cut', 'crossfade', 'dipBlack', 'dipWhite', 'zoomBlur']
+/**
+ * Transitions the pinned LGPL FFmpeg can render (it has no xfade/fade filters): a hard cut, or a dip to black/white
+ * drawn with stepped `drawbox` alpha: the outgoing clip fades out over its last half of the transition, the incoming
+ * clip fades in over its first half. Dips do not overlap clips, so they never change the output length.
+ */
+export type TransitionKind = 'cut' | 'dipBlack' | 'dipWhite'
+export const TRANSITION_KINDS: readonly TransitionKind[] = ['cut', 'dipBlack', 'dipWhite']
 /** Transition length range (seconds); `cut` has length 0. */
 export const TRANSITION_RANGE = { min: 0.2, max: 0.6 } as const
 
@@ -107,12 +112,12 @@ export const STYLE_PRESETS: Readonly<Record<MontageStyle, StylePreset>> = {
     beatSync: false, letterbox: false, intro: false, outro: false, presetId: null, maxSec: null, captionScale: 0.06, musicGain: 0.35
   },
   cinematic: {
-    id: 'cinematic', transition: 'crossfade', transitionSec: 0.5, overlays: true, slowMo: { speed: 0.5, durationSec: 0.6 },
+    id: 'cinematic', transition: 'dipBlack', transitionSec: 0.5, overlays: true, slowMo: { speed: 0.5, durationSec: 0.6 },
     zoomPunch: null, flash: false, beatSync: false, letterbox: true, intro: true, outro: true, presetId: null, maxSec: null,
     captionScale: 0.06, musicGain: 0.4
   },
   hype: {
-    id: 'hype', transition: 'zoomBlur', transitionSec: 0.25, overlays: true, slowMo: null,
+    id: 'hype', transition: 'dipWhite', transitionSec: 0.25, overlays: true, slowMo: null,
     zoomPunch: { scale: 1.2, durationSec: 0.3 }, flash: true, beatSync: true, letterbox: false, intro: false, outro: true,
     presetId: null, maxSec: null, captionScale: 0.08, musicGain: 0.5
   },
@@ -193,8 +198,8 @@ export interface AutoEditPlan {
   presetId: PresetId | 'source'
   clips: AutoEditClip[]
   /**
-   * Exact planned output length in seconds: sum of clip lengths after speed and slow-mo, minus transition overlaps,
-   * plus intro and outro. The real FFmpeg output must match this within ±1 frame.
+   * Exact planned output length in seconds: sum of clip lengths after speed and slow-mo, plus intro and outro
+   * (dip transitions do not overlap clips). The real FFmpeg output must match this within ±1 frame.
    */
   totalSec: number
   music: MusicBed | null
@@ -220,12 +225,14 @@ export function clipOutputSec(c: Pick<AutoEditClip, 'in' | 'out' | 'speed' | 'ef
   return sec
 }
 
-/** `AutoEditPlan.totalSec` for a list of clips and cards (transition overlaps are subtracted). */
+/** `AutoEditPlan.totalSec` for a list of clips and cards. Dip transitions do not overlap clips, so they add nothing. */
 export function planTotalSec(clips: AutoEditClip[], intro: TitleCard | null, outro: TitleCard | null): number {
-  let sec = 0
-  clips.forEach((c, i) => {
-    sec += clipOutputSec(c)
-    if (i > 0 && c.transitionIn !== 'cut') sec -= c.transitionSec
-  })
+  const sec = clips.reduce((s, c) => s + clipOutputSec(c), 0)
   return sec + (intro?.durationSec ?? 0) + (outro?.durationSec ?? 0)
 }
+
+/**
+ * Audio limits of the pinned FFmpeg (no atempo/amix): a clip or slow-mo window played at a speed other than 1 has
+ * silent game audio; music is mixed in the app (Node, PCM) rather than by an FFmpeg filter.
+ */
+export const AUDIO_SILENT_WHEN_SPEED_CHANGED = true
