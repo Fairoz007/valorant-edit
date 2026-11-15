@@ -16,6 +16,11 @@ pub fn run(cmd: &Command) -> Result<()> {
             crate::valorant::load_valorant_profile(dir)?.with_layout(layout.unwrap_or_default());
         let detector = crate::valorant::FeedDetector::new(&p);
         let mut tracker = crate::valorant::FeedTracker::default();
+        // Optional: write every restored kill-feed crop (what `observations` sees) as `<t>.png`, for test fixtures.
+        let dump = value("--dump-dir").map(Path::new);
+        if let Some(dir) = dump {
+            std::fs::create_dir_all(dir)?;
+        }
         let stream = crate::decode::FrameStream::for_capture(
             video,
             p.decoder_profile(),
@@ -29,6 +34,9 @@ pub fn run(cmd: &Command) -> Result<()> {
         for frame in stream {
             let (t, b, s) = frame?;
             let (b, _) = p.restore(&b, &s)?;
+            if let Some(dir) = dump {
+                crate::cv::write_png(&dir.join(format!("{t:08.3}.png")), &b)?;
+            }
             let rows = detector.observations(&b)?;
             tracker.feed(t, &rows);
             println!(
