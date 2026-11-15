@@ -11,7 +11,7 @@ import {
 } from '../shared/settings'
 import { AutoClipParams } from '../shared/types'
 import { RECORDING_RANGES, type RecordingSettings } from '../shared/recording'
-import { coerceAutoMontage } from '../shared/montage'
+import { coerceAutoMontage, postAnalysisForMontage } from '../shared/montage'
 import { validateOutDir } from './settings-ipc'
 import { LANGUAGE_SETTINGS } from '../shared/locale'
 import { isSafeLocalDirPath } from './safe-path'
@@ -80,6 +80,7 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
   const encoder = candidate === 'auto' || ['nvenc', 'amf', 'qsv'].some((vendor) => candidate === `${codec}_${vendor}`)
     ? candidate : 'auto'
   const diskWarnGb = clampRecordingNumber(s.diskWarnGb, RECORDING_RANGES.diskWarnGb, base.diskWarnGb)
+  const autoMontage = coerceAutoMontage(s.autoMontage, base.autoMontage)
   return {
     autoRecord: pickBool(s.autoRecord, base.autoRecord),
     launchAtLogin: pickBool(s.launchAtLogin, base.launchAtLogin),
@@ -110,14 +111,15 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
     micEnabled: pickBool(s.micEnabled, base.micEnabled),
     micMono: pickBool(s.micMono, base.micMono),
     micGain: clampRecordingNumber(s.micGain, RECORDING_RANGES.micGain, base.micGain),
-    postAnalysis: pickEnum(s.postAnalysis, ['none', 'afterExit', 'perMatch'] as const, base.postAnalysis),
+    // Auto montage needs analysis results: 'none' is stored as 'perMatch' while it is on (see postAnalysisForMontage).
+    postAnalysis: postAnalysisForMontage(pickEnum(s.postAnalysis, ['none', 'afterExit', 'perMatch'] as const, base.postAnalysis), autoMontage),
     diskWarnGb,
     diskStopGb: Math.min(diskWarnGb, clampRecordingNumber(s.diskStopGb, RECORDING_RANGES.diskStopGb, base.diskStopGb)),
     notifyMatch: pickBool(s.notifyMatch, base.notifyMatch),
     captureCursor: pickBool(s.captureCursor, base.captureCursor),
     captureMethod: pickEnum(s.captureMethod, ['auto', 'wgc', 'dda', 'hook'] as const, base.captureMethod),
     openOnGameExit: pickBool(s.openOnGameExit, base.openOnGameExit),
-    autoMontage: coerceAutoMontage(s.autoMontage, base.autoMontage)
+    autoMontage
   }
 }
 

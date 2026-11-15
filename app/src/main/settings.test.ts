@@ -376,3 +376,34 @@ describe('capture method setting', () => {
     expect(migrateSettings({ version: 1, recording: { captureMethod: 'dda' } }).recording.captureMethod).toBe('dda')
   })
 })
+
+describe('auto montage settings', () => {
+  let dir: string
+  let file: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aditor-settings-montage-'))
+    file = path.join(dir, 'settings.json')
+  })
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
+
+  it('old files get the off-by-default settings and nothing else changes', () => {
+    const old = { recording: { postAnalysis: 'none', fps: 60, autoRecord: true } }
+    fs.writeFileSync(file, JSON.stringify(old))
+    const r = loadSettings(file).recording
+    expect(r.autoMontage).toEqual(DEFAULT_SETTINGS.recording.autoMontage)
+    expect(r.autoMontage.enabled).toBe(false)
+    expect(r).toMatchObject({ postAnalysis: 'none', fps: 60, autoRecord: true })
+  })
+
+  it("auto montage on never stores postAnalysis 'none' (switched to 'perMatch'), off keeps it", () => {
+    const store = new SettingsStore(file)
+    const base = store.get().recording
+    store.set({ recording: { ...base, postAnalysis: 'none', autoMontage: { ...base.autoMontage, enabled: true } } })
+    expect(store.get().recording.postAnalysis).toBe('perMatch')
+    expect(new SettingsStore(file).get().recording.postAnalysis).toBe('perMatch')
+    store.set({ recording: { ...store.get().recording, postAnalysis: 'none', autoMontage: { ...base.autoMontage, enabled: false } } })
+    expect(store.get().recording.postAnalysis).toBe('none')
+    fs.writeFileSync(file, JSON.stringify({ recording: { postAnalysis: 'none', autoMontage: { enabled: true } } }))
+    expect(loadSettings(file).recording.postAnalysis).toBe('perMatch')
+  })
+})
