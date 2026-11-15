@@ -611,7 +611,7 @@ const i18n = {
     musicPlaceholder: '貼上音樂檔案的完整路徑',
     musicBrowse: '選擇…',
     musicClear: '清除音樂',
-    musicHint: '尚無檔案選擇器，請直接輸入路徑。',
+    musicHint: '支援 .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi（內建的 FFmpeg 無法讀取 MP3、WAV、FLAC）。',
     deaths: '保留以自己死亡結束的片段',
     output: '輸出格式',
     presets: {

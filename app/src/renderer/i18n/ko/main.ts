@@ -613,7 +613,7 @@ export const i18n: Messages['i18n'] = {
     musicPlaceholder: '음악 파일의 전체 경로를 붙여 넣으세요',
     musicBrowse: '찾아보기…',
     musicClear: '음악 지우기',
-    musicHint: '아직 파일 선택기가 없으니 경로를 입력하세요.',
+    musicHint: '지원 형식: .m4a, .mp4, .mov, .mkv, .mka, .webm, .avi(내장 FFmpeg는 MP3, WAV, FLAC를 읽을 수 없습니다).',
     deaths: '내 데스로 끝나는 클립도 유지',
     output: '출력 형식',
     presets: {

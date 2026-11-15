@@ -610,7 +610,7 @@ export const i18n: Messages['i18n'] = {
     musicPlaceholder: 'Paste the full path of a music file',
     musicBrowse: 'Browse…',
     musicClear: 'Clear music',
-    musicHint: 'There is no file picker yet; type the path.',
+    musicHint: 'Supported: .m4a, .mp4, .mov, .mkv, .mka, .webm, .avi (the bundled FFmpeg cannot read MP3, WAV or FLAC).',
     deaths: 'Keep clips that end in my death',
     output: 'Output format',
     presets: {

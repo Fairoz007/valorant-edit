@@ -114,11 +114,11 @@ describe('request validation', () => {
     ]) {
       await expect(validateExportRequest(req(bad))).rejects.toThrow()
     }
-    await expect(validateExportRequest(req({ music: { path: '\\\\server\\share\\a.mp3', gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_PATH_INVALID)
-    await expect(validateExportRequest(req({ music: { path: source.replace('.mp4', '.exe'), gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_PATH_INVALID)
+    await expect(validateExportRequest(req({ music: { path: '\\\\server\\share\\a.mp3', gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_PATH_INVALID())
+    await expect(validateExportRequest(req({ music: { path: source.replace('.mp4', '.exe'), gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_PATH_INVALID())
     // The pinned FFmpeg has no MP3 demuxer.
-    await expect(validateExportRequest(req({ music: { path: source.replace('.mp4', '.mp3'), gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_PATH_INVALID)
-    await expect(validateExportRequest(req({ music: { path: path.join(root, 'missing.m4a'), gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_NOT_FOUND)
+    await expect(validateExportRequest(req({ music: { path: source.replace('.mp4', '.mp3'), gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_PATH_INVALID())
+    await expect(validateExportRequest(req({ music: { path: path.join(root, 'missing.m4a'), gain: 0.5, duck: true, fadeInSec: 1, fadeOutSec: 1 } }))).rejects.toThrow(MUSIC_NOT_FOUND())
   })
 })
 

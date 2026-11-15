@@ -612,7 +612,7 @@ export const i18n: Messages['i18n'] = {
     musicPlaceholder: '粘贴音乐文件的完整路径',
     musicBrowse: '选择…',
     musicClear: '清除音乐',
-    musicHint: '暂无文件选择器，请直接输入路径。',
+    musicHint: '支持 .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi（内置的 FFmpeg 无法读取 MP3、WAV、FLAC）。',
     deaths: '保留以自己死亡结束的片段',
     output: '输出格式',
     presets: {

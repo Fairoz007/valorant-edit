@@ -6,7 +6,7 @@ import { proxyPath } from './proxy'
 import { AnalysisQueue } from './queue'
 import { EngineClient } from './engine'
 import { detectEncoders } from './export/encoders'
-import { createExportService, registerExportHandlers } from './export/export-ipc'
+import { createExportService, MUSIC_EXTS, registerExportHandlers } from './export/export-ipc'
 import { hasOpenH264, downloadOpenH264 } from './codecs'
 import { loadCacheWithEdits, saveCacheEdits } from './reanalysis'
 import { SettingsStore } from './settings'
@@ -454,7 +454,7 @@ export function registerIpcHandlers(
     const res = await dialog.showOpenDialog(win || (undefined as unknown as BrowserWindow), {
       title: dialogText().selectMusicTitle,
       properties: ['openFile'],
-      filters: [{ name: dialogText().audioFilesFilter, extensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'] }]
+      filters: [{ name: dialogText().audioFilesFilter, extensions: [...MUSIC_EXTS].map((e) => e.slice(1)) }]
     })
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })

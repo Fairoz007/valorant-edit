@@ -185,17 +185,17 @@ async function validateProjectStyle(r: Record<string, unknown>): Promise<Montage
   }
   if (style.music) {
     const p = style.music.path
-    if (!isSafeLocalDirPath(p) || !MUSIC_EXTS.has(path.extname(p).toLowerCase())) throw new RequestError(MUSIC_PATH_INVALID)
+    if (!isSafeLocalDirPath(p) || !MUSIC_EXTS.has(path.extname(p).toLowerCase())) throw new RequestError(MUSIC_PATH_INVALID())
     const st = await fs.promises.stat(p).catch(() => null)
-    if (!st || !st.isFile()) throw new RequestError(MUSIC_NOT_FOUND)
+    if (!st || !st.isFile()) throw new RequestError(MUSIC_NOT_FOUND())
   }
   return Object.keys(style).length > 0 ? style : undefined
 }
 
 /** User-facing messages without translations yet (listed for the lead; English source text). */
-export const MUSIC_PATH_INVALID = 'The music file path is not valid'
-export const MUSIC_NOT_FOUND = 'The music file was not found'
-export const MONTAGE_NEEDS_ENCODER = 'Styled montages need a video encoder (precise export)'
+export const MUSIC_PATH_INVALID = (): string => tr('音樂檔案路徑無效（支援 .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi）')
+export const MUSIC_NOT_FOUND = (): string => tr('找不到音樂檔案')
+export const MONTAGE_NEEDS_ENCODER = (): string => tr('套用風格的精華影片需要影片編碼器（精確匯出）')
 
 /** A concatenated v2 project with styling goes through the montage render stage; everything else uses buildJobs. */
 export function isMontageRequest(req: Pick<ValidatedRequest, 'mode' | 'items' | 'style'>): boolean {
@@ -346,7 +346,7 @@ export function createExportService(deps: ExportServiceDeps = {}) {
 
   /** Styled v2 project: montage render stage (always re-encoded, one output file). */
   async function startMontage(req: ValidatedRequest, probes: Map<string, StreamProbe>, signal: AbortSignal, sender: ExportSender): Promise<ExportStartResult> {
-    if (!req.encoder) return { ok: false, code: 'noEncoder', error: MONTAGE_NEEDS_ENCODER, outputs: [], notices: [] }
+    if (!req.encoder) return { ok: false, code: 'noEncoder', error: MONTAGE_NEEDS_ENCODER(), outputs: [], notices: [] }
     const notices: string[] = []
     const silentSources = new Set<string>()
     const hasAudio = deps.hasAudio ?? createAudioProbe()

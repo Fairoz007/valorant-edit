@@ -5,6 +5,7 @@ import { drawerFixtureRequested } from '../dev/fixture'
 import { i18n } from '../i18n'
 import type { useToast } from '../shell/ToastHost'
 import type { createExportController, ExportState } from './exportController'
+import { exportItemsFrom } from './exportController'
 import { buildPlanBase, ExportPlanBase } from './exportPlanBase'
 
 interface StudioExportOptions {
@@ -83,8 +84,7 @@ export function useStudioExport({
       await new Promise((r) => setTimeout(r, 150))
       if (kind === 'consent') await exportCtl.setQuality('precise')
       else if (kind !== 'settings') {
-        const items = projectRef.current.items.map((i) => ({ id: i.id, source: i.source, start: i.start, end: i.end }))
-        void exportCtl.start(items)
+        void exportCtl.start(exportItemsFrom(projectRef.current), projectRef.current)
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

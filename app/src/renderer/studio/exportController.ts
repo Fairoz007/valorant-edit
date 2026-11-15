@@ -37,6 +37,20 @@ export interface ExportItem {
   transitionSec?: ProjectItem['transitionSec']
 }
 
+/** Export items for a project: range plus the v2 styling fields that are set (unstyled projects send exactly what v1 sent). */
+export function exportItemsFrom(project: { items: ProjectItem[] }): ExportItem[] {
+  return project.items.map((i) => {
+    const out: ExportItem = { id: i.id, source: i.source, start: i.start, end: i.end }
+    if (i.speed !== undefined) out.speed = i.speed
+    if (i.gain !== undefined) out.gain = i.gain
+    if (i.effects !== undefined) out.effects = i.effects
+    if (i.overlay !== undefined) out.overlay = i.overlay
+    if (i.transitionIn !== undefined) out.transitionIn = i.transitionIn
+    if (i.transitionSec !== undefined) out.transitionSec = i.transitionSec
+    return out
+  })
+}
+
 /** v2 project-level styling sent with `export:start` (only the fields that are set). */
 function styleFields(style: ProjectStyle | undefined): ProjectStyle {
   if (!style) return {}

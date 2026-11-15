@@ -612,7 +612,7 @@ export const i18n: Messages['i18n'] = {
     musicPlaceholder: '音楽ファイルのフルパスを貼り付け',
     musicBrowse: '参照…',
     musicClear: '音楽をクリア',
-    musicHint: 'ファイル選択はまだないため、パスを入力してください。',
+    musicHint: '対応形式: .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi（同梱の FFmpeg は MP3・WAV・FLAC を読み込めません）。',
     deaths: '自分のデスで終わるクリップも残す',
     output: '出力形式',
     presets: {
