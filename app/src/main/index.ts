@@ -1,4 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage } from 'electron'
+import { createMediaAccess, handleMediaRequest, MEDIA_SCHEME, MEDIA_SCHEME_PRIVILEGES } from './media-protocol'
+import { proxyDir } from '../shared/paths'
 import { createAppQuitGuard } from './quit-guard'
 import { delimiter, join, resolve } from 'path'
 import { EngineClient } from './engine'
@@ -32,10 +34,17 @@ const e2e = currentE2EConfig()
 if (e2e?.appData) process.env.APPDATA = e2e.appData
 // Must be set before ready: the default userData Cache and analysis cache use the same directory (see chromiumUserDataDir).
 app.setPath('userData', chromiumUserDataDir())
+// Library videos, thumbnails and proxies reach the renderer only through this scheme (never file://); must be registered before ready.
+protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: MEDIA_SCHEME_PRIVILEGES }])
 
 let mainWindow: BrowserWindow | null = null
 let engineClient: EngineClient | null = null
 let library: Library | null = null
+/** Which files `aditor-media:` may serve: library videos and thumbnails, the proxy/thumbnail cache, and saved-project sources. */
+const mediaAccess = createMediaAccess({
+  libraryEntries: () => library?.getEntries() ?? [],
+  cacheRoots: () => [proxyDir()]
+})
 let queue: AnalysisQueue | null = null
 let settingsStore: SettingsStore | null = null
 let watchManager: WatchManager | null = null
@@ -200,7 +209,7 @@ async function initEngineAndServices(): Promise<void> {
   // Project autosave: `%APPDATA%\Valorant Editor\projects\<id>.json`.
   const projectStore = new ProjectStore(join(appDataDir(), 'projects'))
 
-  const handlers = registerIpcHandlers(library, queue, () => (mainWindow ? [mainWindow] : []), engineClient, settingsStore, watchManager, projectStore, (ok) => closeGate?.ack(ok))
+  const handlers = registerIpcHandlers(library, queue, () => (mainWindow ? [mainWindow] : []), engineClient, settingsStore, watchManager, projectStore, (ok) => closeGate?.ack(ok), (sources) => mediaAccess.allowProjectSources(sources))
   cancelExport = handlers.cancelExport
 
   const notify = createRecordingNotifier(() => settingsStore!.get().recording)
@@ -351,6 +360,7 @@ if (!app.requestSingleInstanceLock()) {
   initializeTelemetry(startupSettings.telemetryEnabled)
   app.on('second-instance', showMainWindow)
   app.whenReady().then(async () => {
+    protocol.handle(MEDIA_SCHEME, (request) => handleMediaRequest(request, mediaAccess))
     await initEngineAndServices()
     servicesReady = true
     if (openRequested) showMainWindow()

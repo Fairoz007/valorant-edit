@@ -16,8 +16,14 @@ export function registerProjectHandlers(
   ipc: IpcLike,
   store: ProjectStore,
   settings?: SettingsStore,
-  onFlushDone?: (ok: boolean) => void
+  onFlushDone?: (ok: boolean) => void,
+  /** Called with the clip sources of every project saved or loaded, so the media protocol may serve them. */
+  onProjectSources?: (sources: unknown[]) => void
 ): void {
+  const noteSources = (p: unknown): void => {
+    const items = (p as { items?: unknown } | null)?.items
+    if (Array.isArray(items)) onProjectSources?.(items.map((i) => (i as { source?: unknown } | null)?.source))
+  }
   const remember = (id: string): void => {
     try {
       if (settings && settings.get().lastProjectId !== id) settings.set({ lastProjectId: id })
@@ -28,6 +34,7 @@ export function registerProjectHandlers(
 
   ipc.handle('projects:save', async (_e, p: StoredProject) => {
     await store.save(p)
+    noteSources(p)
     remember(p.id)
     return true
   })
@@ -35,6 +42,7 @@ export function registerProjectHandlers(
   ipc.on('projects:flushSync', (event, p: StoredProject) => {
     try {
       store.saveSync(p)
+      noteSources(p)
       remember(p.id)
       event.returnValue = true
     } catch (err) {
@@ -45,7 +53,11 @@ export function registerProjectHandlers(
 
   ipc.on('projects:flushDone', (_event, ok?: boolean) => onFlushDone?.(ok !== false))
 
-  ipc.handle('projects:load', async (_e, id: string) => store.load(id))
+  ipc.handle('projects:load', async (_e, id: string) => {
+    const p = await store.load(id)
+    noteSources(p)
+    return p
+  })
   // Sent by the renderer only after it actually switched to the project, so a failed switch cannot change what startup restores.
   ipc.handle('projects:markOpened', async (_e, id: string) => {
     if (!isValidId(id)) return false
