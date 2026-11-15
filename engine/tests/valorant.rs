@@ -108,3 +108,77 @@ fn stretched_and_letterboxed_restore_pixels_match_python() {
         assert_eq!(s, parity::image(c["expected_spec"].as_str().unwrap()));
     }
 }
+
+/// Kill-feed crop (600x256, 1080p reference coordinates) from a fixture; a shorter strip is placed at row `y` and padded.
+fn feed_fixture(rel: &str) -> Image<u8> {
+    feed_fixture_at(rel, 0)
+}
+
+fn feed_fixture_at(rel: &str, y: usize) -> Image<u8> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(rel);
+    let strip = aditor::cv::read_png(&path, false).unwrap();
+    assert_eq!((strip.width, strip.channels), (600, 3), "{rel}");
+    let mut data = vec![0; 600 * 256 * 3];
+    data[y * 600 * 3..y * 600 * 3 + strip.data.len()].copy_from_slice(&strip.data);
+    Image::new(600, 256, 3, data).unwrap()
+}
+
+fn confirmed(rel: &str) -> Vec<(usize, String)> {
+    FeedDetector::new(&profile())
+        .observations(&feed_fixture(rel))
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.confirmed)
+        .map(|r| (r.slot, r.kind))
+        .collect()
+}
+
+#[test]
+fn own_rows_on_compressed_footage_are_confirmed() {
+    // 720p upload, 47.75 s: "Jett -> Me" death whose blurred chevron is only 10x15 px.
+    assert_eq!(
+        confirmed("valorant_feed/own_death_short_chevron.png"),
+        [(0, "death".into())]
+    );
+    // 720p upload, 75.75 s: "Me -> Clove" kill below an enemy-kills-ally row; only the player's row counts.
+    assert_eq!(
+        confirmed("valorant_feed/own_kill_lone_chevron.png"),
+        [(1, "kill".into())]
+    );
+}
+
+#[test]
+fn rows_that_are_not_the_players_are_rejected() {
+    for rel in [
+        // 720p upload rows without the player's yellow marking.
+        "valorant_feed/teammate_kill.png",
+        "valorant_feed/enemy_kills_ally.png",
+        "valorant_feed/clove_resurrect.png",
+        // Teammate kills with a yellow-bordered assist portrait left of the row.
+        "valorant_feed/teammate_kill_assist_badge.png",
+        "valorant_feed/teammate_kill_assist_badge_2.png",
+        // Empty, fading and faded-out feeds.
+        "valorant_feed/empty_feed.png",
+        "valorant_feed/fade_to_dark.png",
+        "valorant_feed/partially_faded_row.png",
+        // 1080p: yellow clothing behind a teammate's row (see fixtures/valorant/README.md).
+        "valorant/yellow-clothing-background.png",
+    ] {
+        assert_eq!(confirmed(rel), [], "{rel}");
+    }
+}
+
+#[test]
+fn native_1080p_player_rows_stay_detected() {
+    // See fixtures/valorant/README.md for the source of each strip.
+    let kill = |slot: usize| (slot, String::from("kill"));
+    assert_eq!(confirmed("valorant/outlined-player-background.png"), [kill(1)]);
+    assert_eq!(confirmed("valorant/faint-player-chevron.png"), [kill(1)]);
+    assert_eq!(confirmed("valorant/sparse-player-chevrons.png"), [kill(1), kill(2)]);
+    // This strip sits at y=80..139 of the feed crop.
+    let rows = FeedDetector::new(&profile())
+        .observations(&feed_fixture_at("valorant/compact-player-row.png", 80))
+        .unwrap();
+    let rows: Vec<_> = rows.into_iter().filter(|r| r.confirmed).map(|r| (r.slot, r.kind)).collect();
+    assert_eq!(rows, [kill(2)]);
+}

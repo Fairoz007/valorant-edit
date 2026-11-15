@@ -33,11 +33,32 @@
 - **Diagnostics are off by default** and no Sentry DSN is bundled, so no crash data is sent anywhere unless you configure your own project.
 - **Updates** now point at `Fairoz007/valorant-edit` GitHub Releases.
 
+### Fixed
+
+- **Own kills and deaths on compressed footage**: the kill-feed detector (`engine/src/valorant/feed.rs`) now finds the player's
+  rows when the thin yellow row outline blurs away (e.g. 720p uploads), using the solid yellow chevron plus ally teal on the
+  player's side. It accepts small death-side chevrons, death chevrons under the red death-screen tint, and faint kill-side
+  chevrons; a fill limit (0.35–0.80) rejects solid yellow blocks. Measured on one hand-labelled 720p 60 fps clip
+  (19 kills, 12 deaths, ±1.0 s):
+
+  | Build | Kills detected / correct | Deaths detected / correct | Precision | Recall |
+  |---|---|---|---|---|
+  | Before (Aditor import, 67d211e) | 4 detected (not scored) | 1 detected (not scored) | — | — |
+  | fa348ce (first chevron fix) | 19 / 17 | 10 / 10 | 0.931 | 0.871 |
+  | This change | 19 / 19 | 12 / 12 | 1.000 | 1.000 |
+
+  `templates_version` is now `valorant-feed@10`, so cached analyses are redone. Only one clip is labelled; native 1080p is
+  covered by single-frame fixtures only. Details in `docs/VALORANT-EDITOR-AUDIT.md`.
+
 ### Added
 
 - `app/src/shared/english-default.test.ts`: checks the English defaults, scans every English string for untranslated text and
   renders each Settings page in English.
 - `docs/VALORANT-EDITOR-AUDIT.md`: technical audit, feature-gap report and roadmap.
+- `tools/eval_feed_labels.py` and hand labels in `tools/labels/videoplayback.json`: score kill/death detection against labels
+  (±1.0 s, per type, one-to-one).
+- Engine tests `own_rows_on_compressed_footage_are_confirmed`, `rows_that_are_not_the_players_are_rejected` and
+  `native_1080p_player_rows_stay_detected`, with real kill-feed crops in `engine/tests/fixtures/valorant_feed/`.
 
 ### Kept unchanged (internal names)
 
