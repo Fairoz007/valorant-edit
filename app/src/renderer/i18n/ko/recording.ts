@@ -191,5 +191,27 @@ export const recordingI18n: Messages['recordingI18n'] = {
       actionFailed: '작업에 실패했습니다. 다시 시도하세요.',
       unavailable: '자동 몽타주 상태를 가져올 수 없습니다.'
     }
+  },
+  overlay: {
+    card: '게임 내 오버레이',
+    rows: {
+      enabled: { title: '게임 내 오버레이', desc: '녹화 상태, 킬, 라운드, 저장 알림을 게임 화면 모서리에 표시합니다. 마우스나 포커스를 가져가지 않으며 녹화에도 나타나지 않습니다.' },
+      position: { title: '위치', desc: '카드가 표시될 화면 모서리입니다.' },
+      durationSec: { title: '표시 시간', desc: '각 카드가 표시되는 시간(초)입니다. 오류는 두 배 동안 표시됩니다.' },
+      showKills: { title: '킬 카드', desc: '킬이 감지되면 표시합니다. 한 라운드의 킬은 카드 하나로 합쳐지고 5킬은 ACE로 표시됩니다.' },
+      showRounds: { title: '라운드 결과', desc: '라운드가 끝날 때마다 승패와 점수를 표시합니다(Riot Client 필요).' },
+      opacity: { title: '불투명도', desc: '카드의 불투명도입니다.' },
+      test: { title: '오버레이 테스트', desc: '이 화면 모서리에 샘플 카드를 표시해 위치와 크기를 확인합니다.' }
+    },
+    positions: { topRight: '오른쪽 위', topLeft: '왼쪽 위', bottomRight: '오른쪽 아래', bottomLeft: '왼쪽 아래' },
+    secondsUnit: '초',
+    test: '테스트 카드 표시',
+    testShown: '테스트 카드를 표시했습니다',
+    testFailed: '테스트 카드를 표시할 수 없습니다.',
+    windowedHint: '오버레이를 사용하려면 VALORANT 디스플레이 모드를 「창 모드 전체 화면」으로 설정해야 합니다. 독점 전체 화면에서는 게임 위에 아무것도 표시할 수 없으므로 게임이 포커스를 잃은 뒤 Windows 알림으로 표시합니다.',
+    previewLabel: '미리 보기',
+    previewTitle: 'ACE',
+    previewDetail: '7라운드',
+    offHint: '게임 내 오버레이를 켜야 이 옵션을 변경할 수 있습니다.'
   }
 }

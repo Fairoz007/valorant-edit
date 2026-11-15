@@ -6,7 +6,7 @@ import { SettingsController, type SettingsApi } from './settingsController'
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings'
 import type { RecorderCapabilities } from '../../shared/recording'
 import { recordingI18n as t } from '../i18n'
-import { AUTO_MONTAGE_FIELDS } from './rows'
+import { AUTO_MONTAGE_FIELDS, OVERLAY_FIELDS } from './rows'
 import { cleanupMounted, click, flush, installDomShims, mount } from '../../../test/dom'
 
 const capabilities: RecorderCapabilities = {
@@ -69,6 +69,28 @@ async function slider(field: string, value: string): Promise<void> {
 }
 
 describe('Recording settings screen and controller', () => {
+  test('in-game overlay: defaults on, writes settings.recording.overlay, disables its options when off, and the Test button asks main', async () => {
+    const r = await show()
+    const testOverlay = vi.fn(async () => true)
+    r.api.recording!.testOverlay = testOverlay
+    const ov = <T extends HTMLElement>(field: string): T => document.getElementById(`set-overlay-${field}`) as T
+    expect(ov<HTMLInputElement>('enabled').checked).toBe(true)
+    expect(ov<HTMLSelectElement>('position').value).toBe('topRight')
+    act(() => { ov<HTMLSelectElement>('position').value = 'bottomLeft'; ov('position').dispatchEvent(new Event('change', { bubbles: true })) })
+    await flush()
+    expect(r.set).toHaveBeenLastCalledWith(expect.objectContaining({ recording: expect.objectContaining({ overlay: expect.objectContaining({ position: 'bottomLeft', enabled: true }) }) }))
+    expect(document.querySelector('.ovp.left.bottom')).not.toBeNull()
+    click(ov('test'))
+    await flush()
+    expect(testOverlay).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain(t.overlay.testShown)
+    expect(document.body.textContent).toContain(t.overlay.windowedHint)
+    click(ov('enabled'))
+    await flush()
+    expect(r.controller.getState().settings?.recording.overlay.enabled).toBe(false)
+    expect(ov<HTMLInputElement>('showKills').disabled).toBe(true)
+    expect(ov<HTMLSelectElement>('position').disabled).toBe(true)
+  })
   test('cursor recording defaults on and can be disabled in saved settings', async () => {
     const r = await show()
     expect(control<HTMLInputElement>('captureCursor').checked).toBe(true)
@@ -146,10 +168,11 @@ describe('Recording settings screen and controller', () => {
       'diskWarnGb', 'diskStopGb', 'notifyMatch', 'openOnGameExit'
     ]
     const montageRows = AUTO_MONTAGE_FIELDS.map((field) => `autoMontage-${field}`)
+    const overlayRows = OVERLAY_FIELDS.map((field) => `overlay-${field}`)
     expect(Array.from(document.querySelectorAll<HTMLElement>('[data-row]')).map((el) => el.dataset.row))
-      .toEqual([...fields.slice(0, 3).map((field) => `recording-${field}`), ...montageRows, ...fields.slice(3).map((field) => `recording-${field}`)])
+      .toEqual([...fields.slice(0, 3).map((field) => `recording-${field}`), ...montageRows, ...overlayRows, ...fields.slice(3).map((field) => `recording-${field}`)])
     expect(Array.from(document.querySelectorAll('.set-card h2')).map((el) => el.textContent))
-      .toEqual([t.cards.basics, t.cards.autoMontage, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
+      .toEqual([t.cards.basics, t.cards.autoMontage, t.overlay.card, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
     for (const field of fields) {
       const label = document.getElementById(`set-recording-${field}-title`)
       expect(label?.textContent).toBe(t.rows[field as keyof typeof t.rows].title)

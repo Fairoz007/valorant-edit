@@ -38,6 +38,11 @@ import { diskFreeBytes } from './recording/disk'
 import type { CacheDoc, Clip } from '../shared/types'
 import { createFocusGuard } from './focus-guard'
 import { createForegroundQuery } from './foreground'
+import { OverlayWindow } from './overlay/overlay-window'
+import { createElectronOverlayWindow, createOverlayPlacement, displayNear } from './overlay/electron-overlay'
+import { createOverlayController, type OverlayInput } from './overlay/overlay-controller'
+import { OVERLAY_CHANNELS } from '../shared/overlay'
+import type { RecordingNoticeKind } from './recording'
 
 // E2E hooks (ADITOR_E2E=1 only): use temporary appData/userData so tests do not touch user data; null in production.
 const e2e = currentE2EConfig()
@@ -68,6 +73,7 @@ let unregisterRecordingIpc: (() => void) | null = null
 let unsubscribeSettings: (() => void) | null = null
 let appUpdater: AppUpdaterService | null = null
 let montageService: MontageService | null = null
+let overlayWindow: OverlayWindow | null = null
 let quitting = false
 /** Currently active interface language (from the `language` setting; English by default, `auto` follows the Windows display language). */
 let locale: Locale = 'en'
@@ -254,7 +260,40 @@ async function initEngineAndServices(): Promise<void> {
   const handlers = registerIpcHandlers(library, queue, () => (mainWindow ? [mainWindow] : []), engineClient, settingsStore, watchManager, projectStore, (ok) => closeGate?.ack(ok), (sources) => mediaAccess.allowProjectSources(sources))
   cancelExport = handlers.cancelExport
 
-  const notify = createRecordingNotifier(() => settingsStore!.get().recording)
+  const toast = createRecordingNotifier(() => settingsStore!.get().recording)
+  // In-game overlay: recorder activity shows as click-through cards over the game; without a game it falls back to toasts,
+  // and in exclusive fullscreen the toast waits until the game loses focus (it would not be visible over the game anyway).
+  const overlayWin = new OverlayWindow({
+    create: createElectronOverlayWindow,
+    getSettings: () => settingsStore!.get().recording.overlay,
+    placement: createOverlayPlacement({ gamePid: () => gamePid, queryForeground })
+  })
+  overlayWindow = overlayWin
+  const overlay = createOverlayController({
+    getSettings: () => settingsStore!.get().recording.overlay,
+    present: (card) => overlayWin.present(card)
+  })
+  const toOverlay = (input: OverlayInput): void => {
+    void overlay.handle(input).catch((error) => console.error('[overlay] Failed to handle activity:', error))
+  }
+  let deferredToasts = 0
+  const notify = (kind: RecordingNoticeKind, message: string): void => {
+    void overlay.handle({ type: 'notice', kind, message }).then((outcome) => {
+      if (outcome === 'off') toast(kind, message)
+      else if (outcome === 'exclusive') void focusGuard.run(`toast-${++deferredToasts}`, () => toast(kind, message))
+    }, (error) => {
+      console.error('[overlay] Failed to handle notice:', error)
+      toast(kind, message)
+    })
+  }
+  ipcMain.handle(OVERLAY_CHANNELS.test, async () => {
+    const placement = displayNear(mainWindow)
+    for (const [i, card] of overlay.test().entries()) {
+      if (i) await new Promise((resolve) => setTimeout(resolve, 180))
+      await overlayWin.present(card, placement)
+    }
+    return true
+  })
   const pushLibrary = (): void => {
     const payload = queue!.payload()
     for (const win of BrowserWindow.getAllWindows()) {
@@ -332,7 +371,11 @@ async function initEngineAndServices(): Promise<void> {
     log: (message) => recordingLog(message)
   })
   montageService = montage
-  queue.on('analyzed', (videoPath: string, game) => montage.onMatchAnalyzed(videoPath, game))
+  queue.on('analyzed', (videoPath: string, game) => {
+    montage.onMatchAnalyzed(videoPath, game)
+    const entry = library?.get(videoPath)
+    if (entry?.source === 'recording') toOverlay({ type: 'analysis', kills: entry.counts?.kill ?? null })
+  })
   queue.on('analysisFailed', (videoPath: string, _game: unknown, error: string) => montage.onAnalysisFailed(videoPath, error))
   const unregisterMontageIpc = registerMontageIpc(ipcMain, montage)
   const unsubscribeMontage = settingsStore.onChange(() => montage.onSettingsChanged())
@@ -357,6 +400,7 @@ async function initEngineAndServices(): Promise<void> {
     enqueueAnalysis: (videoPath) => queue!.enqueue(videoPath),
     notify,
     onGameExit: () => showMainWindow(false),
+    onActivity: (activity) => toOverlay({ type: 'activity', activity }),
     onGamePid: (pid) => {
       gamePid = pid
       // The game exited: anything deferred while it was in front can run now.
@@ -375,6 +419,7 @@ async function initEngineAndServices(): Promise<void> {
     liveCachePath: (videoPath) => cacheFilePath(videoPath, cacheDir(), settingsStore!.get().cacheLocation === 'besideVideo'),
     // Live cache is already done, so the library entry can open immediately; if full analysis is queued next, the queue returns it to pending and replaces it when complete.
     onLiveAnalysis: (videoPath, summary) => {
+      if (summary.trusted) toOverlay({ type: 'analysis', kills: summary.counts.kill ?? null })
       if (library!.update(videoPath, { status: 'done', progress: 1, counts: summary.counts, game: summary.game, durationSec: summary.durationSec, codec: summary.codec || undefined, hl: undefined })) pushLibrary()
       void generateThumbnail(videoPath, summary.durationSec).then((thumb) => {
         if (!thumb || library!.get(videoPath)?.status !== 'done') return
@@ -383,6 +428,9 @@ async function initEngineAndServices(): Promise<void> {
     }
   })
   unregisterRecordingIpc = registerRecordingIpc(recordingService, () => BrowserWindow.getAllWindows())
+  const unsubscribeOverlayStatus = recordingService.onStatus((status) => toOverlay({ type: 'status', status }))
+  toOverlay({ type: 'status', status: recordingService.status() })
+  const unsubscribeOverlayLive = recordingService.onLive?.((update) => toOverlay({ type: 'live', update })) ?? (() => {})
   tray = createRecordingTray({
     service: recordingService,
     iconDir: join(app.isPackaged ? process.resourcesPath : resolve(__dirname, '../..'), 'resources'),
@@ -422,6 +470,9 @@ async function initEngineAndServices(): Promise<void> {
     if (mainWindow && !mainWindow.isDestroyed()) loadRenderer(mainWindow)
   })
   unsubscribeSettings = () => {
+    unsubscribeOverlayStatus()
+    unsubscribeOverlayLive()
+    ipcMain.removeHandler(OVERLAY_CHANNELS.test)
     unsubscribeLogin()
     unsubscribeLanguage()
     unsubscribeMontage()
@@ -509,6 +560,8 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.on('will-quit', () => {
     focusGuard.dispose()
+    overlayWindow?.destroy()
+    overlayWindow = null
     unsubscribeSettings?.()
     unregisterRecordingIpc?.()
     tray?.destroy()

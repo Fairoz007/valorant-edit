@@ -191,5 +191,27 @@ export const recordingI18n: Messages['recordingI18n'] = {
       actionFailed: '操作に失敗しました。もう一度お試しください。',
       unavailable: '自動モンタージュの状態を取得できません。'
     }
+  },
+  overlay: {
+    card: 'ゲーム内オーバーレイ',
+    rows: {
+      enabled: { title: 'ゲーム内オーバーレイ', desc: '録画の状態、キル、ラウンド、保存をゲーム画面の隅に表示します。マウスやフォーカスを奪わず、録画にも映りません。' },
+      position: { title: '位置', desc: 'カードを表示する画面の隅。' },
+      durationSec: { title: '表示時間', desc: '各カードを表示する秒数。エラーは 2 倍の時間表示されます。' },
+      showKills: { title: 'キルカード', desc: 'キルを検出したときに表示します。同じラウンドのキルは 1 枚にまとめ、5 キルは ACE と表示します。' },
+      showRounds: { title: 'ラウンド結果', desc: '各ラウンド終了時に勝敗とスコアを表示します（Riot Client が必要）。' },
+      opacity: { title: '不透明度', desc: 'カードの不透明度。' },
+      test: { title: 'オーバーレイのテスト', desc: 'この画面の隅にサンプルカードを表示して、位置と大きさを確認します。' }
+    },
+    positions: { topRight: '右上', topLeft: '左上', bottomRight: '右下', bottomLeft: '左下' },
+    secondsUnit: '秒',
+    test: 'テストカードを表示',
+    testShown: 'テストカードを表示しました',
+    testFailed: 'テストカードを表示できませんでした。',
+    windowedHint: 'オーバーレイには VALORANT の表示モードを「ウィンドウフルスクリーン」にする必要があります。排他的フルスクリーンではゲームの上に何も表示できないため、ゲームのフォーカスが外れた後に Windows 通知で表示します。',
+    previewLabel: 'プレビュー',
+    previewTitle: 'ACE',
+    previewDetail: 'ラウンド 7',
+    offHint: 'ゲーム内オーバーレイをオンにすると、これらのオプションを変更できます。'
   }
 }

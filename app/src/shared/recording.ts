@@ -79,6 +79,39 @@ export interface RecordingSettings {
   openOnGameExit: boolean
   /** Build and export a highlight montage after each analyzed match (`shared/montage.ts`; off by default). */
   autoMontage: AutoMontageSettings
+  /** In-game overlay notifications for recorder activity (click-through, never focused, excluded from capture). */
+  overlay: OverlaySettings
+}
+
+export type OverlayPosition = 'topRight' | 'topLeft' | 'bottomRight' | 'bottomLeft'
+
+export interface OverlaySettings {
+  enabled: boolean
+  position: OverlayPosition
+  /** Seconds a card stays on screen (errors stay twice as long). */
+  durationSec: number
+  /** Kill / multi-kill / ace cards from the live engine. */
+  showKills: boolean
+  /** Round won / lost cards. */
+  showRounds: boolean
+  /** Card opacity, 0.3..1. */
+  opacity: number
+}
+
+export const OVERLAY_POSITIONS: readonly OverlayPosition[] = ['topRight', 'topLeft', 'bottomRight', 'bottomLeft']
+
+export const OVERLAY_RANGES = {
+  durationSec: { min: 1, max: 10 },
+  opacity: { min: 0.3, max: 1 }
+} as const
+
+export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
+  enabled: true,
+  position: 'topRight',
+  durationSec: 3,
+  showKills: true,
+  showRounds: true,
+  opacity: 0.9
 }
 
 export type RecordingCaptureMethod = 'auto' | 'wgc' | 'dda' | 'hook'
@@ -126,7 +159,8 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   captureCursor: true,
   captureMethod: 'auto',
   openOnGameExit: true,
-  autoMontage: { ...DEFAULT_AUTO_MONTAGE, include: { ...DEFAULT_AUTO_MONTAGE.include } }
+  autoMontage: { ...DEFAULT_AUTO_MONTAGE, include: { ...DEFAULT_AUTO_MONTAGE.include } },
+  overlay: { ...DEFAULT_OVERLAY_SETTINGS }
 }
 
 /** Recording service status (pushed from main to renderer on `recording:status`, also available via `recording:getStatus`). */
@@ -152,6 +186,8 @@ export interface RecordingStatus {
   sessionId: string | null
   /** Recording start time in epoch milliseconds. */
   startedAt: number | null
+  /** Capture method in use for the current recording (null when idle or with OBS). */
+  capture?: 'wgc' | 'dda' | 'hook' | null
   /** Actual encoder and dimensions reported by aditorrec `started`. */
   encoder: string | null
   width: number | null
@@ -179,6 +215,7 @@ export const IDLE_RECORDING_STATUS: RecordingStatus = {
   detectionOnly: false,
   sessionId: null,
   startedAt: null,
+  capture: null,
   encoder: null,
   width: null,
   height: null,

@@ -191,5 +191,27 @@ export const recordingI18n: Messages['recordingI18n'] = {
       actionFailed: '操作失败，请再试一次。',
       unavailable: '无法获取自动精华视频状态。'
     }
+  },
+  overlay: {
+    card: '游戏内通知',
+    rows: {
+      enabled: { title: '游戏内通知', desc: '在游戏画面角落显示录制状态、击杀、回合与保存通知。不会抢走鼠标或焦点，也不会出现在录像中。' },
+      position: { title: '位置', desc: '通知显示在游戏画面的哪个角落。' },
+      durationSec: { title: '显示时间', desc: '每条通知停留的秒数；错误会停留两倍时间。' },
+      showKills: { title: '击杀通知', desc: '检测到击杀时显示；同一回合的多杀合并为一条，五杀显示为 ACE。' },
+      showRounds: { title: '回合结果', desc: '每回合结束时显示胜负与比分（需要 Riot Client）。' },
+      opacity: { title: '不透明度', desc: '通知卡片的不透明度。' },
+      test: { title: '测试通知', desc: '在此屏幕角落显示示例通知，确认位置与大小。' }
+    },
+    positions: { topRight: '右上', topLeft: '左上', bottomRight: '右下', bottomLeft: '左下' },
+    secondsUnit: '秒',
+    test: '显示测试通知',
+    testShown: '已显示测试通知',
+    testFailed: '无法显示测试通知。',
+    windowedHint: '游戏内通知需要将 VALORANT 的显示模式设为“窗口化全屏”。在独占“全屏”下无法显示，通知会在游戏失去焦点后改用 Windows 通知。',
+    previewLabel: '预览',
+    previewTitle: 'ACE',
+    previewDetail: '第 7 回合',
+    offHint: '开启“游戏内通知”后才能调整这些选项。'
   }
 }

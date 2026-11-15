@@ -3,6 +3,7 @@ import { RECORDING_CHANNELS, type LiveState, type LiveUpdate, type RecordingStat
 import { UPDATE_CHANNELS, type UpdateStatus } from '../shared/update'
 import { MONTAGE_CHANNELS, type MontageStatus } from '../shared/montage'
 import type { PlaybackDesyncReport } from '../shared/telemetry'
+import { OVERLAY_CHANNELS } from '../shared/overlay'
 
 type FlushResult = void | boolean | PromiseLike<unknown>
 const flushCallbacks = new Set<() => FlushResult>()
@@ -31,6 +32,8 @@ const api = {
   },
   recording: {
     testObs: () => ipcRenderer.invoke(RECORDING_CHANNELS.testObs),
+    /** Show sample in-game overlay cards (Settings → Recording → In-game overlay). */
+    testOverlay: (): Promise<boolean> => ipcRenderer.invoke(OVERLAY_CHANNELS.test),
     getStatus: (): Promise<RecordingStatus> => ipcRenderer.invoke(RECORDING_CHANNELS.getStatus),
     getCapabilities: (): Promise<RecorderCapabilities | null> => ipcRenderer.invoke(RECORDING_CHANNELS.getCapabilities),
     startManual: (): Promise<boolean> => ipcRenderer.invoke(RECORDING_CHANNELS.startManual),

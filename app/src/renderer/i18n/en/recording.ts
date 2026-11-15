@@ -190,5 +190,27 @@ export const recordingI18n: Messages['recordingI18n'] = {
       actionFailed: 'The action failed. Try again.',
       unavailable: 'Unable to get the Auto montage status.'
     }
+  },
+  overlay: {
+    card: 'In-game overlay',
+    rows: {
+      enabled: { title: 'In-game overlay', desc: 'Shows recorder status, kills, rounds and saved clips in a corner of the game. It never takes the mouse or focus and never appears in the recording.' },
+      position: { title: 'Position', desc: 'Which corner of the game screen the cards appear in.' },
+      durationSec: { title: 'Duration', desc: 'How long each card stays on screen; errors stay twice as long.' },
+      showKills: { title: 'Kill cards', desc: 'Shown when a kill is detected. Kills in one round share one card, and five kills show as ACE.' },
+      showRounds: { title: 'Round results', desc: 'Shows the result and score after each round (needs the Riot Client).' },
+      opacity: { title: 'Opacity', desc: 'How opaque the cards are.' },
+      test: { title: 'Test the overlay', desc: 'Shows sample cards in the corner of this screen so you can check position and size.' }
+    },
+    positions: { topRight: 'Top right', topLeft: 'Top left', bottomRight: 'Bottom right', bottomLeft: 'Bottom left' },
+    secondsUnit: 's',
+    test: 'Show test cards',
+    testShown: 'Test cards shown',
+    testFailed: 'Could not show the test cards.',
+    windowedHint: 'The overlay needs VALORANT set to Windowed Fullscreen. In exclusive Fullscreen nothing can appear over the game, so cards become Windows notifications once the game loses focus.',
+    previewLabel: 'Preview',
+    previewTitle: 'ACE',
+    previewDetail: 'Round 7',
+    offHint: 'Turn on the in-game overlay to change these options.'
   }
 }

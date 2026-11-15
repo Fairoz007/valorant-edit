@@ -18,7 +18,10 @@ const ALLOWED: Record<string, number> = {
   // File pickers opened from a click in our own (already focused) window.
   'ipc-handlers.ts': 5,
   // Windows toast: shown by the shell without activation.
-  'notify.ts': 1
+  'notify.ts': 1,
+  // In-game overlay: new BrowserWindow with focusable: false, and setAlwaysOnTop on that window; it is only ever shown with showInactive().
+  'overlay/electron-overlay.ts': 2,
+  'overlay/overlay-window.ts': 2
 }
 
 function sources(dir: string, root = dir): string[] {

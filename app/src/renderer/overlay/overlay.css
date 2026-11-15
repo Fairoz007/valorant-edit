@@ -1,0 +1,147 @@
+/* In-game overlay cards, styled after a kill-feed row: a light slanted bar with a thin border, a coloured bold title on the
+   left, an icon, grey detail text and a slanted accent stripe on the right edge. The window is click-through and transparent. */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  src: url('../assets/fonts/montserrat-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 900;
+  src: url('../assets/fonts/montserrat-latin-900-normal.woff2') format('woff2');
+}
+
+:root {
+  --ov-surface: #f8f8f9;
+  --ov-border: rgba(20, 22, 30, 0.14);
+  --ov-detail: #4f5562;
+  --ov-icon: #15171d;
+  /* Title colours: each at least 4.5:1 on --ov-surface (overlay.test.ts checks them). */
+  --tone-rec: #c23a0c;
+  --tone-kill: #b82c0d;
+  --tone-info: #1f55d6;
+  --tone-ok: #0b7356;
+  --tone-loss: #b4232c;
+  --tone-warn: #8a5100;
+  --tone-error: #c41e2a;
+  --stripe-rec: #ff5a1f;
+  --stripe-kill: #ff4a1c;
+  --stripe-info: #2f6bff;
+  --stripe-ok: #14b88a;
+  --stripe-loss: #e5343b;
+  --stripe-warn: #f5a524;
+  --stripe-error: #e5343b;
+  --skew: -12deg;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+  font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.stack {
+  position: absolute;
+  inset: 8px 14px;
+  display: flex;
+  gap: 8px;
+}
+.stack.top { flex-direction: column; }
+.stack.bottom { flex-direction: column-reverse; }
+.stack.right { align-items: flex-end; }
+.stack.left { align-items: flex-start; }
+
+.card {
+  --tone: var(--tone-info);
+  --stripe: var(--stripe-info);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  max-width: 400px;
+  padding: 0 28px 0 22px;
+  box-sizing: border-box;
+  transform: skewX(var(--skew));
+  background: var(--ov-surface);
+  border: 1px solid var(--ov-border);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  animation: card-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.card > * { transform: skewX(calc(var(--skew) * -1)); }
+.card::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  right: -1px;
+  width: 7px;
+  background: var(--stripe);
+}
+.stack.left .card { animation-name: card-in-left; }
+.card.bump { animation: card-bump 220ms ease; }
+.card.leaving, .stack.left .card.leaving { animation: card-out 260ms ease both; }
+
+.card[data-tone='rec'] { --tone: var(--tone-rec); --stripe: var(--stripe-rec); }
+.card[data-tone='kill'] { --tone: var(--tone-kill); --stripe: var(--stripe-kill); }
+.card[data-tone='info'] { --tone: var(--tone-info); --stripe: var(--stripe-info); }
+.card[data-tone='ok'] { --tone: var(--tone-ok); --stripe: var(--stripe-ok); }
+.card[data-tone='loss'] { --tone: var(--tone-loss); --stripe: var(--stripe-loss); }
+.card[data-tone='warn'] { --tone: var(--tone-warn); --stripe: var(--stripe-warn); }
+.card[data-tone='error'] { --tone: var(--tone-error); --stripe: var(--stripe-error); }
+
+.title {
+  color: var(--tone);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.icon {
+  flex: none;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  color: var(--ov-icon);
+}
+.card[data-tone='rec'] .icon .dot { fill: var(--stripe-rec); animation: pulse 1.1s ease-in-out infinite; }
+.detail {
+  color: var(--ov-detail);
+  font-weight: 700;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: skewX(var(--skew)) translateX(60px); clip-path: inset(0 0 0 100%); }
+  to { opacity: 1; transform: skewX(var(--skew)) translateX(0); clip-path: inset(0 0 0 0); }
+}
+@keyframes card-in-left {
+  from { opacity: 0; transform: skewX(var(--skew)) translateX(-60px); clip-path: inset(0 100% 0 0); }
+  to { opacity: 1; transform: skewX(var(--skew)) translateX(0); clip-path: inset(0 0 0 0); }
+}
+@keyframes card-out {
+  to { opacity: 0; transform: skewX(var(--skew)) translateY(-6px); }
+}
+@keyframes card-bump {
+  50% { transform: skewX(var(--skew)) scale(1.06); }
+}
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .card.leaving, .card.bump, .stack.left .card { animation-duration: 1ms; }
+  .card[data-tone='rec'] .icon .dot { animation: none; }
+}

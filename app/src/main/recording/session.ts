@@ -21,7 +21,7 @@ import { ObsClient } from './obs-client'
 import { finalizeObsMatches } from './obs-finalize'
 import { ObsRecording } from './obs-session'
 import { resolveCaptureMethod } from './capture-method'
-import type { RecordingDeps, RecordingNoticeKind } from './index'
+import type { RecorderActivity, RecordingDeps, RecordingNoticeKind } from './index'
 import { tr } from '../../shared/locale'
 import { recordOutputRemoval } from './removed-output'
 import { emitChildDiagnostic, RECORDING_SERVICE_ERRORS } from '../../shared/child-diagnostics'
@@ -183,6 +183,8 @@ export class RecordingSessionService implements RecordingService {
           this.pidSeenAt = this.firstPoll ? -Infinity : Date.now()
           this.skipReason = null
           this.log(`${found?.game ?? this.game} pid ${pid ?? 'none'}`)
+          if (found) this.activity({ type: 'game', running: true })
+          else if (exited) this.activity({ type: 'game', running: false })
         }
         this.firstPoll = false
         this.gamePid = pid
@@ -381,6 +383,7 @@ export class RecordingSessionService implements RecordingService {
     })
     live.on('match', (ev: 'match_start' | 'match_end' | 'match_pending' | 'match_cancel', index: number, time: number) => {
       if (this.active?.live !== live) return
+      this.activity({ type: 'match', ev: ev === 'match_start' ? 'start' : ev === 'match_end' ? 'end' : ev === 'match_pending' ? 'pending' : 'cancel', index, kills: live.kills() })
       if (ev === 'match_start') this.notice('matchStart', tr('第 {index} 局開始', { index }))
       else if (ev === 'match_end') this.notice('matchEnd', tr('第 {index} 局結束（計入擊殺 {kills}）', { index, kills: live.kills() }))
       const session = this.active
@@ -530,6 +533,7 @@ export class RecordingSessionService implements RecordingService {
       if (clientReachable && gameClient) {
         gameClient.on('event', (ev: PresenceEvent) => {
           if ((ev.type === 'match_start' || ev.type === 'match_end') && this.active === session && !session!.ending) session!.live.clientMatch(ev.type, ev.at)
+          if (ev.type === 'round_end' && this.active === session && !session!.ending) this.activity({ type: 'round', winner: ev.winner, ally: ev.ally, enemy: ev.enemy })
         })
         gameClient.on('unavailable', (error: Error) => {
           this.log(`riot client unavailable: ${error.message}`)
@@ -539,7 +543,7 @@ export class RecordingSessionService implements RecordingService {
         gameClient.start()
       }
       this.active = session
-      this.update({ sessionId: id, startedAt, backend: settings.backend })
+      this.update({ sessionId: id, startedAt, backend: settings.backend, capture: settings.backend === 'obs' ? null : capture })
       const current = session
       client.on('event', (event: RecorderEvent) => this.onEvent(current, event))
       client.on('crash', (error: Error) => {
@@ -605,12 +609,14 @@ export class RecordingSessionService implements RecordingService {
         this.hookFallbackPid = pid
         this.log(`hook fallback pid=${pid} reason=${hookReason}`)
         this.notice('warning', tr('Hook擷取無法使用，本次改用螢幕擷取（DDA）：{reason}', { reason: hookReason }))
+        this.activity({ type: 'fallback', from: 'hook', to: 'dda' })
         return this.begin(pid, builtin)
       }
       if (capture === 'dda' && code === 'capture_failed' && String(error).includes('0x887A0004') && this.ddaFallbackPid !== pid && this.gamePid === pid) {
         this.ddaFallbackPid = pid
         this.log(`dda fallback pid=${pid}`)
         this.notice('warning', tr('螢幕擷取（DDA）無法在此系統使用，本次改用視窗擷取（WGC）'))
+        this.activity({ type: 'fallback', from: 'dda', to: 'wgc' })
         return this.begin(pid, builtin)
       }
       if (windowNotFound(error)) {
@@ -761,6 +767,7 @@ export class RecordingSessionService implements RecordingService {
       this.hookFallbackPid = session.pid
       this.log(`hook fallback pid=${session.pid} reason=${hookReason}`)
       this.notice('warning', tr('Hook擷取無法使用，本次改用螢幕擷取（DDA）：{reason}', { reason: hookReason }))
+      this.activity({ type: 'fallback', from: 'hook', to: 'dda' })
       if (this.gamePid === session.pid && !this.state.paused && !this.manualStopped) {
         await this.begin(session.pid)
       }
@@ -770,6 +777,7 @@ export class RecordingSessionService implements RecordingService {
       this.ddaFallbackPid = session.pid
       this.log(`dda fallback pid=${session.pid}`)
       this.notice('warning', tr('螢幕擷取（DDA）無法在此系統使用，本次改用視窗擷取（WGC）'))
+      this.activity({ type: 'fallback', from: 'dda', to: 'wgc' })
       if (this.gamePid === session.pid && !this.state.paused && !this.manualStopped) {
         await this.begin(session.pid)
       }
@@ -950,6 +958,9 @@ export class RecordingSessionService implements RecordingService {
   private fail(code: string, message: string): void {
     this.update({ phase: 'error', error: { code, message } })
     this.notice('error', message)
+  }
+  private activity(activity: RecorderActivity): void {
+    try { this.deps.onActivity?.(activity) } catch (error) { console.error('[recording] onActivity failed:', error) }
   }
   private notice(kind: RecordingNoticeKind, message: string): void {
     this.log(`notice ${kind}: ${message}`)

@@ -4,6 +4,7 @@
 import { settingsI18n, recordingI18n, LOCALES, LOCALE_NAMES } from '../i18n'
 import type { RecordingSettings } from '../../shared/recording'
 import type { AutoMontageSettings } from '../../shared/montage'
+import type { OverlayField } from './OverlayControl'
 
 const t = settingsI18n
 
@@ -38,6 +39,7 @@ export const AUTO_MONTAGE_FIELDS: readonly AutoMontageField[] = ['enabled', 'for
 export type ControlSpec =
   | { kind: 'recording'; field: keyof RecordingSettings }
   | { kind: 'autoMontage'; field: AutoMontageField }
+  | { kind: 'overlay'; field: OverlayField }
   | { kind: 'switch'; field: BoolField }
   | { kind: 'select'; field: 'decode' | 'cacheLocation' | 'language'; options: ReadonlyArray<{ value: string; label: string }> }
   | { kind: 'numberPair'; fields: readonly ['before', 'after'] }
@@ -118,6 +120,22 @@ const autoMontageRows = (): SettingRow[] => AUTO_MONTAGE_FIELDS.map((field) => {
   }
 })
 
+/** In-game overlay card (settings.recording.overlay): copy comes from recordingI18n.overlay.rows. */
+export const OVERLAY_FIELDS: readonly OverlayField[] = ['enabled', 'position', 'durationSec', 'showKills', 'showRounds', 'opacity', 'test']
+const overlayRows = (): SettingRow[] => OVERLAY_FIELDS.map((field) => {
+  const text = recordingI18n.overlay.rows[field]
+  return {
+    id: `overlay-${field}`,
+    category: 'recording',
+    card: recordingI18n.overlay.card,
+    title: text.title,
+    desc: text.desc,
+    keywords: ['recording', 'overlay', 'notification', 'in-game', 'VALORANT', field, recordingI18n.overlay.card],
+    isNew: field === 'enabled' || undefined,
+    control: { kind: 'overlay', field }
+  }
+})
+
 export const SETTING_ROWS: SettingRow[] = [
   // ── General: app-wide preferences ──
   {
@@ -163,6 +181,7 @@ export const SETTING_ROWS: SettingRow[] = [
   // ── Recording ──
   ...recordingRows(rc.basics, ['autoRecord', 'mode', 'postAnalysis']),
   ...autoMontageRows(),
+  ...overlayRows(),
   ...recordingRows(rc.recorder, ['backend', 'obsHost', 'obsPort', 'obsPassword', 'obsFallbackBuiltin']),
   ...recordingRows(rc.video, ['height', 'bitrateKbps', 'fps', 'forceAspect', 'aspectMode', 'codec', 'gpu', 'encoder', 'preset', 'captureMethod', 'captureCursor']),
   ...recordingRows(rc.audio, ['systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono']),

@@ -43,6 +43,23 @@
 - Project schema v2 (per-clip speed, audio gain, effects, caption and transition; project style, music, intro/outro, letterbox
   and preset). v1 project files are migrated on load and left untouched on disk.
 
+- **In-game overlay** (Settings → Recording → In-game overlay, on by default):
+  - Small kill-feed-style cards in a corner of the game for every recorder activity: game detected, recording
+    started/paused/resumed/stopped, match found/started/cancelled/over, round won/lost, kills, saved, analysis done, montage
+    ready, low disk space, capture fallback (DDA ↔ WGC), warnings and errors.
+  - Kills in one round update a single card (KILL → DOUBLE → TRIPLE → QUADRA → ACE), so a five-kill round shows one ACE card.
+  - Cards auto-hide after 3 s (1–10 s; errors twice as long), at most three are stacked, and they make no sound. Settings
+    cover the corner, duration, kills, rounds and opacity, with a live preview and a "Show test cards" button.
+  - The window is transparent, frameless, never focusable, click-through (`setIgnoreMouseEvents`), shown only with
+    `showInactive()`, and excluded from capture (`setContentProtection`, WDA_EXCLUDEFROMCAPTURE). It is placed on the
+    game's monitor.
+  - Measured on Windows 11 with `app/scripts/verify-overlay-capture.cjs`, using the real overlay page and the real recorder:
+    the cards were absent from the DDA and WGC recordings and visible in a control recording without content protection.
+    The foreground window never changed (`docs/screenshots/overlay-excluded-from-recording.png`).
+  - Exclusive fullscreen cannot show other windows. There, and on Windows builds older than 2004 (no capture exclusion),
+    notices become Windows toasts once the game loses focus. Settings tells you to use Windowed Fullscreen.
+  - Not yet checked over a running VALORANT match.
+
 #### Known limitations
 
 - The pinned LGPL FFmpeg is a minimal build (no `xfade`, `fade`, `drawtext`, `amix`, `sidechaincompress`, `atempo`, `zoompan`).

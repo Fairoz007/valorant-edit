@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
-import { AUTO_MONTAGE_FIELDS, SETTING_ROWS } from './rows'
+import { AUTO_MONTAGE_FIELDS, OVERLAY_FIELDS, SETTING_ROWS } from './rows'
 import { recordingI18n } from '../i18n'
 
 const src = (rel: string): string => resolve(__dirname, '../../', rel)
@@ -76,7 +76,15 @@ const ROW_TARGETS: Record<string, { fields?: string[]; consumers?: Array<[string
       fields: ['recording'],
       consumers: [['main/settings.ts', /coerceAutoMontage/], ['renderer/settings/AutoMontageControl.tsx', /controller\.setRecording\('autoMontage'/]]
     }
-  ]))
+  ])),
+  // In-game overlay rows write settings.recording.overlay (main validates it with pickOverlay; the overlay controller and window read it).
+  ...Object.fromEntries(OVERLAY_FIELDS.filter((field) => field !== 'test').map((field) => [
+    `overlay-${field}`, {
+      fields: ['recording'],
+      consumers: [['main/settings.ts', /pickOverlay/], ['main/index.ts', /recording\.overlay/], ['renderer/settings/OverlayControl.tsx', /controller\.setOverlay/]]
+    }
+  ])),
+  'overlay-test': { consumers: [['main/index.ts', /OVERLAY_CHANNELS\.test/], ['renderer/settings/settingsController.ts', /testOverlay/]] }
 }
 
 const check = (list: Array<[string, RegExp]>): void => {
