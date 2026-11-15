@@ -13,6 +13,7 @@ import { cardStatusText, fileName } from './cardLogic'
 import { mediaUrl } from '../../shared/media-url'
 import { GAMES, SUPPORTED_GAME_IDS, gameOf, type GameId } from '../../shared/games'
 import { entryGame } from '../lib/libraryFilter'
+import '../styles/autoEdit.css'
 
 export { fileName } from './cardLogic'
 
@@ -67,6 +68,7 @@ export function sameCardEntry(a: LibraryEntry, b: LibraryEntry): boolean {
     a.path === b.path &&
     a.status === b.status &&
     a.source === b.source &&
+    a.montage?.projectId === b.montage?.projectId &&
     a.progress === b.progress &&
     a.analyzingSince === b.analyzingSince &&
     a.favorite === b.favorite &&
@@ -97,6 +99,8 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
   const title = name.replace(/\.[^.]+$/, '')
   const badge = proxySuggest ? proxyBadge(entry) : null
   const done = entry.status === 'done'
+  /** Auto montage output: opens its project in Studio whatever its own analysis state is. */
+  const montage = entry.source === 'montage' && entry.montage !== undefined
   const error = entry.status === 'error'
   const unknownGame = error && entry.errorCode === 'unknown_game'
   // With a single supported game (VALORANT) every card would carry the same tag, so it is only shown for multiple games.
@@ -186,7 +190,7 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
     return () => io.disconnect()
   }, [wantHl, entry.path])
 
-  const label = statusText ? `${title} · ${statusText}` : title
+  const label = [title, entry.source === 'montage' ? t.montageTag : '', statusText].filter(Boolean).join(' · ')
 
 // Structure: the <article> (no role or keyboard handling) contains one main .vcard-open button (thumbnail and text, used to open),
 // with all other controls (selection checkbox, favorite, ⋯, analyze, retry, remove) as siblings, never nested; native <button> handles Enter/Space.
@@ -200,7 +204,7 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
         type="button"
         className="vcard-open"
         aria-label={label}
-        aria-disabled={selectionMode ? false : !done}
+        aria-disabled={selectionMode ? false : !(done || montage)}
         aria-pressed={selectionMode ? selected : undefined}
         tabIndex={tab}
         onClick={() => {
@@ -284,6 +288,7 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
           ) : (
             <span className="vcard-meta">
               {gameTag && <span className={`vcard-game ${gameTag}`}>{GAMES[gameTag].displayName}</span>}
+              {entry.source === 'montage' && <span className="vcard-montage">{t.montageTag}</span>}
               {entry.source === 'external' && <span className="vcard-imported">{t.importedTag}</span>}
               <span>{new Date(entry.addedAt).toLocaleString(currentLocale, { hour12: false })}</span>
               {entry.codec ? <span className="vcard-codec">{entry.codec.toUpperCase()}</span> : null}

@@ -104,7 +104,10 @@ export const i18n: Messages['i18n'] = {
       deleteSource: '원본 파일 삭제',
       removeFromLibrary: '라이브러리에서 제거',
       cancel: '취소',
-      removeFailed: '원본 영상 파일을 삭제하지 못했습니다. 파일 권한이나 사용 중인지 확인하세요.'
+      removeFailed: '원본 영상 파일을 삭제하지 못했습니다. 파일 권한이나 사용 중인지 확인하세요.',
+      montageTag: '몽타주',
+      montageRemoveConfirm: '몽타주 "{name}"을(를) 라이브러리에서 제거할까요? 파일은 디스크에 남고 원본 녹화와 프로젝트에는 영향이 없습니다.',
+      montageOpenFailed: '이 몽타주의 프로젝트를 열지 못했습니다.'
     },
     selection: {
       select: '{name} 선택',
@@ -121,7 +124,11 @@ export const i18n: Messages['i18n'] = {
       deleteChoiceRecordingNote: '녹화한 동영상의 원본 파일은 항상 삭제됩니다.',
       deleteSources: '원본 파일 삭제',
       removeFromLibraryOnly: '라이브러리에서만 제거',
-      deleteFailed: '동영상 {n}개를 제거하지 못했습니다. 파일 권한이나 사용 중인지 확인하세요.'
+      deleteFailed: '동영상 {n}개를 제거하지 못했습니다. 파일 권한이나 사용 중인지 확인하세요.',
+      autoEdit: '자동 편집',
+      autoEditHint: '분석된 동영상을 하나 이상 선택하세요',
+      montageRemoveManyConfirm: '몽타주 {n}개를 라이브러리에서 제거할까요? 파일은 디스크에 남습니다.',
+      montageNote: '몽타주는 라이브러리에서만 제거되고 파일은 디스크에 남습니다.'
     }
   },
   queue: {
@@ -565,5 +572,81 @@ export const i18n: Messages['i18n'] = {
     preview: '미리 보기',
     previewCurrent: '현재 프레임',
     previewNone: '미리 보기 이미지 없음'
+  },
+  autoEdit: {
+    open: '자동 편집',
+    title: '자동 편집',
+    intro: '감지된 킬로 편집 가능한 하이라이트 프로젝트를 만듭니다.',
+    sources: '원본 동영상',
+    sourcesHint: '녹화 순서',
+    sourceLoading: '분석 결과를 불러오는 중…',
+    sourceFailed: '분석 결과를 불러오지 못했습니다',
+    sourceKills: '킬 {n}',
+    addOthers: '분석된 다른 동영상 추가',
+    noOthers: '분석된 다른 동영상이 없습니다',
+    addSameDay: '같은 날의 동영상 모두 추가',
+    target: '목표 길이',
+    targetAll: '전체',
+    targetCustom: '사용자 지정',
+    targetCustomLabel: '사용자 지정 길이(초 또는 분:초)',
+    targetCustomHint: '{min}초~{max}분',
+    targetInvalid: '{min}초에서 {max}분 사이의 길이를 입력하세요',
+    style: '스타일',
+    styles: {
+      clean: '클린',
+      cinematic: '시네마틱',
+      hype: '하이프',
+      shorts: '쇼츠'
+    },
+    styleDesc: {
+      clean: '효과 없이 바로 자릅니다.',
+      cinematic: '검은 화면 전환, 마지막 킬 슬로 모션, 레터박스, 타이틀과 엔드 카드.',
+      hype: '흰 화면 전환, 킬 순간 줌과 플래시, 음악이 있으면 비트에 맞춰 자릅니다.',
+      shorts: '세로 9:16, 큰 자막, 최대 60초.'
+    },
+    slowMoSilent: '슬로 모션 부분은 게임 소리 없이 재생됩니다.',
+    styleCap: '{style} 스타일은 최대 {sec}초라서 목표 길이가 줄어듭니다.',
+    music: '음악',
+    musicLabel: '음악 파일 경로(선택)',
+    musicPlaceholder: '음악 파일의 전체 경로를 붙여 넣으세요',
+    musicClear: '음악 지우기',
+    musicHint: '아직 파일 선택기가 없으니 경로를 입력하세요.',
+    deaths: '내 데스로 끝나는 클립도 유지',
+    output: '출력 형식',
+    presets: {
+      source: '원본',
+      youtube: 'YouTube',
+      shorts: 'Shorts',
+      tiktok: 'TikTok',
+      reels: 'Reels',
+      square: '정사각형'
+    },
+    presetForced: '{style} 스타일은 항상 세로 9:16으로 출력하므로 다른 형식을 고를 수 없습니다.',
+    estimate: '클립 {n}개 · {len} · 약 {size}',
+    estimating: '계산 중…',
+    emptyNoKills: '선택한 동영상에서 킬을 찾지 못했습니다',
+    emptyNoSelection: '동영상을 하나 이상 선택하세요',
+    warnings: '참고',
+    create: '만들기',
+    creating: '만드는 중…',
+    cancel: '취소',
+    createFailed: '프로젝트를 만들지 못했습니다. 다시 시도하세요.',
+    defaultName: '자동 편집 · {style} · {date}',
+    badges: '효과',
+    badge: {
+      slowmo: '슬로',
+      zoomPunch: '줌',
+      flash: '플래시',
+      transition: '전환'
+    },
+    badgeAria: {
+      slowmo: '슬로 모션 ×{speed}',
+      zoomPunch: '줌 펀치',
+      flash: '플래시',
+      caption: '자막: {text}',
+      speed: '속도 ×{speed}',
+      dipBlack: '검은 화면 전환',
+      dipWhite: '흰 화면 전환'
+    }
   }
 }

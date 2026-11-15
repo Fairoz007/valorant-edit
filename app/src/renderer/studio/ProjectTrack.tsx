@@ -9,6 +9,7 @@ import { ProjectManagerDialog } from './ProjectManagerDialog'
 import { rovingStep } from '../a11y/roving'
 import { dropIndex, itemWidth, trimFromDrag, trimUpperBound } from '../editor/trackLayout'
 import { sourceBadge } from '../editor/sourceColors'
+import { AutoEditBadges, effectSummary } from './AutoEditBadges'
 
 export interface ProjectTrackProps {
   project: Project
@@ -468,6 +469,7 @@ export function ProjectTrack(props: ProjectTrackProps): JSX.Element {
             const badge = sourceBadge(item.source, sources)
             const miss = missingIds.has(item.id)
             const label = labelOf(item)
+            const fx = effectSummary(item)
             return (
               <div
                 key={item.id}
@@ -481,7 +483,7 @@ export function ProjectTrack(props: ProjectTrackProps): JSX.Element {
                 aria-label={t.itemAria
                   .replace('{i}', String(i + 1))
                   .replace('{label}', label)
-                  .replace('{time}', formatTime(len))}
+                  .replace('{time}', formatTime(len)) + (fx ? `, ${fx}` : '')}
                 onClick={() => handleCardClick(item)}
                 onFocus={(e) => {
                   // Focus entering a clip (Tab/click) selects it; there are no nested controls (handles are <i> elements).
@@ -511,6 +513,7 @@ export function ProjectTrack(props: ProjectTrackProps): JSX.Element {
                   onPointerUp={handleTrimEnd}
                   onPointerCancel={handleTrimCancel}
                 />
+                <AutoEditBadges item={item} />
                 <div className="cap">
                   <span>{label}</span>
                   <span className="mono">{formatTime(len)}</span>

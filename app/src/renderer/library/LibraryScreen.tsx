@@ -10,7 +10,7 @@ import { SUPPORTED_GAME_IDS, type GameId } from '../../shared/games'
 import { resolveCardActivation, resolveLibraryEscape } from './cardLogic'
 import { VirtualGrid } from './VirtualGrid'
 import { isAllSelected, pruneSelection, selectAll, toggleGroup, toggleOne } from './selection'
-import { CopyCheck, Trash2, X } from '../components/icons'
+import { CopyCheck, Film, Trash2, X } from '../components/icons'
 import { groupByDate } from '../lib/groupByDate'
 import { useLocalNow } from '../lib/localDay'
 import { filterEntries, type LibraryGame, type LibraryKind } from '../lib/libraryFilter'
@@ -21,6 +21,10 @@ import { useQueueStore } from '../queue/QueueProvider'
 import { i18n } from '../i18n'
 import { subscribeStudioSettings } from '../studio/studioSettings'
 import { library500Requested } from '../dev/libraryFixtureFlag'
+import { useProject } from '../editor/ProjectProvider'
+import type { ProjectWithId } from '../editor/projectIo'
+import { AutoEditDialog } from '../studio/AutoEditDialog'
+import { analyzedCandidates } from '../studio/useAutoEditSources'
 
 const t = i18n.library
 
@@ -30,7 +34,7 @@ const t = i18n.library
  */
 type RemoveChoice =
   | { kind: 'single'; path: string }
-  | { kind: 'many'; paths: string[]; imported: number; hasRecording: boolean }
+  | { kind: 'many'; paths: string[]; imported: number; hasRecording: boolean; montages: string[] }
 
 interface LibraryScreenProps {
   onSelectVideo: (path: string) => void
@@ -41,6 +45,7 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
   const toast = useToast()
   const overlay = useOverlay()
   const queueStore = useQueueStore()
+  const { openProject } = useProject()
   const [entries, setEntries] = useState<LibraryEntry[]>([])
   const [query, setQuery] = useState('')
   const [favoriteOnly, setFavoriteOnly] = useState(false)
@@ -111,7 +116,7 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
       }
     },
     // While the removal dialog is open it owns the keyboard: the screen must not act on Esc or any other shortcut.
-    { screen: 'library', enabled: removeChoice === null }
+    { screen: 'library', enabled: removeChoice === null && overlay.kind !== 'dialog' }
   )
 
   const filtered = useMemo(
@@ -188,11 +193,15 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
     const paths = Array.from(selected)
     if (paths.length === 0) return
     const chosen = entries.filter((entry) => selected.has(entry.path))
-    const imported = chosen.filter((entry) => entry.source !== 'recording').length
+    // Montages are app outputs: they never get the imported-source question and only their library entry is removed.
+    const imported = chosen.filter((entry) => entry.source !== 'recording' && entry.source !== 'montage').length
     if (imported === 0) {
-      // Only recordings are selected: they always delete their source file, so one confirmation is enough.
-      const confirmed = window.confirm(t.selection.deleteSourceConfirm.replace('{n}', String(paths.length)))
-      if (!confirmed) return
+      // Only recordings and montages are selected: one confirmation is enough (recordings delete their source file).
+      const montages = chosen.filter((entry) => entry.source === 'montage').length
+      const message = montages === paths.length
+        ? t.selection.montageRemoveManyConfirm.replace('{n}', String(paths.length))
+        : t.selection.deleteSourceConfirm.replace('{n}', String(paths.length)) + (montages > 0 ? ` ${t.selection.montageNote}` : '')
+      if (!window.confirm(message)) return
       await finishManyRemove(paths, () => window.api.library.removeMany(paths))
       return
     }
@@ -201,9 +210,32 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
       kind: 'many',
       paths,
       imported,
-      hasRecording: chosen.some((entry) => entry.source === 'recording')
+      hasRecording: chosen.some((entry) => entry.source === 'recording'),
+      montages: chosen.filter((entry) => entry.source === 'montage').map((entry) => entry.path)
     })
   }, [entries, selected, finishManyRemove])
+
+  /** Selected videos that can feed an auto edit (analyzed, not montage outputs). */
+  const autoEditPaths = useMemo(
+    () => analyzedCandidates(entries.filter((entry) => selected.has(entry.path))).map((entry) => entry.path),
+    [entries, selected]
+  )
+  const createAutoEdit = useCallback(
+    async (next: ProjectWithId): Promise<boolean> => {
+      if ((await window.api?.projects?.save?.(next)) !== true) return false
+      if (!(await openProject(next.id))) return false
+      exitSelection()
+      // Studio needs a video: open the first clip's source (the project track shows the whole montage).
+      const first = next.items[0]?.source
+      if (first) onSelectVideo(first)
+      return true
+    },
+    [openProject, exitSelection, onSelectVideo]
+  )
+  const handleAutoEdit = useCallback(() => {
+    if (autoEditPaths.length === 0) return
+    overlay.open(<AutoEditDialog origin="library" initialPaths={autoEditPaths} onClose={overlay.close} onCreate={createAutoEdit} />)
+  }, [autoEditPaths, overlay, createAutoEdit])
 
   const handleImportFiles = useCallback(() => {
     void window.api?.library?.selectFiles?.().catch((error: unknown) => toast({ message: String(error) }))
@@ -215,12 +247,20 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
 
   const handleOpen = useCallback(
     (entry: LibraryEntry) => {
+      if (entry.source === 'montage' && entry.montage) {
+        // A montage opens its editable project in Studio, on the recording it was built from.
+        const { projectId, sourcePath } = entry.montage
+        void openProject(projectId)
+          .then((ok) => (ok ? onSelectVideo(sourcePath) : toast({ message: t.card.montageOpenFailed })))
+          .catch(() => toast({ message: t.card.montageOpenFailed }))
+        return
+      }
       const action = resolveCardActivation(entry, queueStore.stateOf(entry.path))
       if (action === 'open') onSelectVideo(entry.path)
       else if (action === 'toast-not-analyzed') toast({ message: t.card.notAnalyzedToast })
       else if (action === 'toast-blocked') toast({ message: t.card.openBlocked })
     },
-    [onSelectVideo, toast, queueStore]
+    [onSelectVideo, toast, queueStore, openProject]
   )
 
   const handleToggleFavorite = useCallback((path: string) => {
@@ -230,6 +270,16 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
   const handleRemove = useCallback(
     async (path: string) => {
       const entry = entries.find((entry) => entry.path === path)
+      if (entry?.source === 'montage') {
+        // Auto montage output: only its library entry goes (the file stays; its source recording and project are kept).
+        if (!window.confirm(t.card.montageRemoveConfirm.replace('{name}', fileName(path)))) return
+        try {
+          await window.api.library.remove(path)
+        } catch {
+          toast({ message: t.card.removeFailed })
+        }
+        return
+      }
       if (entry?.source === 'recording') {
         // Recordings own their source file: one confirmation is enough.
         const confirmed = window.confirm(t.card.removeSourceConfirm.replace('{name}', fileName(path)))
@@ -264,9 +314,17 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
   const removeMany = useCallback(
     async (paths: string[], deleteSource: boolean) => {
       setRemoveChoice(null)
-      await finishManyRemove(paths, () => window.api.library.removeMany(paths, { deleteSource }))
+      const montages = new Set(removeChoice?.kind === 'many' ? removeChoice.montages : [])
+      const others = paths.filter((p) => !montages.has(p))
+      await finishManyRemove(paths, async () => {
+        // A montage's file is never deleted through the imported-source choice: remove its entries separately.
+        const results: Array<{ failed?: string[] } | undefined> = []
+        if (others.length > 0) results.push(await window.api.library.removeMany(others, { deleteSource }))
+        if (montages.size > 0) results.push(await window.api.library.removeMany([...montages]))
+        return { failed: results.flatMap((r) => (Array.isArray(r?.failed) ? r.failed : [])) }
+      })
     },
-    [finishManyRemove]
+    [finishManyRemove, removeChoice]
   )
 
   const handleRetry = useCallback((path: string, force?: boolean) => {
@@ -441,6 +499,17 @@ export function LibraryScreen({ onSelectVideo, onOpenSettings }: LibraryScreenPr
                 onClick={handleSelectAll}
               >
                 <CopyCheck className="ic sm" />
+              </button>
+              <button
+                type="button"
+                className="lib-btn lib-selection-autoedit"
+                aria-haspopup="dialog"
+                title={autoEditPaths.length === 0 ? t.selection.autoEditHint : undefined}
+                disabled={autoEditPaths.length === 0}
+                onClick={handleAutoEdit}
+              >
+                <Film className="ic sm" />
+                {t.selection.autoEdit}
               </button>
               <button
                 type="button"

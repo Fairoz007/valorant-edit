@@ -102,7 +102,10 @@ const i18n = {
       deleteSource: '刪除來源檔案',
       removeFromLibrary: '從影片庫移除',
       cancel: '取消',
-      removeFailed: '移除失敗，無法刪除來源影片檔案，請確認檔案權限或是否正被使用。'
+      removeFailed: '移除失敗，無法刪除來源影片檔案，請確認檔案權限或是否正被使用。',
+      montageTag: '精華剪輯',
+      montageRemoveConfirm: '要從影片庫移除精華剪輯「{name}」嗎？剪輯檔案會保留在磁碟上，來源錄影與專案不受影響。',
+      montageOpenFailed: '無法開啟這個精華剪輯的專案。'
     },
     selection: {
       select: '選取 {name}',
@@ -119,7 +122,11 @@ const i18n = {
       deleteChoiceRecordingNote: '錄製影片的來源檔案一律會刪除。',
       deleteSources: '刪除來源檔案',
       removeFromLibraryOnly: '僅從影片庫移除',
-      deleteFailed: '有 {n} 部影片無法移除，請檢查檔案權限或是否正在使用中。'
+      deleteFailed: '有 {n} 部影片無法移除，請檢查檔案權限或是否正在使用中。',
+      autoEdit: '自動剪輯',
+      autoEditHint: '請選取至少一支已分析的影片',
+      montageRemoveManyConfirm: '要從影片庫移除 {n} 個精華剪輯嗎？剪輯檔案會保留在磁碟上。',
+      montageNote: '精華剪輯只會從影片庫移除，檔案會保留在磁碟上。'
     }
   },
   queue: {
@@ -563,6 +570,82 @@ const i18n = {
     preview: '預覽',
     previewCurrent: '目前畫面',
     previewNone: '沒有預覽畫面'
+  },
+  autoEdit: {
+    open: '自動剪輯',
+    title: '自動剪輯',
+    intro: '從偵測到的擊殺自動產生一個可編輯的精華專案。',
+    sources: '來源影片',
+    sourcesHint: '依錄影時間排序',
+    sourceLoading: '正在載入分析結果…',
+    sourceFailed: '無法載入分析結果',
+    sourceKills: '{n} 次擊殺',
+    addOthers: '加入其他已分析的影片',
+    noOthers: '沒有其他已分析的影片',
+    addSameDay: '加入同一天的所有影片',
+    target: '目標長度',
+    targetAll: '全部',
+    targetCustom: '自訂',
+    targetCustomLabel: '自訂長度（秒，或 分:秒）',
+    targetCustomHint: '{min} 秒到 {max} 分鐘',
+    targetInvalid: '請輸入 {min} 秒到 {max} 分鐘之間的長度',
+    style: '風格',
+    styles: {
+      clean: '簡潔',
+      cinematic: '電影感',
+      hype: '熱血',
+      shorts: '短影音'
+    },
+    styleDesc: {
+      clean: '直接剪接，不加效果。',
+      cinematic: '淡出至黑轉場、最後一殺慢動作、寬銀幕黑邊，加上片頭與片尾。',
+      hype: '淡出至白轉場、擊殺時縮放與閃光，有音樂時依節拍剪接。',
+      shorts: '9:16 直式、大字幕，最長 60 秒。'
+    },
+    slowMoSilent: '慢動作片段播放時沒有遊戲音效。',
+    styleCap: '{style}風格最長 {sec} 秒，會縮短目標長度。',
+    music: '背景音樂',
+    musicLabel: '音樂檔案路徑（選填）',
+    musicPlaceholder: '貼上音樂檔案的完整路徑',
+    musicClear: '清除音樂',
+    musicHint: '尚無檔案選擇器，請直接輸入路徑。',
+    deaths: '保留以自己死亡結束的片段',
+    output: '輸出格式',
+    presets: {
+      source: '原始',
+      youtube: 'YouTube',
+      shorts: 'Shorts',
+      tiktok: 'TikTok',
+      reels: 'Reels',
+      square: '方形'
+    },
+    presetForced: '{style}風格一律輸出 9:16 直式，所以無法選擇其他格式。',
+    estimate: '{n} 個片段 · {len} · 約 {size}',
+    estimating: '計算中…',
+    emptyNoKills: '所選影片中沒有找到擊殺',
+    emptyNoSelection: '請至少選取一支影片',
+    warnings: '注意事項',
+    create: '建立',
+    creating: '建立中…',
+    cancel: '取消',
+    createFailed: '無法建立專案，請再試一次。',
+    defaultName: '自動剪輯 · {style} · {date}',
+    badges: '效果',
+    badge: {
+      slowmo: '慢',
+      zoomPunch: '縮放',
+      flash: '閃光',
+      transition: '轉場'
+    },
+    badgeAria: {
+      slowmo: '慢動作 ×{speed}',
+      zoomPunch: '縮放衝擊',
+      flash: '閃光',
+      caption: '字幕：{text}',
+      speed: '速度 ×{speed}',
+      dipBlack: '淡出至黑轉場',
+      dipWhite: '淡出至白轉場'
+    }
   }
 }
 
