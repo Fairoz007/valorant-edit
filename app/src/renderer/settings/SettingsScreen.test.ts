@@ -234,8 +234,8 @@ describe('SettingsScreen markup (renderToString + fake window.api data)', () => 
 
   test('search results: rows from ALL categories, grouped by card, with per-category hit counts', async () => {
     const html = await render({ initialQuery: '資料夾' })
-    // Storage location (General) and watch folders (Import and analysis).
-    expect(rowIds(html)).toEqual(['storageRoot', 'watchFolders'])
+    // Storage location (General), the montage folder (Recording) and watch folders (Import and analysis).
+    expect(rowIds(html)).toEqual(['storageRoot', 'autoMontage-outputDir', 'watchFolders'])
     expect(html).toContain('role="region"')
     expect(html).toContain('aria-label="搜尋結果"')
     expect(html).not.toContain('role="tabpanel"')
@@ -243,10 +243,10 @@ describe('SettingsScreen markup (renderToString + fake window.api data)', () => 
     // Show only matching rows; other rows in the same card are filtered out.
     expect(html).not.toContain('data-row="autoAnalyze"')
     expect(html).toContain('影片來源') // Keep the card title.
-    // One match in each category: General and Import and analysis.
+    // One match in each category: General, Recording and Import and analysis.
     const tabs = [...html.matchAll(/<button[^>]*role="tab"[^>]*>.*?<\/button>/g)].map((m) => m[0])
     expect(tabs[0]).toMatch(/aria-label="1 項符合">1</)
-    expect(tabs[1]).not.toContain('set-hit')
+    expect(tabs[1]).toMatch(/aria-label="1 項符合">1</)
     expect(tabs[2]).toMatch(/aria-label="1 項符合">1</)
     expect(tabs[3]).not.toContain('set-hit')
   })

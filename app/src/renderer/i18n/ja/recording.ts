@@ -4,7 +4,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: '録画',
   card: 'ゲーム録画',
-  cards: { basics: '基本', recorder: 'レコーダー', video: '映像', audio: '音声', disk: 'ディスク容量と通知' },
+  cards: { basics: '基本', recorder: 'レコーダー', video: '映像', audio: '音声', disk: 'ディスク容量と通知', autoMontage: '自動モンタージュ' },
   advanced: '詳細オプション',
   current: '現在：{value}',
   fit: 'フィット',
@@ -125,5 +125,71 @@ export const recordingI18n: Messages['recordingI18n'] = {
   watchLive: '現在の試合を視聴',
   watchLiveHint: '録画中のみ、現在の試合を視聴できます',
   kills: 'この試合のキル',
-  matchIndex: '試合'
+  matchIndex: '試合',
+  autoMontage: {
+    rows: {
+      enabled: { title: '自動モンタージュ', desc: '録画した VALORANT の試合の解析が終わるたびに、ハイライトを選んでモンタージュ動画を 1 本書き出します。VALORANT のみ対応。作成中は GPU／CPU を使用します。' },
+      formatPreset: { title: 'モンタージュの形式', desc: 'モンタージュに使う書き出しプリセットです。' },
+      minClips: { title: '最小クリップ数', desc: 'ハイライトがこの数より少ない試合ではモンタージュを作りません。' },
+      maxDurationSec: { title: '最大の長さ', desc: 'モンタージュ全体の長さの上限です。' },
+      include: { title: '含めるハイライト', desc: 'モンタージュに入れるハイライトの種類を選びます。' },
+      timing: { title: '作成のタイミング', desc: '「各試合の後」は試合の解析が終わるとすぐに作成します（ゲーム実行中は低優先度）。「VALORANT 終了後」はゲームを閉じるまで待ちます。' },
+      keepSourceRecording: { title: '試合の録画を残す', desc: 'オフにすると、モンタージュの書き出しと検証が完了した後に、その試合の録画が削除されます。' },
+      outputDir: { title: 'モンタージュの保存先', desc: 'モンタージュ動画を保存するフォルダーです。' }
+    },
+    include: { multiKills: 'マルチキル（2～4 キル）', aces: 'エース（5 キル）', clutches: 'クラッチ', singleKills: 'シングルキル' },
+    timingAfterEachMatch: '各試合の後',
+    timingAfterGameExit: 'VALORANT 終了後',
+    clipsUnit: '本',
+    secondsUnit: '秒',
+    offHint: '自動モンタージュをオンにすると、これらのオプションを変更できます。',
+    outputDefault: '既定：{dir}（日付ごとのフォルダー）',
+    outputDefaultUnset: '既定：保存場所の Montages フォルダー（日付ごとのフォルダー）',
+    outputChoose: 'フォルダーを選択',
+    outputReset: '既定に戻す',
+    outputPickFailed: 'フォルダーを選択できませんでした。もう一度お試しください。',
+    analysisNoneDisabled: '自動モンタージュには解析結果が必要なため、オンの間は「解析しない」を選べません。',
+    enableDialog: {
+      title: '自動モンタージュをオンにする',
+      body: 'モンタージュには試合の解析結果が必要です。現在「録画後の解析」は「解析しない」になっており、「各試合の後」に切り替わります。',
+      confirm: 'オンにして切り替える',
+      cancel: 'キャンセル'
+    },
+    keepSourceDialog: {
+      title: '試合の録画を残さない設定にしますか？',
+      body: 'モンタージュの書き出しと検証が完了した後に、その試合の録画が削除されます。削除した録画は元に戻せません。',
+      confirm: '書き出し後に削除する',
+      cancel: 'キャンセル'
+    },
+    status: {
+      title: '自動モンタージュ',
+      idleEach: 'オン：各試合の後にモンタージュを作成します',
+      idleExit: 'オン：VALORANT の終了後にモンタージュを作成します',
+      recorded: 'モンタージュを準備中…',
+      analyzing: '試合の解析を待っています…',
+      selecting: 'ハイライトを選んでいます…',
+      exporting: 'モンタージュを作成中… {pct}%',
+      deferred: 'VALORANT の終了を待っています',
+      done: 'モンタージュ完成：{n} クリップ、{dur}',
+      doneOne: 'モンタージュ完成：1 クリップ、{dur}',
+      skipped: {
+        tooFew: 'スキップ：ハイライトが {n} 件のみ',
+        tooFewOne: 'スキップ：ハイライトが 1 件のみ',
+        tooFewNoCount: 'スキップ：ハイライトが少なすぎます',
+        empty: 'スキップ：この試合にはハイライトがありません',
+        lowDisk: 'スキップ：ディスクの空き容量が不足しています',
+        notValorant: 'スキップ：VALORANT の録画ではありません',
+        sourceMissing: 'スキップ：試合の録画が削除されています'
+      },
+      failed: '失敗：{error}',
+      failedUnknown: 'モンタージュの作成に失敗しました',
+      cancelled: 'モンタージュをキャンセルしました',
+      open: 'スタジオで開く',
+      retry: '再試行',
+      cancel: 'モンタージュをキャンセル',
+      openFailed: 'モンタージュのプロジェクトを開けませんでした。',
+      actionFailed: '操作に失敗しました。もう一度お試しください。',
+      unavailable: '自動モンタージュの状態を取得できません。'
+    }
+  }
 }

@@ -4,7 +4,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: '녹화',
   card: '게임 녹화',
-  cards: { basics: '기본', recorder: '녹화기', video: '영상', audio: '오디오', disk: '디스크 공간과 알림' },
+  cards: { basics: '기본', recorder: '녹화기', video: '영상', audio: '오디오', disk: '디스크 공간과 알림', autoMontage: '자동 몽타주' },
   advanced: '고급 옵션',
   current: '현재: {value}',
   fit: '맞춤',
@@ -125,5 +125,71 @@ export const recordingI18n: Messages['recordingI18n'] = {
   watchLive: '이번 매치 보기',
   watchLiveHint: '녹화 중에만 이번 매치를 볼 수 있습니다',
   kills: '이번 매치 킬',
-  matchIndex: '매치'
+  matchIndex: '매치',
+  autoMontage: {
+    rows: {
+      enabled: { title: '자동 몽타주', desc: '녹화한 VALORANT 매치의 분석이 끝날 때마다 하이라이트를 골라 몽타주 영상 하나를 내보냅니다. VALORANT 전용입니다. 몽타주를 만드는 동안 GPU와 CPU를 사용합니다.' },
+      formatPreset: { title: '몽타주 형식', desc: '몽타주에 사용할 내보내기 프리셋입니다.' },
+      minClips: { title: '최소 클립 수', desc: '하이라이트 클립이 이보다 적은 매치는 몽타주를 만들지 않습니다.' },
+      maxDurationSec: { title: '최대 길이', desc: '몽타주 전체 길이의 상한입니다.' },
+      include: { title: '포함할 하이라이트', desc: '몽타주에 넣을 하이라이트 종류를 선택합니다.' },
+      timing: { title: '만드는 시점', desc: '"매치가 끝날 때마다"는 매치 분석이 끝나는 즉시 만듭니다(게임 실행 중에는 낮은 우선순위). "VALORANT 종료 후"는 게임이 종료될 때까지 기다립니다.' },
+      keepSourceRecording: { title: '매치 녹화 보관', desc: '끄면 몽타주를 내보내고 검증한 뒤 해당 매치의 녹화를 삭제합니다.' },
+      outputDir: { title: '몽타주 폴더', desc: '몽타주 영상을 저장할 위치입니다.' }
+    },
+    include: { multiKills: '멀티킬(2~4킬)', aces: '에이스(5킬)', clutches: '클러치', singleKills: '단일 킬' },
+    timingAfterEachMatch: '매치가 끝날 때마다',
+    timingAfterGameExit: 'VALORANT 종료 후',
+    clipsUnit: '개',
+    secondsUnit: '초',
+    offHint: '자동 몽타주를 켜야 이 옵션들을 변경할 수 있습니다.',
+    outputDefault: '기본값: {dir}(날짜별 폴더)',
+    outputDefaultUnset: '기본값: 저장 위치의 Montages 폴더(날짜별 폴더)',
+    outputChoose: '폴더 선택',
+    outputReset: '기본값으로',
+    outputPickFailed: '폴더를 선택할 수 없습니다. 다시 시도하세요.',
+    analysisNoneDisabled: '자동 몽타주에는 분석 결과가 필요하므로 켜져 있는 동안에는 "분석 안 함"을 선택할 수 없습니다.',
+    enableDialog: {
+      title: '자동 몽타주 켜기',
+      body: '몽타주에는 매치 분석 결과가 필요합니다. 현재 "녹화 후 분석"이 "분석 안 함"으로 설정되어 있으며 "매치가 끝날 때마다"로 바뀝니다.',
+      confirm: '켜고 변경',
+      cancel: '취소'
+    },
+    keepSourceDialog: {
+      title: '매치 녹화를 보관하지 않을까요?',
+      body: '몽타주를 내보내고 검증한 뒤 해당 매치의 녹화가 삭제됩니다. 삭제한 녹화는 복구할 수 없습니다.',
+      confirm: '내보낸 후 삭제',
+      cancel: '취소'
+    },
+    status: {
+      title: '자동 몽타주',
+      idleEach: '켜짐: 매치가 끝날 때마다 몽타주를 만듭니다',
+      idleExit: '켜짐: VALORANT 종료 후 몽타주를 만듭니다',
+      recorded: '몽타주 준비 중…',
+      analyzing: '매치 분석을 기다리는 중…',
+      selecting: '하이라이트를 고르는 중…',
+      exporting: '몽타주 만드는 중… {pct}%',
+      deferred: 'VALORANT 종료를 기다리는 중',
+      done: '몽타주 완성: 클립 {n}개, {dur}',
+      doneOne: '몽타주 완성: 클립 1개, {dur}',
+      skipped: {
+        tooFew: '건너뜀: 하이라이트가 {n}개뿐입니다',
+        tooFewOne: '건너뜀: 하이라이트가 1개뿐입니다',
+        tooFewNoCount: '건너뜀: 하이라이트가 너무 적습니다',
+        empty: '건너뜀: 이 매치에는 하이라이트가 없습니다',
+        lowDisk: '건너뜀: 디스크 공간이 부족합니다',
+        notValorant: '건너뜀: VALORANT 녹화가 아닙니다',
+        sourceMissing: '건너뜀: 매치 녹화가 삭제되었습니다'
+      },
+      failed: '실패: {error}',
+      failedUnknown: '몽타주를 만들지 못했습니다',
+      cancelled: '몽타주가 취소되었습니다',
+      open: '스튜디오에서 열기',
+      retry: '다시 시도',
+      cancel: '몽타주 취소',
+      openFailed: '몽타주 프로젝트를 열 수 없습니다.',
+      actionFailed: '작업에 실패했습니다. 다시 시도하세요.',
+      unavailable: '자동 몽타주 상태를 가져올 수 없습니다.'
+    }
+  }
 }

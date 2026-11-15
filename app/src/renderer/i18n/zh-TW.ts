@@ -910,7 +910,7 @@ const settingsI18n = {
 const recordingI18n = {
   title: '錄影',
   card: '遊戲錄影',
-  cards: { basics: '基本', recorder: '錄影器', video: '影像', audio: '音訊', disk: '磁碟空間與通知' },
+  cards: { basics: '基本', recorder: '錄影器', video: '影像', audio: '音訊', disk: '磁碟空間與通知', autoMontage: '自動精華影片' },
   advanced: '進階選項',
   current: '目前：{value}',
   fit: '適配',
@@ -1031,7 +1031,73 @@ const recordingI18n = {
   watchLive: '觀看當局',
   watchLiveHint: '錄影中才能觀看當局',
   kills: '本局擊殺',
-  matchIndex: '對局'
+  matchIndex: '對局',
+  autoMontage: {
+    rows: {
+      enabled: { title: '自動製作精華影片', desc: '每局 VALORANT 錄影分析完成後，自動挑出精華並匯出一支精華影片。僅支援 VALORANT；製作時會使用 GPU／CPU。' },
+      formatPreset: { title: '影片格式', desc: '精華影片使用的匯出格式。' },
+      minClips: { title: '最少片段數', desc: '精華片段少於此數量時不製作精華影片。' },
+      maxDurationSec: { title: '最長長度', desc: '精華影片的總長度上限。' },
+      include: { title: '包含的精華', desc: '選擇哪些精華可以放進精華影片。' },
+      timing: { title: '製作時機', desc: '「每局結束後」在對局分析完成後立即製作（遊戲執行中以低優先順序進行）；「關閉 VALORANT 後」等遊戲關閉後再製作。' },
+      keepSourceRecording: { title: '保留該局原始錄影', desc: '關閉後，精華影片匯出並驗證成功後，會刪除該局的原始錄影。' },
+      outputDir: { title: '精華影片資料夾', desc: '精華影片的儲存位置。' }
+    },
+    include: { multiKills: '多殺（2–4 殺）', aces: 'ACE（5 殺）', clutches: '殘局', singleKills: '單殺' },
+    timingAfterEachMatch: '每局結束後',
+    timingAfterGameExit: '關閉 VALORANT 後',
+    clipsUnit: '個',
+    secondsUnit: '秒',
+    offHint: '開啟「自動製作精華影片」後才能調整這些選項。',
+    outputDefault: '預設：{dir}（每天一個資料夾）',
+    outputDefaultUnset: '預設：儲存位置中的 Montages 資料夾（每天一個資料夾）',
+    outputChoose: '選擇資料夾',
+    outputReset: '恢復預設',
+    outputPickFailed: '無法選擇資料夾，請再試一次。',
+    analysisNoneDisabled: '自動製作精華影片需要分析結果，開啟時無法選擇「不分析」。',
+    enableDialog: {
+      title: '開啟自動製作精華影片',
+      body: '精華影片需要對局分析結果。目前「錄後分析」為「不分析」，開啟後會改為「每局結束後」。',
+      confirm: '開啟並改為每局結束後',
+      cancel: '取消'
+    },
+    keepSourceDialog: {
+      title: '不保留原始錄影？',
+      body: '精華影片匯出並驗證成功後，該局的原始錄影會被刪除，刪除後無法復原。',
+      confirm: '不保留原始錄影',
+      cancel: '取消'
+    },
+    status: {
+      title: '自動精華影片',
+      idleEach: '已開啟：每局結束後製作精華影片',
+      idleExit: '已開啟：關閉 VALORANT 後製作精華影片',
+      recorded: '準備製作精華影片…',
+      analyzing: '等待對局分析完成…',
+      selecting: '正在挑選精華…',
+      exporting: '正在製作精華影片… {pct}%',
+      deferred: '等待 VALORANT 關閉',
+      done: '精華影片已完成：{n} 個片段，{dur}',
+      doneOne: '精華影片已完成：1 個片段，{dur}',
+      skipped: {
+        tooFew: '已略過：只有 {n} 個精華',
+        tooFewOne: '已略過：只有 1 個精華',
+        tooFewNoCount: '已略過：精華太少',
+        empty: '已略過：這局沒有精華',
+        lowDisk: '已略過：磁碟空間不足',
+        notValorant: '已略過：不是 VALORANT 錄影',
+        sourceMissing: '已略過：原始錄影已被移除'
+      },
+      failed: '失敗：{error}',
+      failedUnknown: '精華影片製作失敗',
+      cancelled: '已取消精華影片',
+      open: '在工作室開啟',
+      retry: '重試',
+      cancel: '取消製作',
+      openFailed: '無法開啟精華影片專案。',
+      actionFailed: '操作失敗，請再試一次。',
+      unavailable: '無法取得自動精華影片狀態。'
+    }
+  }
 }
 
 /** Playback during recording (phase 3). */

@@ -18,7 +18,7 @@ export interface RecordingApi {
   onLive?(callback: (update: LiveUpdate) => void): () => void
 }
 
-/** Auto montage (preload `montage`; optional in test doubles). */
+/** Auto montage (preload `montage`). */
 export interface MontageApi {
   getStatus(): Promise<MontageStatus>
   open(jobId: string): Promise<{ projectId: string } | null>
@@ -29,6 +29,6 @@ export interface MontageApi {
 
 declare global {
   interface Window {
-    api: { recording: RecordingApi; montage?: MontageApi; telemetry?: { enabled(): Promise<boolean>; report(message: string): Promise<boolean>; reportPlaybackDesync(report: PlaybackDesyncReport): Promise<boolean> } } & Record<'engine' | 'library' | 'queue' | 'cache' | 'proxy' | 'projects' | 'app' | 'settings' | 'export' | 'update', any>
+    api: { recording: RecordingApi; montage: MontageApi; telemetry?: { enabled(): Promise<boolean>; report(message: string): Promise<boolean>; reportPlaybackDesync(report: PlaybackDesyncReport): Promise<boolean> } } & Record<'engine' | 'library' | 'queue' | 'cache' | 'proxy' | 'projects' | 'app' | 'settings' | 'export' | 'update', any>
   }
 }

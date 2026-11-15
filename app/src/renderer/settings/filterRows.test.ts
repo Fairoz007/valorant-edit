@@ -115,6 +115,6 @@ describe('filterRows', () => {
 
   test('real rows: searching finds rows across categories', () => {
     expect(Object.keys(filterRows(SETTING_ROWS, '錄影').counts).sort()).toEqual(['about', 'general', 'recording'])
-    expect(Object.keys(filterRows(SETTING_ROWS, '資料夾').counts)).toEqual(['general', 'analysis'])
+    expect(Object.keys(filterRows(SETTING_ROWS, '資料夾').counts)).toEqual(['general', 'recording', 'analysis'])
   })
 })

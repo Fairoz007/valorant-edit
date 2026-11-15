@@ -4,7 +4,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: '录制',
   card: '游戏录制',
-  cards: { basics: '基本', recorder: '录制器', video: '画面', audio: '音频', disk: '磁盘空间与通知' },
+  cards: { basics: '基本', recorder: '录制器', video: '画面', audio: '音频', disk: '磁盘空间与通知', autoMontage: '自动精华视频' },
   advanced: '高级选项',
   current: '当前：{value}',
   fit: '适配',
@@ -125,5 +125,71 @@ export const recordingI18n: Messages['recordingI18n'] = {
   watchLive: '观看本局',
   watchLiveHint: '录制中才能观看本局',
   kills: '本局击杀',
-  matchIndex: '对局'
+  matchIndex: '对局',
+  autoMontage: {
+    rows: {
+      enabled: { title: '自动制作精华视频', desc: '每局 VALORANT 录像分析完成后，自动挑选精华并导出一个精华视频。仅支持 VALORANT；制作时会使用 GPU／CPU。' },
+      formatPreset: { title: '视频格式', desc: '精华视频使用的导出格式。' },
+      minClips: { title: '最少片段数', desc: '精华片段少于此数量时不制作精华视频。' },
+      maxDurationSec: { title: '最长时长', desc: '精华视频的总时长上限。' },
+      include: { title: '包含的精华', desc: '选择哪些精华可以放进精华视频。' },
+      timing: { title: '制作时机', desc: '“每局结束后”在对局分析完成后立即制作（游戏运行中以低优先级进行）；“关闭 VALORANT 后”等游戏关闭后再制作。' },
+      keepSourceRecording: { title: '保留该局原始录像', desc: '关闭后，精华视频导出并验证成功后，会删除该局的原始录像。' },
+      outputDir: { title: '精华视频文件夹', desc: '精华视频的保存位置。' }
+    },
+    include: { multiKills: '多杀（2–4 杀）', aces: 'ACE（5 杀）', clutches: '残局', singleKills: '单杀' },
+    timingAfterEachMatch: '每局结束后',
+    timingAfterGameExit: '关闭 VALORANT 后',
+    clipsUnit: '个',
+    secondsUnit: '秒',
+    offHint: '开启“自动制作精华视频”后才能调整这些选项。',
+    outputDefault: '默认：{dir}（每天一个文件夹）',
+    outputDefaultUnset: '默认：存储位置中的 Montages 文件夹（每天一个文件夹）',
+    outputChoose: '选择文件夹',
+    outputReset: '恢复默认',
+    outputPickFailed: '无法选择文件夹，请再试一次。',
+    analysisNoneDisabled: '自动制作精华视频需要分析结果，开启时无法选择“不分析”。',
+    enableDialog: {
+      title: '开启自动制作精华视频',
+      body: '精华视频需要对局分析结果。当前“录后分析”为“不分析”，开启后会改为“每局结束后”。',
+      confirm: '开启并改为每局结束后',
+      cancel: '取消'
+    },
+    keepSourceDialog: {
+      title: '不保留原始录像？',
+      body: '精华视频导出并验证成功后，该局的原始录像会被删除，删除后无法恢复。',
+      confirm: '不保留原始录像',
+      cancel: '取消'
+    },
+    status: {
+      title: '自动精华视频',
+      idleEach: '已开启：每局结束后制作精华视频',
+      idleExit: '已开启：关闭 VALORANT 后制作精华视频',
+      recorded: '准备制作精华视频…',
+      analyzing: '等待对局分析完成…',
+      selecting: '正在挑选精华…',
+      exporting: '正在制作精华视频… {pct}%',
+      deferred: '等待 VALORANT 关闭',
+      done: '精华视频已完成：{n} 个片段，{dur}',
+      doneOne: '精华视频已完成：1 个片段，{dur}',
+      skipped: {
+        tooFew: '已跳过：只有 {n} 个精华',
+        tooFewOne: '已跳过：只有 1 个精华',
+        tooFewNoCount: '已跳过：精华太少',
+        empty: '已跳过：这局没有精华',
+        lowDisk: '已跳过：磁盘空间不足',
+        notValorant: '已跳过：不是 VALORANT 录像',
+        sourceMissing: '已跳过：原始录像已被移除'
+      },
+      failed: '失败：{error}',
+      failedUnknown: '精华视频制作失败',
+      cancelled: '已取消精华视频',
+      open: '在工作室打开',
+      retry: '重试',
+      cancel: '取消制作',
+      openFailed: '无法打开精华视频项目。',
+      actionFailed: '操作失败，请再试一次。',
+      unavailable: '无法获取自动精华视频状态。'
+    }
+  }
 }
