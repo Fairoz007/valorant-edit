@@ -223,9 +223,9 @@ describe('scenario 1: match cancelled (matchCancel) or remake', () => {
   })
 
   it.each([
-    ['a remake with one kill', [kill('k1', 30)], 'tooFew'],
-    ['a remake with no kills', [], 'empty']
-  ] as const)('%s → skipped(%s), no render and no file', async (_label, events, reason) => {
+    ['a remake with one kill', 'tooFew', [kill('k1', 30)]],
+    ['a remake with no kills', 'empty', []]
+  ] as const)('%s → skipped(%s), no render and no file', async (_label, reason, events) => {
     const base = root()
     const m = montageRig(base)
     const { deps, dir } = matchSession(base, { matches: [{ start: 10, end: 40 }] })
