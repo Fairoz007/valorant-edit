@@ -217,6 +217,26 @@ export class Library {
   }
 
   /**
+   * Add (or tag) an Auto montage output: `source: 'montage'` plus the match it was built from. Persists immediately and throws
+   * when the library cannot be saved, so the caller never reports a montage the library will forget.
+   */
+  addMontage(videoPath: string, montage: { sourcePath: string; projectId: string; jobId: string }, extra: { game?: GameId; durationSec?: number } = {}): LibraryEntry {
+    this.add([videoPath], 'montage', extra.game)
+    const entry = this.get(videoPath)
+    if (!entry) throw new Error('Montage output is not a supported local video')
+    entry.source = 'montage'
+    entry.montage = { ...montage }
+    if (extra.durationSec !== undefined && Number.isFinite(extra.durationSec)) entry.durationSec = extra.durationSec
+    if (!this.save()) throw new Error('Failed to save library')
+    return { ...entry }
+  }
+
+  /** Whether a montage entry built by this Auto montage job is in the library. */
+  hasMontage(jobId: string): boolean {
+    return this.entries.some((e) => e.source === 'montage' && e.montage?.jobId === jobId)
+  }
+
+  /**
    * Remove one entry. The source file is unlinked for recordings (they own it) and for every other entry only when
    * `opts.deleteSource` is true. A missing file is tolerated; any other failure keeps the entry (the error is thrown).
    */

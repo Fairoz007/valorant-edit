@@ -253,6 +253,12 @@ export class AnalysisQueue extends EventEmitter {
         // Reanalysis completed: invalidate the old N highlights count and let lazy computation recalculate it.
         hl: undefined
       })
+      // Auto montage: results for this video are on disk (never emitted for cancelled or failed runs). Listener errors stay out of the queue.
+      try {
+        this.emit('analyzed', videoPath, gameOf(doc.game))
+      } catch (err) {
+        console.error('[Queue] analyzed listener failed:', err)
+      }
     } catch (err) {
       if (run.cancelled || (err instanceof EngineError && err.code === 'engine_stopped')) {
         // Interrupted runs remain pending, including jobs deferred until the game exits and runs cut off by quitting.

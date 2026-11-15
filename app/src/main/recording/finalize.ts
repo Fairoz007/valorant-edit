@@ -340,6 +340,7 @@ async function completeCut(dir: string, deps: RecordingDeps, config: SessionSnap
   catch (error) { if (outputWasRemoved(dir, cut.outputPath)) return; throw error }
   if (outputWasRemoved(dir, cut.outputPath)) return
   addRecorded(deps, [cut.outputPath], config.game)
+  notifyMontage(deps, 'onMatchRecorded', cut.outputPath, config.game)
   if (!cut.liveCached || (finishing && trusted && !cut.liveTrusted)) {
     try {
       const summary = await writeLiveCache(dir, cut.outputPath, deps, entries, {
@@ -361,6 +362,8 @@ async function completeCut(dir: string, deps: RecordingDeps, config: SessionSnap
     cut.analysisQueued = true
     await writeJson(path.join(dir, 'matches.json'), marker)
   }
+  // The full-analysis path reports through AnalysisQueue's 'analyzed' event instead.
+  if (cut.liveTrusted && !cut.analysisQueued) notifyMontage(deps, 'onMatchAnalyzed', cut.outputPath, config.game)
 }
 
 export function liveMatches(live: LiveFile | null): LiveMatch[] {
@@ -468,6 +471,18 @@ export async function reserveOutput(outputDir: string, base: string, startedAt: 
 export function addRecorded(deps: RecordingDeps, paths: string[], game?: GameId): void {
   if (game && game !== DEFAULT_GAME) deps.addToLibrary(paths, game)
   else deps.addToLibrary(paths)
+}
+
+/**
+ * Auto montage hooks (`onMatchRecorded` after addRecorded, `onMatchAnalyzed` when the trusted live cache replaces a full analysis).
+ * The montage service de-duplicates by persisted job; a hook failure must never affect finalization.
+ */
+export function notifyMontage(deps: RecordingDeps, hook: 'onMatchRecorded' | 'onMatchAnalyzed', videoPath: string, game?: GameId): void {
+  try {
+    deps[hook]?.(videoPath, gameOf(game))
+  } catch (error) {
+    console.error(`[recording] Auto montage ${hook} failed:`, error)
+  }
 }
 
 /** MP4 tags the engine reads back for offline analysis; the game tag lets it skip sampling-based game detection. */
@@ -603,6 +618,7 @@ export async function finalizeSession(dir: string, deps: RecordingDeps): Promise
   if (!['none', 'afterExit', 'perMatch'].includes(marker.postAnalysis)) throw new Error(tr('已收尾的分析設定無效'))
   // recording.json outlives the marker, so recovery keeps the game even without a live cache.
   addRecorded(deps, [marker.outputPath], gameOf(recording?.game))
+  notifyMontage(deps, 'onMatchRecorded', marker.outputPath, gameOf(recording?.game))
   if (!marker.liveCached) {
       // Live events are best-effort: conversion failure does not block finalization; full or manual analysis can fill them in later.
     try {
@@ -625,6 +641,7 @@ export async function finalizeSession(dir: string, deps: RecordingDeps): Promise
     marker.analysisQueued = true
     await writeJson(markerPath, marker)
   }
+  if (marker.liveTrusted && !marker.analysisQueued) notifyMontage(deps, 'onMatchAnalyzed', marker.outputPath, gameOf(recording?.game))
   await removeSessionDir(dir)
   return [marker.outputPath]
 }

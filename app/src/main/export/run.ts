@@ -1,4 +1,5 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { spawn } from 'child_process'
@@ -25,6 +26,31 @@ export interface RunExportOptions {
   ffmpeg?: { bin: string; prefixArgs?: string[] }
   /** Temporary directory for concat lists; defaults to `%APPDATA%\Valorant Editor\temp`. */
   tempDir?: string
+  /**
+   * OS scheduling priority of each ffmpeg process, applied right after spawn (errors are ignored). A function is re-read on every
+   * progress update, so a background export can drop to idle while a game recording runs. Omitted = inherit (normal).
+   */
+  priority?: ExportPriority | (() => ExportPriority)
+}
+
+export type ExportPriority = 'normal' | 'belowNormal' | 'idle'
+
+const OS_PRIORITY: Record<ExportPriority, number> = {
+  normal: os.constants.priority.PRIORITY_NORMAL,
+  belowNormal: os.constants.priority.PRIORITY_BELOW_NORMAL,
+  // PRIORITY_LOW maps to IDLE_PRIORITY_CLASS on Windows.
+  idle: os.constants.priority.PRIORITY_LOW
+}
+
+/** Set a process's priority; a process that already exited or a refused change must not affect the export. */
+export function applyProcessPriority(pid: number | undefined, priority: ExportPriority): boolean {
+  if (pid === undefined) return false
+  try {
+    os.setPriority(pid, OS_PRIORITY[priority])
+    return true
+  } catch {
+    return false
+  }
 }
 
 export interface RunExportControl {
@@ -221,6 +247,19 @@ export async function runExport(opts: RunExportOptions, control: RunExportContro
         let stderrBuffer = ''
         let stdoutRest = ''
         let spawnError: Error | null = null
+        let appliedPriority: ExportPriority | null = null
+        const syncPriority = (): void => {
+          if (opts.priority === undefined) return
+          try {
+            const wanted = typeof opts.priority === 'function' ? opts.priority() : opts.priority
+            if (wanted === appliedPriority || !(wanted in OS_PRIORITY)) return
+            appliedPriority = wanted
+            applyProcessPriority(proc.pid, wanted)
+          } catch {
+            // A failing priority getter must not affect the export.
+          }
+        }
+        syncPriority()
 
         const onAbort = (): void => {
           void killTree(proc)
@@ -231,6 +270,7 @@ export async function runExport(opts: RunExportOptions, control: RunExportContro
         const cleanup = (): void => signal?.removeEventListener('abort', onAbort)
 
         proc.stdout?.on('data', (data) => {
+          syncPriority()
           const lines = (stdoutRest + data.toString()).split('\n')
           stdoutRest = lines.pop() ?? ''
           for (const line of lines) {
