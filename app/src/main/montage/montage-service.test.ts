@@ -29,7 +29,7 @@ function cacheDoc(): CacheDoc {
     analysis: { status: 'done', progress_t: 600, engine_version: 'x', templates_version: 'x', h_scale: 1 },
     events: [],
     spectating: [],
-    clips: [clip('m1', 400, 405, 'manual'), clip('oldai', 1, 2)],
+    clips: [clip('m1', 400, 405, 'manual'), { ...clip('oldai', 1, 2), status: 'suggested' }],
     keyframes: [],
     cache_path: 'x',
     game: 'valorant'
@@ -152,6 +152,26 @@ async function recordAndAnalyze(h: Harness, src = SRC): Promise<void> {
   await h.service.idle()
 }
 
+describe('cache clips follow the re-analysis merge rules', () => {
+  it('keeps accepted AI clips (stale), drops old suggestions, and passes skipped clips so selection can leave them out', async () => {
+    const doc = cacheDoc()
+    doc.clips = [
+      clip('m1', 400, 405, 'manual'),
+      { ...clip('acc', 200, 210), status: 'accepted' },
+      { ...clip('sug', 1, 2), status: 'suggested' },
+      { ...clip('skip', 100, 110), status: 'skipped' }
+    ]
+    const h = harness({ readCache: vi.fn(() => doc), probeOutput: vi.fn(async () => ({ duration: 55, hasVideo: true, hasAudio: true })) })
+    h.service.start()
+    await recordAndAnalyze(h)
+    const passed = vi.mocked(selectMontageClips).mock.calls[0][1]
+    expect(passed.map((c) => c.id).sort()).toEqual(['a1', 'a2', 'a3', 'acc', 'm1', 'skip'])
+    expect(passed.find((c) => c.id === 'acc')).toMatchObject({ status: 'accepted', stale: true })
+    expect(passed.find((c) => c.id === 'skip')).toMatchObject({ status: 'skipped' })
+    expect(passed.some((c) => c.id === 'sug')).toBe(false)
+  })
+})
+
 describe('happy path', () => {
   it('full analysis: recorded → analyzing → (analyzed event) → selecting → exporting → done, with library entry and notice', async () => {
     const h = harness()
@@ -164,7 +184,7 @@ describe('happy path', () => {
     const job = h.store.get(id)!
     expect(job).toMatchObject({ state: 'done', clipCount: 4, totalSec: 35, projectId: montageProjectId(id), formatPreset: 'youtube', progress: 1 })
     expect(job.outputPath).toBe(`D:/Root/Montages/${dayFolderName(NOW)}/Montage_Valorant_2026-11-15_21-08.mp4`)
-    // Autoclip output plus manual cache clips (not the stale AI clips of the cache).
+    // mergeOnReanalyze: manual clips stay, old AI suggestions are replaced by the fresh autoclip output.
     expect(vi.mocked(selectMontageClips).mock.calls[0][1].map((c) => c.id)).toEqual(['a1', 'a2', 'a3', 'm1'])
     expect(vi.mocked(selectMontageClips).mock.calls[0][2]).toMatchObject({ videoDurationSec: 600, montage: { minClips: 2 } })
     const req = h.render.mock.calls[0][0] as MontageRenderRequest

@@ -275,6 +275,7 @@ const messages: MessageTable = {
   '精華合輯檔案缺少影像或聲音': 'The montage file is missing its video or audio.',
   '精華合輯長度不符（{actual} 秒，預期 {expected} 秒）': 'The montage length does not match ({actual} s, expected {expected} s).',
   '精華合輯製作失敗：{error}': 'The montage could not be made: {error}',
+  '磁碟空間不足，已略過這場對局的精華合輯': 'Low disk space: the montage for this match was skipped',
   '找不到這場對局的分析結果': 'The analysis results for this match could not be found.',
   '無法挑選精華片段：{error}': 'Could not pick the highlights: {error}',
   '無法建立精華合輯資料夾：{error}': 'Could not create the montage folder: {error}',

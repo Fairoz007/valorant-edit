@@ -291,8 +291,8 @@ const totalOf = (j: Joined[]): number => j.reduce((s, x) => s + (x.end - x.start
  *    multiKills on, a clutch is kept and ranked as a 2k.
  * 3. Existing clips: a non-skipped clip overlapping a window is reused — the montage clip spans the union of both ranges
  *    and keeps that clip's id, origin, status and other fields (manual beats accepted beats suggested when several meet
- *    in one montage clip; the others are absorbed). Skipped clips are ignored entirely, so a window overlapping only a
- *    skipped clip is still eligible. Stale AI suggestions are ignored too (their range comes from an older analysis;
+ *    in one montage clip; the others are absorbed). Skipped clips are never reused; a window whose kills all lie inside a
+ *    skipped clip is left out (the user rejected that highlight), while a window only partly covered stays eligible. Stale AI suggestions are ignored too (their range comes from an older analysis;
  *    the fresh window replaces them), while stale accepted/manual clips are reused because a user decision is attached.
  *    Existing clips that overlap no eligible window are not part of the montage.
  * 4. Ranges overlapping or less than 0.5 s apart are joined into one clip (event ids united, chronological).
@@ -320,10 +320,13 @@ export function selectMontageClips(events: EngineEvent[], clips: Clip[], setting
     durationSec: dur,
     ...(settings.rounds ? { rounds: settings.rounds } : {})
   })
+  // A window whose kills all lie inside a clip the user skipped was rejected by the user: leave it out.
+  const rejected = clips.filter((c) => c.status === 'skipped' && Number.isFinite(c.start) && Number.isFinite(c.end))
+  const userRejected = (w: HighlightWindow): boolean => rejected.some((s) => w.killTimes.every((t) => t >= s.start && t <= s.end))
   const eligible: HighlightWindow[] = []
   for (const w of windows) {
     const kind = effectiveKind(w.kind, inc)
-    if (kind && w.end > w.start) eligible.push({ ...w, kind })
+    if (kind && w.end > w.start && !userRejected(w)) eligible.push({ ...w, kind })
   }
   if (eligible.length === 0) return { clips: [], totalSec: 0, skipped: 'empty' }
 

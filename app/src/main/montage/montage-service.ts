@@ -25,6 +25,7 @@ import { dayFolderName } from '../../shared/storage'
 import type { AutoClipParams, CacheDoc, Clip, EngineEvent, VideoInfo } from '../../shared/types'
 import type { GameId } from '../../shared/games'
 import { tr } from '../../shared/locale'
+import { mergeOnReanalyze, normalizeClips } from '../../shared/clips'
 import type { ExportPriority } from '../export/run'
 import { isTerminal, type MontageJobStore } from './montage-job'
 import { montageDiskEstimate, verifyFailure, type MontageRenderer, type OutputProbe } from './montage-export'
@@ -186,6 +187,8 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
     lastPushedPercent = -1
     run.done = (async () => {
       try {
+        // Yield first: hooks call pump() from inside finalization, which must not wait for the cache read below.
+        await new Promise<void>((resolve) => setImmediate(resolve))
         await processJob(next.id, run)
       } catch (err) {
         // Unexpected bug: never leave a job stuck in a running state.
@@ -253,9 +256,11 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
     }
     if (signal.aborted) return stopped(run)
 
-    // Autoclip output plus the user's own clips from the cache (AI clips in the cache are what autoclip just regenerated).
-    const manual = (Array.isArray(doc.clips) ? doc.clips : []).filter((c) => c.origin === 'manual')
-    const selection = selectMontageClips(doc.events, [...fresh, ...manual], {
+    // Same rules as a re-analysis in Studio (`mergeOnReanalyze`): manual and accepted clips stay, fresh autoclip output is
+    // added as suggestions. Clips the user skipped are passed along so selection leaves those highlights out.
+    const cached = normalizeClips(Array.isArray(doc.clips) ? doc.clips : [])
+    const userSkipped = cached.filter((c) => c.status === 'skipped')
+    const selection = selectMontageClips(doc.events, [...mergeOnReanalyze(cached, fresh), ...userSkipped], {
       montage: settings.montage,
       autoclip: settings.autoclip,
       videoDurationSec: duration,
@@ -287,7 +292,10 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
     }
     if (free !== null) {
       const need = montageDiskEstimate(project.items, probes, format)
-      if (free < settings.diskWarnGb * GB || free < need + settings.diskStopGb * GB) return skip(id, 'lowDisk')
+      if (free < settings.diskWarnGb * GB || free < need + settings.diskStopGb * GB) {
+        deps.notify('montage', tr('磁碟空間不足，已略過這場對局的精華合輯'))
+        return skip(id, 'lowDisk')
+      }
     }
     if (signal.aborted) return stopped(run)
 
@@ -481,8 +489,9 @@ export function createMontageService(deps: MontageServiceDeps): MontageService {
       } catch {
         return null
       }
-      const manual = (Array.isArray(doc.clips) ? doc.clips : []).filter((c) => c.origin === 'manual')
-      const selection = selectMontageClips(doc.events, [...fresh, ...manual], {
+      const cached = normalizeClips(Array.isArray(doc.clips) ? doc.clips : [])
+      const userSkipped = cached.filter((c) => c.status === 'skipped')
+      const selection = selectMontageClips(doc.events, [...mergeOnReanalyze(cached, fresh), ...userSkipped], {
         montage: settings.montage, autoclip: settings.autoclip, videoDurationSec: duration, rounds: doc.rounds
       })
       if (selection.clips.length === 0) return null

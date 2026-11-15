@@ -251,11 +251,16 @@ describe('selectMontageClips: existing clips', () => {
     ])
   })
 
-  it('never uses skipped clips; a window overlapping only a skipped clip is still eligible', () => {
-    const skipped = clip('mt_97000', 90, 120, { status: 'skipped' })
+  it('never reuses skipped clips; a window only partly covered by a skipped clip is still eligible', () => {
+    const skipped = clip('mt_97000', 90, 99, { status: 'skipped' })
     const sel = selectMontageClips(events, [skipped], input())
     // New id avoids colliding with the skipped clip that already has the deterministic id.
     expect(sel.clips).toEqual([{ id: 'mt_97000_2', start: 97, end: 102, origin: 'ai', event_ids: ['k1'], status: 'suggested' }])
+  })
+
+  it('leaves out a window whose kills all lie inside a clip the user skipped', () => {
+    const skipped = clip('c_skip', 90, 120, { status: 'skipped' })
+    expect(selectMontageClips(events, [skipped], input())).toEqual({ clips: [], totalSec: 0, skipped: 'empty' })
   })
 
   it('prefers manual over accepted over suggested when several clips meet in one montage clip', () => {
