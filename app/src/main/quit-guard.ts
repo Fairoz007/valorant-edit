@@ -82,6 +82,8 @@ export interface AppQuitGuardDeps {
   cancelExport: () => Promise<unknown> | undefined | void
   cancelProxies: () => Promise<unknown> | undefined | void
   cancelThumbnails?: () => Promise<unknown> | undefined | void
+  /** Stop the running Auto montage export (kills its ffmpeg tree, removes partials) and wait; the job resumes on the next start. */
+  cancelMontage?: () => Promise<unknown> | undefined | void
   stopWatcher: () => void
   /** Start a manually requested update after finalization; return true when it has taken over quitting. */
   installUpdate?: () => boolean
@@ -95,6 +97,7 @@ export function createAppQuitGuard(deps: AppQuitGuardDeps): QuitGuard {
     earlyTasks: [
       () => deps.cancelExport(),
       () => deps.cancelProxies(),
+      () => deps.cancelMontage?.(),
       () => deps.stopWatcher(),
       // Persist pending library changes immediately; entries added by finalization are flushed again after recording stop.
       () => deps.flushLibrary()

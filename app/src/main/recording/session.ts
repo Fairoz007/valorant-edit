@@ -186,6 +186,7 @@ export class RecordingSessionService implements RecordingService {
         this.firstPoll = false
         this.gamePid = pid
         if (found) this.game = found.game
+        if (exited) { try { this.deps.onGameClosed?.() } catch (error) { console.error('[recording] onGameClosed failed:', error) } }
         if (exited && this.deps.getSettings().openOnGameExit) this.deps.onGameExit?.()
         void this.serialize(async () => {
           if (!this.running) return
