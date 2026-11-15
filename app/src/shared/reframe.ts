@@ -39,7 +39,7 @@ export interface ReframeGeometry {
 /** Used when a source size is unknown (matches FALLBACK_SPEC in encodeQuality). */
 const FALLBACK_SOURCE: Size = { width: 1920, height: 1080 }
 /** Background blur: shrink by this factor and scale back up (only `scale` is needed; the bundled FFmpeg has no gblur/boxblur). */
-export const BLUR_DOWNSCALE = 24
+export const BLUR_DOWNSCALE = 48
 
 const evenFloor = (v: number): number => Math.max(2, Math.floor(v / 2) * 2)
 const evenRound = (v: number): number => Math.max(2, Math.round(v / 2) * 2)
@@ -135,7 +135,7 @@ export function reframeFilter(g: ReframeGeometry, src: Size): string {
       const bh = evenRound(H / BLUR_DOWNSCALE)
       return (
         `${pre}split=2[rf_bg][rf_fg];` +
-        `[rf_bg]scale=${bg.scaled.width}:${bg.scaled.height}:flags=fast_bilinear,${cropStep(bg.crop)},scale=${bw}:${bh}:flags=area,scale=${W}:${H}:flags=bicubic[rf_bgb];` +
+        `[rf_bg]scale=${bg.scaled.width}:${bg.scaled.height}:flags=fast_bilinear,${cropStep(bg.crop)},scale=${bw}:${bh}:flags=area,scale=${W}:${H}:flags=bilinear[rf_bgb];` +
         `[rf_fg]scale=${g.scaled.width}:${g.scaled.height}:flags=lanczos[rf_fgs];` +
         `[rf_bgb][rf_fgs]overlay=${g.pos.x}:${g.pos.y},${fpsTail(g.fps)}`
       )

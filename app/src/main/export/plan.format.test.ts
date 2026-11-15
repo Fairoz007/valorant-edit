@@ -76,7 +76,7 @@ describe('separate exports with platform presets', () => {
     const vf = after(separate(preset('shorts', { reframe: 'blur' }), probe(1920, 1080, 60)).jobs[0].args, '-vf')
     expect(vf).toBe(
       'split=2[rf_bg][rf_fg];' +
-        '[rf_bg]scale=3414:1920:flags=fast_bilinear,crop=1080:1920:1166:0,scale=46:80:flags=area,scale=1080:1920:flags=bicubic[rf_bgb];' +
+        '[rf_bg]scale=3414:1920:flags=fast_bilinear,crop=1080:1920:1166:0,scale=22:40:flags=area,scale=1080:1920:flags=bilinear[rf_bgb];' +
         '[rf_fg]scale=1080:608:flags=lanczos[rf_fgs];' +
         '[rf_bgb][rf_fgs]overlay=0:656,fps=60,format=yuv420p'
     )
