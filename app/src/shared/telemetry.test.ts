@@ -1,0 +1,153 @@
+import { describe, expect, it } from 'vitest'
+import { redactTelemetryText, sanitizeTelemetryEvent } from './telemetry'
+import { migrateSettings } from '../main/settings'
+
+describe('telemetry privacy boundary', () => {
+  it('keeps only a lowercase UUID v4 install ID with the IP sentinel', () => {
+    const id = '82eb537b-e1bd-4d94-9a1c-3737c2e5975f'
+    const clean = sanitizeTelemetryEvent({ user: { id, email: 'private@example.com', username: 'private', ip_address: '192.0.2.1' } })
+    expect(clean.user).toEqual({ id, ip_address: '0.0.0.0' })
+    expect(clean).toHaveProperty('sdk.settings', { infer_ip: 'never' })
+    for (const invalid of ['account', id.toUpperCase(), id + '\n', id.replace('-4d94-', '-1d94-'), id.replace('-9a1c-', '-7a1c-')]) {
+      expect(sanitizeTelemetryEvent({ user: { id: invalid, email: 'private@example.com', username: 'private' } }).user)
+        .toEqual({ ip_address: '0.0.0.0' })
+    }
+  })
+
+  it('keeps structured service failure metadata and drops arbitrary command output and credentials', () => {
+    const clean = sanitizeTelemetryEvent({ tags: { component: 'recording-service', error_code: 'ETIMEDOUT', signal: 'SIGTERM',
+      killed: 'true', stdout: 'private-process.exe', password: 'private' }, extra: { stderr: 'private' } })
+    expect(clean.tags).toEqual({ component: 'recording-service', error_code: 'ETIMEDOUT', signal: 'SIGTERM', killed: 'true' })
+    expect(JSON.stringify(clean)).not.toContain('private')
+    expect(sanitizeTelemetryEvent({ tags: { component: 'recording-service', error_code: 'C:/private', signal: 'private', killed: 'private' } }).tags)
+      .toEqual({ component: 'recording-service' })
+  })
+  it('preserves fixed probe progress and exit codes without arbitrary stderr data', () => {
+    const clean = sanitizeTelemetryEvent({ tags: { component: 'rust-recorder', probe_stage: 'probe_send', probe_encoder: 'av1_nvenc', exit_code: '0xC0E90002', stderr: 'private' } })
+    expect(clean.tags).toEqual({ component: 'rust-recorder', probe_stage: 'probe_send', probe_encoder: 'av1_nvenc', exit_code: '0xC0E90002' })
+    expect(sanitizeTelemetryEvent({ tags: { component: 'rust-recorder', probe_stage: 'private', probe_encoder: 'C:/private', exit_code: 'private' } }).tags)
+      .toEqual({ component: 'rust-recorder' })
+  })
+  it('keeps only the redacted diagnostic detail and a fixed-shape stage from extra data', () => {
+    const clean = sanitizeTelemetryEvent({ tags: { component: 'rust-recorder', stage: 'audio_encode', other: 'x' },
+      extra: { detail: 'Cannot read C:/Users/Alice/a.mp4', secret: 'private' }, fingerprint: ['a', 'b'] })
+    expect(clean.tags).toEqual({ component: 'rust-recorder', stage: 'audio_encode' })
+    expect(clean.extra).toEqual({ detail: 'Cannot read [local path]' })
+    expect(sanitizeTelemetryEvent({ tags: { component: 'rust-recorder', stage: 'C:/private path' } }).tags).toEqual({ component: 'rust-recorder' })
+    expect(sanitizeTelemetryEvent({ extra: { secret: 'private' } }).extra).toBeUndefined()
+  })
+  it('redacts file paths containing spaces, including UNC and file URLs', () => {
+    for (const value of ['C:\\Users\\Alice Smith\\private video.mp4', '\\\\server\\Alice Smith\\private video.mp4', 'file:///C:/Users/Alice Smith/private video.mp4']) {
+      expect(redactTelemetryText(`Cannot read '${value}'`)).toBe("Cannot read '[local path]'")
+    }
+  })
+  it('defaults to off (also for malformed legacy values) while preserving an explicit opt-in or opt-out', () => {
+    for (const raw of [{}, { telemetryEnabled: 'true' }, { telemetryEnabled: 1 }]) {
+      expect(migrateSettings(raw).telemetryEnabled).toBe(false)
+    }
+    expect(migrateSettings({ telemetryEnabled: true }).telemetryEnabled).toBe(true)
+    expect(migrateSettings({ telemetryEnabled: false }).telemetryEnabled).toBe(false)
+  })
+
+  it('removes application context and sensitive message content while preserving useful frames', () => {
+    const clean = sanitizeTelemetryEvent({
+      user: { email: 'someone@example.com' },
+      request: { headers: { Authorization: 'secret' } },
+      extra: { video: 'private.mp4' }, breadcrumbs: [{ message: 'private.mp4' }],
+      exception: { values: [{ type: 'Error', value: 'Cannot read C:\\Users\\Alice\\private.mp4 token=private someone@example.com',
+        stacktrace: { frames: [{ filename: 'C:/Users/Alice/Valorant Editor/out/main/index.js', function: 'readVideo', lineno: 20, colno: 3, vars: { password: 'secret' }, context_line: 'secret source' }] }
+      }] }
+    })
+    const encoded = JSON.stringify(clean)
+    for (const secret of ['Alice', 'private', 'someone', 'secret']) expect(encoded).not.toContain(secret)
+    expect(clean.exception?.values?.[0].stacktrace?.frames?.[0]).toMatchObject({ filename: 'app:///out/main/index.js', function: 'readVideo', lineno: 20 })
+    expect(clean.user).toEqual({ ip_address: '0.0.0.0' })
+    expect(clean).not.toHaveProperty('breadcrumbs')
+  })
+
+  it('strips paths, URLs and arbitrary attributes from performance transactions', () => {
+    const clean = sanitizeTelemetryEvent({ type: 'transaction', transaction: 'file:///Users/Alice/private.mp4',
+      spans: [{ trace_id: 'a', span_id: 'b', start_timestamp: 1, timestamp: 2, description: 'private.mp4', data: { password: 'secret' } }] })
+    expect(clean.transaction).toBe('Valorant Editor desktop')
+    expect(clean.spans?.[0].data).toEqual({})
+    expect(JSON.stringify(clean)).not.toMatch(/Alice|private|secret/)
+  })
+
+  it('keeps allowlisted SDK trace origins so Electron startup tracing still recognizes renderer pageloads', () => {
+    for (const origin of ['auto.pageload.browser', 'auto.navigation.browser', 'auto.electron.startup'] as const) {
+      const clean = sanitizeTelemetryEvent({ type: 'transaction', contexts: { trace: {
+        trace_id: 'trace', span_id: 'span', parent_span_id: 'parent', origin, data: { url: 'file:///Users/Alice/private.mp4' }
+      } } })
+      expect(clean.contexts?.trace).toMatchObject({ trace_id: 'trace', span_id: 'span', parent_span_id: 'parent', origin, op: 'desktop' })
+      expect(clean.contexts?.trace).not.toHaveProperty('data')
+    }
+    const untrusted = sanitizeTelemetryEvent({ type: 'transaction', contexts: { trace: {
+      trace_id: 'trace', span_id: 'span', origin: 'https://example.com/Alice' as never
+    } } })
+    expect(untrusted.contexts?.trace).not.toHaveProperty('origin')
+  })
+
+  it('keeps only coarse hardware fields from os, device and gpu contexts', () => {
+    const clean = sanitizeTelemetryEvent({ contexts: {
+      os: { name: 'Windows', version: '10.0.26300', kernel_version: '10.0.26300', build: 'C:\\Users\\Alice\\x' },
+      device: { arch: 'x64', memory_size: 17179869184, processor_count: 16, cpu_description: 'AMD Ryzen 7', processor_frequency: 3800,
+        name: 'ALICE-PC', boot_time: '2026-01-01T00:00:00Z' },
+      gpu: { name: 'NVIDIA RTX 4070', vendor_name: 'NVIDIA', driver_version: '555.1', id: 1, extra: 'Alice' },
+      culture: { locale: 'zh-TW', timezone: 'Asia/Taipei' }
+    } })
+    expect(clean.contexts?.os).toEqual({ name: 'Windows', version: '10.0.26300', kernel_version: '10.0.26300' })
+    expect(clean.contexts?.device).toEqual({ arch: 'x64', memory_size: 17179869184, processor_count: 16, cpu_description: 'AMD Ryzen 7', processor_frequency: 3800 })
+    expect(clean.contexts?.gpu).toEqual({ name: 'NVIDIA RTX 4070', vendor_name: 'NVIDIA', driver_version: '555.1', id: 1 })
+    expect(clean.contexts).not.toHaveProperty('culture')
+    expect(JSON.stringify(clean)).not.toMatch(/Alice|ALICE/)
+  })
+
+  it('keeps numbered gpu_N contexts that the SDK emits on multi-GPU machines', () => {
+    const clean = sanitizeTelemetryEvent({ contexts: {
+      gpu_1: { type: 'gpu', name: 'NVIDIA RTX 4070', vendor_name: 'NVIDIA', driver_version: '555.1', id: '0x2786', vendor_id: '0x10de', active: true, extra: 'Alice' },
+      gpu_2: { type: 'gpu', name: 'AMD Radeon(TM) Graphics', vendor_name: 'AMD', active: false },
+      gpu_9: { name: 'beyond the cap' }
+    } })
+    expect(clean.contexts?.gpu_1).toEqual({ name: 'NVIDIA RTX 4070', vendor_name: 'NVIDIA', driver_version: '555.1', id: '0x2786', vendor_id: '0x10de', active: true })
+    expect(clean.contexts?.gpu_2).toEqual({ name: 'AMD Radeon(TM) Graphics', vendor_name: 'AMD', active: false })
+    expect(clean.contexts).not.toHaveProperty('gpu_9')
+    expect(JSON.stringify(clean)).not.toContain('Alice')
+  })
+
+  it('keeps the user-report tag and redacts paths and emails in the report text', () => {
+    const clean = sanitizeTelemetryEvent({ message: 'mail me@example.com about C:\\Users\\Alice\\a.mp4', tags: { component: 'user-report', extra: 'Alice' } })
+    expect(clean.tags).toEqual({ component: 'user-report' })
+    expect(clean.message).toBe('mail [email] about [local path]')
+  })
+
+  it('keeps only well-formed electron/decode tags and the reporter fingerprint', () => {
+    const clean = sanitizeTelemetryEvent({ fingerprint: ['preview-av-desync'],
+      tags: { component: 'preview-playback', electron: '45.0.1', decode: 'software', user: 'Alice' } })
+    expect(clean.tags).toEqual({ component: 'preview-playback', electron: '45.0.1', decode: 'software' })
+    expect(clean.fingerprint).toEqual(['preview-av-desync'])
+    expect(sanitizeTelemetryEvent({ tags: { component: 'preview-playback', electron: 'C:\\Users\\Alice', decode: 'x' } }).tags)
+      .toEqual({ component: 'preview-playback' })
+    expect(sanitizeTelemetryEvent({ tags: { electron: '45.0.1' } }).tags).toBeUndefined()
+  })
+
+  it('keeps well-formed recorder state tags and drops malformed or unknown ones', () => {
+    const clean = sanitizeTelemetryEvent({ tags: { component: 'rust-recorder', capture: 'dda', codec: 'hevc', encoder: 'hevc_nvenc',
+      fps: '60', height: '1080', mic: 'on', system_audio: 'off', phase: 'recording', uptime: '<1m', gpu: 'NVIDIA RTX 4070' } })
+    expect(clean.tags).toEqual({ component: 'rust-recorder', capture: 'dda', codec: 'hevc', encoder: 'hevc_nvenc',
+      fps: '60', height: '1080', mic: 'on', system_audio: 'off', phase: 'recording', uptime: '<1m' })
+    expect(sanitizeTelemetryEvent({ tags: { component: 'rust-recorder', capture: 'C:\\Users\\Alice', encoder: 'a b/c', fps: '60fps' } }).tags)
+      .toEqual({ component: 'rust-recorder' })
+  })
+
+  it('preserves matching Debug IDs with the same safe build-relative path as stack frames', () => {
+    const filename = 'C:/Users/Alice/Valorant Editor/out/main/index.js'
+    const clean = sanitizeTelemetryEvent({
+      debug_meta: { images: [{ type: 'sourcemap', code_file: filename, debug_id: 'fb59d314-d7a5-4e56-9cb2-5aeb2e9833c7' }] },
+      exception: { values: [{ stacktrace: { frames: [{ filename, lineno: 10 }] } }] }
+    })
+    expect(clean.debug_meta?.images?.[0]).toEqual({ type: 'sourcemap', code_file: 'app:///out/main/index.js', debug_id: 'fb59d314-d7a5-4e56-9cb2-5aeb2e9833c7' })
+    expect(clean.exception?.values?.[0].stacktrace?.frames?.[0].filename).toBe('app:///out/main/index.js')
+    expect(clean.exception?.values?.[0].stacktrace?.frames?.[0]).toHaveProperty('abs_path', 'app:///out/main/index.js')
+    expect(JSON.stringify(clean)).not.toContain('Alice')
+  })
+})

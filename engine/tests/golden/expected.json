@@ -1,0 +1,72 @@
+{
+  "video": "07-13 17-33-52 的 600-826 秒（-c copy，約 226 秒）",
+  "note": "每個事件皆人工目視核對橫幅；全片以 2 fps 逐格掃描，無漏判。Task 11：名字指紋分裂改為需連續 2 格且舊 run 需有穩定名字後，assist_elim 的起點由 21.0/162.5/192.5 提前為 20.75/161.5/192.25（逐格目視確認該格橫幅已淡入出現）。",
+  "events": [
+    {
+      "t": 3.5,
+      "type": "assist_knock",
+      "name": "[PXX]—叶知秋"
+    },
+    {
+      "t": 6.0,
+      "type": "assist_elim",
+      "name": "[PXX]—叶知秋"
+    },
+    {
+      "t": 14.25,
+      "type": "assist_knock",
+      "name": "陈平安"
+    },
+    {
+      "t": 20.75,
+      "type": "assist_elim",
+      "name": "陈平安"
+    },
+    {
+      "t": 136.25,
+      "type": "knock",
+      "name": "DEWYANE（觀戰中）"
+    },
+    {
+      "t": 138.75,
+      "type": "squad_wipe",
+      "name": "DEWYANE"
+    },
+    {
+      "t": 152.0,
+      "type": "assist_knock",
+      "name": "艾瑟兒9316"
+    },
+    {
+      "t": 161.5,
+      "type": "assist_elim",
+      "name": "艾瑟兒9316"
+    },
+    {
+      "t": 172.75,
+      "type": "knock",
+      "name": "ALCA TORDA"
+    },
+    {
+      "t": 175.25,
+      "type": "elim",
+      "name": "ALCA TORDA"
+    },
+    {
+      "t": 184.5,
+      "type": "assist_knock",
+      "name": "艾瑟兒9316"
+    },
+    {
+      "t": 192.25,
+      "type": "assist_elim",
+      "name": "艾瑟兒9316"
+    }
+  ],
+  "spectating": [
+    {
+      "start": 120.5,
+      "end": 138.0
+    }
+  ]
+}

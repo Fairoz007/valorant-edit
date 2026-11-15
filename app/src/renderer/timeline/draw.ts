@@ -1,0 +1,490 @@
+import type { Clip, EngineEvent, EventType, SpecInterval, Round } from '../../shared/types'
+import { isCounted } from '../../shared/types'
+import { formatTime } from '../../shared/time'
+import { i18n } from '../i18n'
+import type { TimelineLayout } from './layout'
+import { View, timeToX } from './model'
+import { heatBinCount } from '../perf/lowPerf'
+import { EVENT_TYPES, SHAPES, glyphPath, shapeFor, shapePath } from './eventShapes'
+import type { BladeState } from './blade'
+import type { ProjectItem } from '../editor/project'
+
+export type Ctx2D = CanvasRenderingContext2D
+
+/** Vertical layout (spec §3.2.2): ruler 0–21, label row 22–38, event/box area 38–bottom. */
+export const RULER_H = 21
+export const CLIP_LABEL_ROW = { y: 24, h: 14 }
+export const EVENT_TOP = 40
+const BOTTOM_PAD = 6
+const ICON_Y = 66
+const ICON_R = 10
+const HANDLE_W = 6
+const NARROW_CLIP_PX = 12
+const RULER_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800]
+
+export interface Theme {
+  font: string
+  bg: string
+  line: string
+  lineStrong: string
+  text1: string
+  text2: string
+  text3: string
+  popover: string
+  /** Glyph color on a solid icon (dark). */
+  onShape: string
+  spectatingFill: string
+  spectatingHatch: string
+  roundWin: string
+  roundLoss: string
+  unanalyzed: string
+  /** 'r, g, b', combined with alpha to form rgba(). */
+  heatRgb: string
+  clipSuggestLine: string
+  clipSuggestFill: string
+  clipLine: string
+  clipFill: string
+  projectLine: string
+  projectFill: string
+  bladeLine: string
+  bladeFill: string
+  events: Record<EventType, string>
+}
+
+export interface DrawModel {
+  width: number
+  height: number
+  view: View
+  duration: number
+  layout: TimelineLayout
+  spectating: SpecInterval[]
+  /** Valorant rounds: a strip under the ruler, coloured by who won. */
+  rounds?: Round[]
+  clips: Clip[]
+  selected: Set<string>
+  /** Event containing the current playhead (drawn with an outer ring). */
+  currentId?: string
+  /** Unused in v1 (no partial-analysis view); drawn only when set. */
+  unanalyzed?: SpecInterval[]
+  hoverClipId?: string | null
+  activeClipId?: string | null
+  projectItem?: ProjectItem | null
+  blade?: BladeState
+  /** Low-performance mode: reduce the heat bar to HEAT_BINS_LOWPERF bins. */
+  lowPerf?: boolean
+}
+
+/* ---------------- Theme: read CSS variables once and cache them ---------------- */
+
+let cachedTheme: Theme | null = null
+
+/** Invalidate the palette cache when the theme changes and in tests. */
+export function resetThemeCache(): void {
+  cachedTheme = null
+}
+
+function defaultGetVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
+export function readTheme(getVar: (name: string) => string = defaultGetVar): Theme {
+  if (cachedTheme) return cachedTheme
+  const events = {} as Record<EventType, string>
+  for (const t of EVENT_TYPES) events[t] = getVar(SHAPES[t].colorVar)
+  cachedTheme = {
+    font: `11px ${getVar('--font-ui')}`,
+    bg: getVar('--tl-bg'),
+    line: getVar('--line'),
+    lineStrong: getVar('--line-strong'),
+    text1: getVar('--text-1'),
+    text2: getVar('--text-2'),
+    text3: getVar('--text-3'),
+    popover: getVar('--bg-popover'),
+    onShape: getVar('--bg-app'),
+    spectatingFill: getVar('--tl-spectating-fill'),
+    spectatingHatch: getVar('--tl-spectating-hatch'),
+    roundWin: getVar('--tl-round-win'),
+    roundLoss: getVar('--tl-round-loss'),
+    unanalyzed: getVar('--tl-unanalyzed'),
+    heatRgb: getVar('--tl-heat'),
+    clipSuggestLine: getVar('--tl-clip-suggest-line'),
+    clipSuggestFill: getVar('--tl-clip-suggest-fill'),
+    clipLine: getVar('--tl-clip-line'),
+    clipFill: getVar('--tl-clip-fill'),
+    projectLine: getVar('--tl-project-line'),
+    projectFill: getVar('--tl-project-fill'),
+    bladeLine: getVar('--tl-blade-line'),
+    bladeFill: getVar('--tl-blade-fill'),
+    events
+  }
+  return cachedTheme
+}
+
+/* ---------------- Redraw scheduling: merge multiple invalidations into one rAF ---------------- */
+
+export function createRedrawScheduler(
+  draw: () => void,
+  raf: (cb: () => void) => number = (cb) => requestAnimationFrame(cb),
+  cancel: (id: number) => void = (id) => cancelAnimationFrame(id)
+): { invalidate: () => void; dispose: () => void } {
+  let pending: number | null = null
+  return {
+    invalidate() {
+      if (pending !== null) return
+      pending = raf(() => {
+        pending = null
+        draw()
+      })
+    },
+    dispose() {
+      if (pending !== null) cancel(pending)
+      pending = null
+    }
+  }
+}
+
+/* ---------------- Drawing ---------------- */
+
+function drawRuler(g: Ctx2D, m: DrawModel, th: Theme): void {
+  const { view, width } = m
+  if (width <= 0 || view.span <= 0) return
+  const step = RULER_STEPS.find((s) => view.span / s <= width / 80) ?? 1800
+  g.fillStyle = th.text3
+  g.strokeStyle = th.lineStrong
+  g.lineWidth = 1
+  const end = view.start + view.span
+  for (let t = Math.ceil(view.start / step) * step; t <= end; t += step) {
+    const x = Math.round(timeToX(t, view)) + 0.5
+    g.beginPath()
+    g.moveTo(x, 14)
+    g.lineTo(x, RULER_H)
+    g.stroke()
+    g.fillText(formatTime(t), x + 3, 2)
+  }
+  g.strokeStyle = th.line
+  g.beginPath()
+  g.moveTo(0, RULER_H + 0.5)
+  g.lineTo(width, RULER_H + 0.5)
+  g.stroke()
+}
+
+function drawSpectating(g: Ctx2D, m: DrawModel, th: Theme): void {
+  const { view, width, height } = m
+  const top = RULER_H + 1
+  for (const s of m.spectating) {
+    const x0 = timeToX(s.start, view)
+    const x1 = timeToX(s.end, view)
+    if (x1 < 0 || x0 > width) continue
+    g.save()
+    g.beginPath()
+    g.rect(x0, top, Math.max(2, x1 - x0), height - top)
+    g.clip()
+    g.fillStyle = th.spectatingFill
+    g.fillRect(x0, top, x1 - x0, height - top)
+    g.strokeStyle = th.spectatingHatch
+    g.lineWidth = 1
+    for (let x = x0 - height; x < x1 + height; x += 8) {
+      g.beginPath()
+      g.moveTo(x, height)
+      g.lineTo(x + height, top)
+      g.stroke()
+    }
+    g.restore()
+    if (x1 - x0 > 90) {
+      g.fillStyle = th.text2
+      g.fillText(i18n.timeline.spectating, x0 + 4, height - 20)
+    }
+  }
+}
+
+const ROUND_STRIP_H = 4
+
+function drawRounds(g: Ctx2D, m: DrawModel, th: Theme): void {
+  if (!m.rounds?.length) return
+  const top = RULER_H + 1
+  for (const r of m.rounds) {
+    const x0 = timeToX(r.start, m.view)
+    const x1 = timeToX(r.end, m.view)
+    if (x1 < 0 || x0 > m.width) continue
+    g.fillStyle = r.winner === 'ally' ? th.roundWin : th.roundLoss
+    // A 1 px gap keeps neighbouring rounds apart.
+    g.fillRect(x0 + 1, top, Math.max(1, x1 - x0 - 1), ROUND_STRIP_H)
+  }
+}
+
+function drawUnanalyzed(g: Ctx2D, m: DrawModel, th: Theme): void {
+  if (!m.unanalyzed) return
+  g.fillStyle = th.unanalyzed
+  for (const r of m.unanalyzed) {
+    const x0 = timeToX(r.start, m.view)
+    const x1 = timeToX(r.end, m.view)
+    if (x1 < 0 || x0 > m.width) continue
+    g.fillRect(x0, RULER_H + 1, Math.max(1, x1 - x0), m.height - RULER_H - 1)
+  }
+}
+
+function drawHeat(g: Ctx2D, m: DrawModel, th: Theme, bot: number): void {
+  const density = m.layout.mode === 'density'
+  const nb = heatBinCount(m.width, density, Boolean(m.lowPerf))
+  if (nb <= 0) return
+  // Normal mode uses fixed 4/6 px bins; low-performance mode divides the full width into 60 bins.
+  const binPx = m.lowPerf ? m.width / nb : density ? 4 : 6
+  const counts = new Float32Array(nb)
+  let max = 0
+  for (const it of m.layout.items) {
+    for (const e of it.events) {
+      if (!isCounted(e)) continue
+      const x = timeToX(e.t, m.view)
+      if (x < 0 || x >= m.width) continue
+      const b = Math.min(nb - 1, Math.floor(x / binPx))
+      counts[b]++
+      if (counts[b] > max) max = counts[b]
+    }
+  }
+  const maxH = density ? 46 : 16
+  for (let i = 0; i < nb; i++) {
+    if (!counts[i]) continue
+    const k = counts[i] / max
+    const h = 3 + k * (maxH - 3)
+    g.fillStyle = `rgba(${th.heatRgb}, ${0.35 + k * 0.55})`
+    g.fillRect(i * binPx, bot - h, Math.max(1, binPx - 1), h)
+  }
+}
+
+function drawClips(g: Ctx2D, m: DrawModel, th: Theme, bot: number): void {
+  const { view, width } = m
+  const boxH = bot - EVENT_TOP
+  for (const c of m.clips) {
+    if (c.status === 'skipped') continue
+    const x0 = timeToX(c.start, view)
+    const x1 = timeToX(c.end, view)
+    if (x1 < 0 || x0 > width) continue
+    const suggested = c.status === 'suggested'
+    const emphasised = m.hoverClipId === c.id || m.activeClipId === c.id
+    const w = x1 - x0
+    if (w < NARROW_CLIP_PX) {
+      // Zoomed out: draw a solid narrow bar without a dashed outline to reduce noise.
+      g.globalAlpha = suggested ? 0.4 : 0.8
+      g.fillStyle = suggested ? th.clipSuggestLine : th.clipLine
+      g.fillRect(x0, EVENT_TOP, Math.max(3, w), boxH)
+      g.globalAlpha = 1
+    } else {
+      g.fillStyle = suggested ? th.clipSuggestFill : th.clipFill
+      g.fillRect(x0, EVENT_TOP, w, boxH)
+      g.strokeStyle = suggested ? th.clipSuggestLine : th.clipLine
+      g.lineWidth = suggested ? 1.5 : 2
+      g.setLineDash(suggested ? [5, 3] : [])
+      g.strokeRect(x0 + 0.5, EVENT_TOP + 0.5, Math.max(1, w), boxH - 1)
+      g.setLineDash([])
+    }
+    if (emphasised) {
+      g.fillStyle = th.text1
+      g.fillRect(x0 - 2, EVENT_TOP + 6, HANDLE_W, boxH - 12)
+      g.fillRect(x1 - 4, EVENT_TOP + 6, HANDLE_W, boxH - 12)
+    }
+    // Put the label on its own line above the box; omit it if there is not enough width.
+    const label =
+      (suggested ? '' : '✓ ') + (c.origin === 'ai' ? i18n.timeline.clipAi + ' ' : '') + formatTime(c.end - c.start)
+    const lw = g.measureText(label).width + 8
+    if (w > lw - 4) {
+      g.fillStyle = suggested ? th.popover : th.clipLine
+      g.fillRect(x0, CLIP_LABEL_ROW.y, lw, CLIP_LABEL_ROW.h)
+      g.fillStyle = suggested ? th.text1 : th.onShape
+      g.fillText(label, x0 + 4, CLIP_LABEL_ROW.y + 1)
+    }
+  }
+}
+
+function drawProjectRange(g: Ctx2D, m: DrawModel, th: Theme, bot: number): void {
+  const item = m.projectItem
+  if (!item) return
+  const x0 = timeToX(item.start, m.view)
+  const x1 = timeToX(item.end, m.view)
+  if (x1 < 0 || x0 > m.width) return
+  g.fillStyle = th.projectFill
+  g.fillRect(x0, EVENT_TOP, x1 - x0, bot - EVENT_TOP)
+  g.strokeStyle = th.projectLine
+  g.lineWidth = 2
+  g.setLineDash([])
+  g.strokeRect(x0 + 0.5, EVENT_TOP + 0.5, Math.max(1, x1 - x0), bot - EVENT_TOP - 1)
+  g.fillStyle = th.projectLine
+  g.fillRect(x0 - 2, EVENT_TOP + 6, HANDLE_W, bot - EVENT_TOP - 12)
+  g.fillRect(x1 - 4, EVENT_TOP + 6, HANDLE_W, bot - EVENT_TOP - 12)
+}
+
+function drawBlade(g: Ctx2D, m: DrawModel, th: Theme, bot: number): void {
+  const blade = m.blade
+  if (!blade?.enabled) return
+  const anchor = blade.anchor === null ? null : timeToX(blade.anchor, m.view)
+  const hover = blade.hover === null ? null : timeToX(blade.hover, m.view)
+  if (anchor !== null && hover !== null) {
+    g.fillStyle = th.bladeFill
+    g.fillRect(Math.min(anchor, hover), EVENT_TOP, Math.abs(hover - anchor), bot - EVENT_TOP)
+  }
+  g.strokeStyle = th.bladeLine
+  g.lineWidth = 2
+  for (const x of [anchor, hover]) {
+    if (x === null || x < 0 || x > m.width) continue
+    g.setLineDash(x === anchor ? [] : [4, 3])
+    g.beginPath()
+    g.moveTo(x, 0)
+    g.lineTo(x, bot)
+    g.stroke()
+  }
+  g.setLineDash([])
+  if (anchor !== null && anchor >= 0 && anchor <= m.width) {
+    g.fillStyle = th.bladeLine
+    g.fillRect(anchor - 4, 0, 8, 8)
+  }
+}
+
+function drawDensityEvents(g: Ctx2D, m: DrawModel, th: Theme): void {
+  const sel = m.selected
+  for (const it of m.layout.items) {
+    const e = it.events[0]
+    const x = Math.round(timeToX(e.t, m.view))
+    if (sel.has(e.id)) {
+      g.fillStyle = th.text1
+      g.fillRect(x - 1, EVENT_TOP + 6, 4, 14)
+    }
+    g.globalAlpha = isCounted(e) ? 1 : 0.65
+    g.fillStyle = th.events[e.type as EventType] ?? th.events.knock
+    g.fillRect(x, EVENT_TOP + 8, 2, 10)
+  }
+  g.globalAlpha = 1
+  g.fillStyle = th.text3
+  g.fillText(i18n.timeline.densityHint.replace('{n}', String(m.layout.visibleCount)), 8, CLIP_LABEL_ROW.y)
+}
+
+function drawSingle(g: Ctx2D, e: EngineEvent, x: number, m: DrawModel, th: Theme, bot: number): void {
+  const spec = shapeFor(e.type)
+  const color = th.events[e.type as EventType] ?? th.events.knock
+  const on = isCounted(e)
+  const y = ICON_Y
+  // Vertical guide line.
+  g.strokeStyle = th.lineStrong
+  g.lineWidth = 1
+  g.beginPath()
+  g.moveTo(x, y + ICON_R + 2)
+  g.lineTo(x, bot - 18)
+  g.stroke()
+
+  shapePath(g, spec.shape, x, y, ICON_R)
+  if (on) {
+    g.globalAlpha = 1
+    g.fillStyle = color
+    g.fill()
+  } else {
+    // Excluded: 14% tinted fill + 65% opacity + 2px outline in the same color.
+    g.globalAlpha = 0.65 * 0.14
+    g.fillStyle = color
+    g.fill()
+    g.globalAlpha = 0.65
+    g.strokeStyle = color
+    g.lineWidth = 2
+    g.stroke()
+  }
+  g.save()
+  g.translate(x - 8, y - 8)
+  g.scale(16 / 24, 16 / 24)
+  g.lineWidth = 3.2
+  g.lineCap = 'round'
+  g.lineJoin = 'round'
+  g.strokeStyle = on ? th.onShape : color
+  g.stroke(glyphPath(spec))
+  g.restore()
+  g.globalAlpha = 1
+
+  if (m.currentId === e.id || m.selected.has(e.id)) {
+    g.strokeStyle = th.text1
+    g.lineWidth = 2
+    g.beginPath()
+    g.arc(x, y, ICON_R + 5, 0, Math.PI * 2)
+    g.stroke()
+  }
+}
+
+function drawCluster(g: Ctx2D, events: EngineEvent[], x: number, m: DrawModel, th: Theme): void {
+  const n = events.length
+  const label = '×' + n
+  const w = g.measureText(label).width + 16
+  const y = ICON_Y
+  // Color segments based on event counts by type; unknown types use the single-event knock color.
+  const segments = new Map<string, { count: number; counted: number }>()
+  for (const e of events) {
+    const color = th.events[e.type as EventType] ?? th.events.knock
+    const segment = segments.get(color) ?? { count: 0, counted: 0 }
+    segment.count++
+    if (isCounted(e)) segment.counted++
+    segments.set(color, segment)
+  }
+  g.save()
+  g.beginPath()
+  g.roundRect(x - w / 2, y - 10, w, 20, 10)
+  g.clip()
+  let left = x - w / 2
+  for (const [color, segment] of segments) {
+    const width = w * segment.count / n
+    g.globalAlpha = segment.counted > 0 ? 1 : 0.65
+    g.fillStyle = color
+    g.fillRect(left, y - 10, width, 20)
+    left += width
+  }
+  g.restore()
+  g.globalAlpha = 1
+  g.strokeStyle = th.text1
+  g.lineWidth = 1.5
+  g.beginPath()
+  g.roundRect(x - w / 2, y - 10, w, 20, 10)
+  g.stroke()
+  g.fillStyle = th.onShape
+  g.textBaseline = 'middle'
+  g.fillText(label, x - w / 2 + 8, y + 1)
+  g.textBaseline = 'top'
+  // Included-ratio indicator.
+  left = x - w / 2 + 4
+  for (const [color, segment] of segments) {
+    const width = (w - 8) * segment.counted / n
+    if (width === 0) continue
+    g.fillStyle = color
+    g.fillRect(left, y + 14, width, 2)
+    left += width
+  }
+  if (events.some((e) => m.selected.has(e.id) || m.currentId === e.id)) {
+    g.strokeStyle = th.text1
+    g.lineWidth = 2
+    g.beginPath()
+    g.roundRect(x - w / 2 - 3, y - 13, w + 6, 26, 13)
+    g.stroke()
+  }
+}
+
+function drawIconEvents(g: Ctx2D, m: DrawModel, th: Theme, bot: number): void {
+  for (const it of m.layout.items) {
+    if (it.events.length === 1) drawSingle(g, it.events[0], it.x, m, th, bot)
+    else drawCluster(g, it.events, it.x, m, th)
+  }
+}
+
+/** Draw the static layer (the playhead is a DOM element and is not drawn here). The caller must set the DPR transform first. */
+export function drawTimeline(g: Ctx2D, m: DrawModel, th: Theme): void {
+  const { width, height } = m
+  const bot = height - BOTTOM_PAD
+  g.clearRect(0, 0, width, height)
+  g.fillStyle = th.bg
+  g.fillRect(0, 0, width, height)
+  g.font = th.font
+  g.textBaseline = 'top'
+  g.globalAlpha = 1
+
+  drawRuler(g, m, th)
+  drawSpectating(g, m, th)
+  drawRounds(g, m, th)
+  drawUnanalyzed(g, m, th)
+  drawHeat(g, m, th, bot)
+  drawClips(g, m, th, bot)
+  drawProjectRange(g, m, th, bot)
+  if (m.layout.mode === 'density') drawDensityEvents(g, m, th)
+  else drawIconEvents(g, m, th, bot)
+  drawBlade(g, m, th, bot)
+}

@@ -1,0 +1,107 @@
+import React from 'react'
+import { Search, Star } from '../components/icons'
+import type { LibraryGame, LibraryKind } from '../lib/libraryFilter'
+import { GAMES, GAME_IDS, type GameId } from '../../shared/games'
+import { i18n } from '../i18n'
+
+const t = i18n.library
+
+export interface LibraryToolbarProps {
+  query: string
+  onQueryChange: (q: string) => void
+  favoriteOnly: boolean
+  onToggleFavorite: () => void
+  kind: LibraryKind
+  onKindChange: (k: LibraryKind) => void
+  game: LibraryGame
+  onGameChange: (g: LibraryGame) => void
+  /** Video counts for each filter, excluding the search query. */
+  counts: Record<LibraryKind, number> & Record<GameId, number>
+  searchRef: React.RefObject<HTMLInputElement>
+}
+
+export function LibraryToolbar({
+  query,
+  onQueryChange,
+  favoriteOnly,
+  onToggleFavorite,
+  kind,
+  onKindChange,
+  game,
+  onGameChange,
+  counts,
+  searchRef
+}: LibraryToolbarProps): JSX.Element {
+  const chip = (k: LibraryKind, label: string, extra?: JSX.Element): JSX.Element => (
+    <button
+      type="button"
+      className={`lib-chip${kind === k ? ' on' : ''}`}
+      aria-pressed={kind === k}
+      onClick={() => onKindChange(k)}
+    >
+      {extra}
+      {label}
+      <span className="n">{counts[k]}</span>
+    </button>
+  )
+
+  return (
+    <div className="lib-tools">
+      <div className="search">
+        <Search className="ic" />
+        <input
+          ref={searchRef}
+          type="search"
+          placeholder={t.searchPlaceholder}
+          aria-label={t.searchPlaceholder}
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+        />
+        <kbd>Ctrl F</kbd>
+      </div>
+      <span className="sep" />
+      <button
+        type="button"
+        className={`lib-chip${kind === 'all' && !favoriteOnly && game === 'all' ? ' on' : ''}`}
+        aria-pressed={kind === 'all' && !favoriteOnly && game === 'all'}
+        onClick={() => {
+          onKindChange('all')
+          if (favoriteOnly) onToggleFavorite()
+          if (game !== 'all') onGameChange('all')
+        }}
+      >
+        {t.chips.all}
+        <span className="n">{counts.all}</span>
+      </button>
+      <button
+        type="button"
+        className={`lib-chip${favoriteOnly ? ' on' : ''}`}
+        aria-pressed={favoriteOnly}
+        onClick={onToggleFavorite}
+      >
+        <Star className="ic sm" />
+        {t.chips.favorite}
+        <kbd>Ctrl D</kbd>
+      </button>
+      {chip('recording', t.chips.recording)}
+      {chip('external', t.chips.external)}
+      {chip('hl', t.chips.hl, <span className="lib-pill accent lib-slant">{t.chips.isNew}</span>)}
+      <span className="sep" />
+      <span className="lib-game-group" role="group" aria-label={t.gameFilter}>
+        {GAME_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={`lib-chip${game === id ? ' on' : ''}`}
+            aria-pressed={game === id}
+            onClick={() => onGameChange(game === id ? 'all' : id)}
+          >
+            <span className={`lib-game-dot ${id}`} />
+            {GAMES[id].displayName}
+            <span className="n">{counts[id]}</span>
+          </button>
+        ))}
+      </span>
+    </div>
+  )
+}

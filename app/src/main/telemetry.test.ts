@@ -1,0 +1,487 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as fs from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { TELEMETRY_INSTALL_ID_PATTERN } from '../shared/telemetry'
+import type { ChildDiagnostic } from '../shared/child-diagnostics'
+import { RECORDING_SERVICE_ERRORS } from '../shared/child-diagnostics'
+
+const fake = vi.hoisted(() => ({ dir: '', switches: new Set<string>(), init: vi.fn(), handle: vi.fn(), send: vi.fn(async () => ({})), captureEvent: vi.fn((_event: any) => 'test-event') }))
+vi.mock('../shared/paths', () => ({ appDataDir: () => fake.dir }))
+// The shipped DSN is empty (telemetry disabled); exercise the SDK wiring with a placeholder project.
+vi.mock('../shared/telemetry', async (importOriginal) => ({ ...(await importOriginal<typeof import('../shared/telemetry')>()), SENTRY_DSN: 'https://key@example.invalid/1' }))
+vi.mock('electron', () => ({ app: { isPackaged: false, getVersion: () => '0.3.0', commandLine: { hasSwitch: (name: string) => fake.switches.has(name) } }, ipcMain: { handle: fake.handle } }))
+vi.mock('@sentry/electron/main', () => ({
+  init: fake.init, IPCMode: { Protocol: 2 },
+  captureEvent: fake.captureEvent,
+  onUncaughtExceptionIntegration: () => ({}), onUnhandledRejectionIntegration: () => ({}),
+  normalizePathsIntegration: () => ({}), startupTracingIntegration: () => ({}),
+  nodeContextIntegration: () => ({}), gpuContextIntegration: () => ({}),
+  makeElectronTransport: () => ({ send: fake.send, flush: async () => true })
+}))
+
+function diagnostic(overrides: Partial<ChildDiagnostic> = {}): ChildDiagnostic {
+  return {
+    component: 'rust-engine',
+    code: 'internal',
+    message: 'Cannot read C:\\Users\\Alice\\private.mp4',
+    exception: {
+      type: 'TypeError',
+      frames: [{ filename: 'aditor/ipc.py', function: '_run', lineno: 150 }, { filename: 'C:/private.py', lineno: 1 }]
+    },
+    ...overrides
+  }
+}
+
+beforeEach(() => {
+  vi.resetModules()
+  vi.clearAllMocks()
+  fake.dir = fs.mkdtempSync(join(tmpdir(), 'aditor-telemetry-'))
+})
+afterEach(() => {
+  vi.useRealTimers()
+  fs.rmSync(fake.dir, { recursive: true, force: true })
+})
+
+describe('telemetry install ID', () => {
+  it('creates a random ID and reuses it on the next start', async () => {
+    const first = await import('./telemetry')
+    first.initializeTelemetry(true)
+    const file = join(fake.dir, 'telemetry-install-id')
+    const id = fs.readFileSync(file, 'utf8')
+    expect(id).toMatch(TELEMETRY_INSTALL_ID_PATTERN)
+    expect(fs.readdirSync(fake.dir)).toEqual(['telemetry-install-id'])
+    expect(fake.init.mock.calls[0][0].beforeSend({}).user).toEqual({ id, ip_address: '0.0.0.0' })
+    vi.resetModules()
+    const second = await import('./telemetry')
+    second.initializeTelemetry(true)
+    expect(fs.readFileSync(file, 'utf8')).toBe(id)
+    expect(fake.init.mock.calls[1][0].beforeSend({}).user.id).toBe(id)
+  })
+
+  it.each(['invalid', '82eb537b-e1bd-4d94-9a1c-3737c2e5975f\n', '82EB537B-E1BD-4D94-9A1C-3737C2E5975F'])(
+    'replaces invalid stored content: %j', async (content) => {
+      const file = join(fake.dir, 'telemetry-install-id')
+      fs.writeFileSync(file, content)
+      const { initializeTelemetry } = await import('./telemetry')
+      initializeTelemetry(true)
+      const id = fs.readFileSync(file, 'utf8')
+      expect(id).toMatch(TELEMETRY_INSTALL_ID_PATTERN)
+      expect(id).not.toBe(content)
+      expect(fake.init.mock.calls[0][0].beforeSend({}).user.id).toBe(id)
+    }
+  )
+
+  it('creates the app data directory when needed', async () => {
+    const dir = fake.dir
+    fake.dir = join(dir, 'new')
+    try {
+      const { initializeTelemetry } = await import('./telemetry')
+      initializeTelemetry(true)
+      expect(fs.readFileSync(join(fake.dir, 'telemetry-install-id'), 'utf8')).toMatch(TELEMETRY_INSTALL_ID_PATTERN)
+    } finally { fake.dir = dir }
+  })
+
+  it('does not create a file while disabled and deletes an existing file at startup', async () => {
+    const { initializeTelemetry } = await import('./telemetry')
+    const file = join(fake.dir, 'telemetry-install-id')
+    initializeTelemetry(false)
+    expect(fs.existsSync(file)).toBe(false)
+    fs.writeFileSync(file, '82eb537b-e1bd-4d94-9a1c-3737c2e5975f')
+    initializeTelemetry(false)
+    expect(fs.existsSync(file)).toBe(false)
+    expect(fake.init).not.toHaveBeenCalled()
+  })
+
+  it('deletes the file immediately on opt-out and uses a new ID after restart', async () => {
+    const { initializeTelemetry, updateTelemetryConsent } = await import('./telemetry')
+    initializeTelemetry(true)
+    const file = join(fake.dir, 'telemetry-install-id')
+    const id = fs.readFileSync(file, 'utf8')
+    updateTelemetryConsent(false)
+    expect(fs.existsSync(file)).toBe(false)
+    updateTelemetryConsent(true)
+    expect(fs.existsSync(file)).toBe(false)
+    expect(fake.init.mock.calls[0][0].beforeSend({}).user).toEqual({ ip_address: '0.0.0.0' })
+    vi.resetModules()
+    const restarted = await import('./telemetry')
+    restarted.initializeTelemetry(true)
+    expect(fs.readFileSync(file, 'utf8')).not.toBe(id)
+  })
+
+  it.each(['read', 'write'])('keeps reporting without an ID on %s failure', async (operation) => {
+    const file = join(fake.dir, 'telemetry-install-id')
+    if (operation === 'read') fs.mkdirSync(file)
+    else {
+      fs.writeFileSync(file, 'invalid')
+      fs.chmodSync(file, 0o444)
+    }
+    const { initializeTelemetry, reportUserFeedback, reportChildDiagnostic } = await import('./telemetry')
+    try { expect(() => initializeTelemetry(true)).not.toThrow() }
+    finally { if (operation === 'write') fs.chmodSync(file, 0o666) }
+    expect(reportUserFeedback('test')).toBe(true)
+    expect(reportChildDiagnostic(diagnostic())).toBe('test-event')
+    const options = fake.init.mock.calls[0][0]
+    for (const filter of [options.beforeSend, options.beforeSendTransaction]) {
+      expect(filter({ user: { id: '82eb537b-e1bd-4d94-9a1c-3737c2e5975f' } }).user).toEqual({ ip_address: '0.0.0.0' })
+    }
+    expect(fake.captureEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores deletion failures at startup and opt-out', async () => {
+    const { initializeTelemetry, updateTelemetryConsent } = await import('./telemetry')
+    const file = join(fake.dir, 'telemetry-install-id')
+    fs.mkdirSync(file)
+    expect(() => initializeTelemetry(false)).not.toThrow()
+    expect(fake.init).not.toHaveBeenCalled()
+    fs.rmdirSync(file)
+    initializeTelemetry(true)
+    fs.unlinkSync(file)
+    fs.mkdirSync(file)
+    expect(() => updateTelemetryConsent(false)).not.toThrow()
+    expect(fake.init.mock.calls[0][0].beforeSend({})).toBeNull()
+    updateTelemetryConsent(true)
+    expect(fake.init.mock.calls[0][0].beforeSend({}).user).toEqual({ ip_address: '0.0.0.0' })
+  })
+
+  it('adds the local ID to main, child, user-report and renderer events and transactions', async () => {
+    const { initializeTelemetry, reportChildDiagnostic, reportUserFeedback } = await import('./telemetry')
+    const { sanitizeTelemetryEvent } = await import('../shared/telemetry')
+    initializeTelemetry(true)
+    const id = fs.readFileSync(join(fake.dir, 'telemetry-install-id'), 'utf8')
+    reportChildDiagnostic(diagnostic())
+    reportUserFeedback('test')
+    const options = fake.init.mock.calls[0][0]
+    const rendererEvent = sanitizeTelemetryEvent({ user: { email: 'private@example.com' } })
+    const rendererTransaction = sanitizeTelemetryEvent({ type: 'transaction', user: { id: '82eb537b-e1bd-4d94-9a1c-3737c2e5975f' } })
+    for (const event of [{ message: 'main' }, ...fake.captureEvent.mock.calls.map(([event]) => event), rendererEvent]) {
+      expect(options.beforeSend(event).user).toEqual({ id, ip_address: '0.0.0.0' })
+    }
+    expect(options.beforeSendTransaction(rendererTransaction).user).toEqual({ id, ip_address: '0.0.0.0' })
+  })
+})
+
+describe('manual user report', () => {
+  it('sends trimmed, length-capped text as a tagged event only while telemetry is active', async () => {
+    const { initializeTelemetry, updateTelemetryConsent, reportUserFeedback } = await import('./telemetry')
+    initializeTelemetry(true)
+    expect(reportUserFeedback('  export freezes  ')).toBe(true)
+    expect(fake.captureEvent.mock.calls[0][0]).toMatchObject({ message: 'export freezes', level: 'info', tags: { component: 'user-report' } })
+    expect(reportUserFeedback('x'.repeat(2000))).toBe(true)
+    expect(fake.captureEvent.mock.calls[1][0].message).toHaveLength(500)
+    expect(reportUserFeedback('   ')).toBe(false)
+    expect(reportUserFeedback(42)).toBe(false)
+    updateTelemetryConsent(false)
+    expect(reportUserFeedback('after opt-out')).toBe(false)
+    expect(fake.captureEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses reports when telemetry was never started', async () => {
+    const { initializeTelemetry, reportUserFeedback } = await import('./telemetry')
+    initializeTelemetry(false)
+    expect(reportUserFeedback('hello')).toBe(false)
+    expect(fake.captureEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe('preview A/V desync report', () => {
+  it('builds a grouped, tagged event from sanitized measurements and stops after the session cap', async () => {
+    const { initializeTelemetry, reportPlaybackDesync } = await import('./telemetry')
+    initializeTelemetry(true)
+    fake.switches.add('disable-accelerated-video-decode')
+    expect(reportPlaybackDesync({ driftMs: 480.4, droppedFrames: 12, totalFrames: 900 })).toBe(true)
+    expect(fake.captureEvent.mock.calls[0][0]).toMatchObject({
+      level: 'warning', fingerprint: ['preview-av-desync'], tags: { component: 'preview-playback', decode: 'software' }
+    })
+    expect(fake.captureEvent.mock.calls[0][0].message).toContain('drift 480ms, dropped 12/900 frames')
+    fake.switches.clear()
+    expect(reportPlaybackDesync({ driftMs: 500, droppedFrames: 0, totalFrames: 0 })).toBe(true)
+    expect(fake.captureEvent.mock.calls[1][0].tags.decode).toBe('auto')
+    expect(reportPlaybackDesync({ driftMs: 500 })).toBe(true)
+    expect(reportPlaybackDesync({ driftMs: 500 })).toBe(false)
+  })
+
+  it('rejects malformed or zero-drift input and reports nothing while telemetry is off', async () => {
+    const { initializeTelemetry, reportPlaybackDesync } = await import('./telemetry')
+    initializeTelemetry(true)
+    for (const bad of [null, 'x', {}, { driftMs: Number.NaN }, { driftMs: 0 }]) expect(reportPlaybackDesync(bad)).toBe(false)
+    expect(fake.captureEvent).not.toHaveBeenCalled()
+    vi.resetModules()
+    const off = await import('./telemetry')
+    off.initializeTelemetry(false)
+    expect(off.reportPlaybackDesync({ driftMs: 500 })).toBe(false)
+  })
+})
+
+describe('telemetry consent', () => {
+  it('keeps spawn messages and fingerprints identical across UI locales', async () => {
+    const { initializeTelemetry, reportChildDiagnostic, CHILD_DIAGNOSTIC_DEDUPE_WINDOW_MS } = await import('./telemetry')
+    const { spawnFailure } = await import('./child-spawn')
+    const { LOCALES, setActiveLocale } = await import('../shared/locale')
+    vi.useFakeTimers()
+    initializeTelemetry(true)
+    try {
+      for (const locale of LOCALES) {
+        setActiveLocale(locale)
+        for (const code of ['ENOENT', 'EACCES']) {
+          const failure = spawnFailure({ code })
+          reportChildDiagnostic({ component: 'rust-engine', code: 'engine_spawn', message: failure.report, tags: failure.tags })
+        }
+        vi.advanceTimersByTime(CHILD_DIAGNOSTIC_DEDUPE_WINDOW_MS + 1)
+      }
+      const events = fake.captureEvent.mock.calls.map(([event]) => event)
+      expect(events).toHaveLength(LOCALES.length * 2)
+      for (let index = 0; index < 2; index++) {
+        const sameErrno = events.filter((_, i) => i % 2 === index)
+        expect(new Set(sameErrno.map((event) => event.message)).size).toBe(1)
+        expect(new Set(sameErrno.map((event) => JSON.stringify(event.fingerprint))).size).toBe(1)
+      }
+    } finally { setActiveLocale('zh-TW') }
+  })
+
+  it('does not initialize or enable reporting without persisted consent, even after toggling on', async () => {
+    const { initializeTelemetry, updateTelemetryConsent } = await import('./telemetry')
+    initializeTelemetry(false)
+    updateTelemetryConsent(true)
+    expect(fake.init).not.toHaveBeenCalled()
+    expect(fake.handle.mock.calls[0][1]()).toBe(false)
+  })
+
+  it('blocks new events and queued transport sends immediately after consent withdrawal', async () => {
+    const { initializeTelemetry, updateTelemetryConsent } = await import('./telemetry')
+    initializeTelemetry(true)
+    const options = fake.init.mock.calls[0][0]
+    const transport = options.transport({})
+    await transport.send([{}, []])
+    expect(fake.send).toHaveBeenCalledTimes(1)
+    updateTelemetryConsent(false)
+    expect(fake.handle.mock.calls[0][1]()).toBe(false)
+    expect(options.beforeSend({ message: 'test' })).toBeNull()
+    expect(options.beforeSendTransaction({ type: 'transaction' })).toBeNull()
+    await transport.send([{}, []])
+    expect(fake.send).toHaveBeenCalledTimes(1)
+    expect(options.defaultIntegrations).toBe(false)
+    expect(options.enableLogs).toBe(false)
+  })
+})
+
+describe('child diagnostics', () => {
+  it.each(Object.entries(RECORDING_SERVICE_ERRORS))('reports service failure %s as a Node event with consent and dedupe', async (code, message) => {
+    const { initializeTelemetry, reportChildDiagnostic, updateTelemetryConsent } = await import('./telemetry')
+    initializeTelemetry(true)
+    const failure: ChildDiagnostic = { component: 'recording-service', code, message,
+      tags: { error_code: 'ETIMEDOUT', signal: 'SIGTERM', killed: 'true' } }
+    expect(reportChildDiagnostic(failure)).toBe('test-event')
+    expect(fake.captureEvent.mock.calls[0][0]).toMatchObject({ platform: 'node', level: 'error',
+      exception: { values: [{ type: `recording-service:${code}`, value: message, mechanism: { type: 'generic', handled: true } }] } })
+    expect(reportChildDiagnostic(failure)).toBeUndefined()
+    expect(reportChildDiagnostic({ ...failure, code: 'disk_full' })).toBeUndefined()
+    updateTelemetryConsent(false)
+    expect(reportChildDiagnostic({ ...failure, message: 'different failure' })).toBeUndefined()
+    expect(fake.captureEvent).toHaveBeenCalledOnce()
+  })
+  it.each(['audio_device_missing', 'audio_source_lost', 'audio_capture_stalled', 'game_audio_unavailable', 'encoder_stalled'])(
+    'reports %s as a warning with privacy filtering, dedupe and consent', async (code) => {
+      const { initializeTelemetry, reportChildDiagnostic, updateTelemetryConsent } = await import('./telemetry')
+      initializeTelemetry(true)
+      const warning = diagnostic({ component: 'rust-recorder', code, exception: undefined,
+        tags: { mic: 'on', system_audio: 'on' } })
+      expect(reportChildDiagnostic(warning)).toBe('test-event')
+      expect(fake.captureEvent.mock.calls[0][0]).toMatchObject({ level: 'warning',
+        tags: { component: 'rust-recorder', mic: 'on', system_audio: 'on' } })
+      expect(JSON.stringify(fake.captureEvent.mock.calls)).not.toContain('Alice')
+      expect(reportChildDiagnostic(warning)).toBeUndefined()
+      expect(reportChildDiagnostic({ ...warning, component: 'rust-engine' })).toBeUndefined()
+      updateTelemetryConsent(false)
+      expect(reportChildDiagnostic({ ...warning, message: 'Different source failure' })).toBeUndefined()
+      expect(fake.captureEvent).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('accepts the Rust exception envelope with empty frames as a native event', async () => {
+    const { initializeTelemetry, reportChildDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    expect(reportChildDiagnostic(diagnostic({ exception: { type: 'RuntimeError', frames: [] } }))).toBe('test-event')
+    expect(fake.captureEvent.mock.calls[0][0]).toMatchObject({
+      platform: 'native', exception: { values: [{ type: 'rust-engine:internal:RuntimeError' }] }
+    })
+  })
+
+  it('filters routine errors and sanitizes reportable failures', async () => {
+    const { initializeTelemetry, reportChildDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    reportChildDiagnostic({ component: 'rust-recorder', code: 'disk_full', message: 'Disk full' })
+    reportChildDiagnostic({ component: 'rust-engine', code: 'cancelled', message: 'Cancelled' })
+    expect(fake.captureEvent).not.toHaveBeenCalled()
+
+    expect(reportChildDiagnostic(diagnostic())).toBe('test-event')
+    const event = fake.captureEvent.mock.calls[0][0]
+    expect(event.platform).toBe('native')
+    expect(event.exception.values[0].type).toBe('rust-engine:internal:TypeError')
+    expect(event.exception.values[0].stacktrace.frames).toEqual([{ filename: 'aditor/ipc.py', function: '_run', lineno: 150, in_app: true }])
+    expect(JSON.stringify(event)).not.toContain('Alice')
+  })
+
+  it('suppresses an identical failure but reports different failures sharing component and code', async () => {
+    const { initializeTelemetry, reportChildDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    const repeated = diagnostic({ message: 'Cannot read "C:\\Users\\Alice\\private.mp4" (attempt 1)' })
+    expect(reportChildDiagnostic(repeated)).toBe('test-event')
+    expect(reportChildDiagnostic(repeated)).toBeUndefined()
+    // Volatile paths and numbers must not turn one recurring fault into many reports.
+    expect(reportChildDiagnostic(diagnostic({ message: 'Cannot read "C:\\Users\\Bob\\other.mp4" (attempt 2)' }))).toBeUndefined()
+
+    expect(reportChildDiagnostic(diagnostic({
+      message: 'Memory exhausted',
+      exception: { type: 'MemoryError', frames: [{ filename: 'aditor/ipc.py', function: '_run', lineno: 150 }] }
+    }))).toBe('test-event')
+    expect(reportChildDiagnostic(diagnostic({
+      message: 'Cannot read C:\\Users\\Alice\\private.mp4',
+      exception: { type: 'TypeError', frames: [{ filename: 'aditor/other.py', function: 'other', lineno: 20 }] }
+    }))).toBe('test-event')
+    expect(fake.captureEvent).toHaveBeenCalledTimes(3)
+  })
+
+  it('gives one fingerprint and one title to the same fault whatever its counters, stage or language say', async () => {
+    const { initializeTelemetry, reportChildDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    const recorder = (message: string) => diagnostic({ component: 'rust-recorder', code: 'encode_failed', exception: undefined, message })
+    const stall = [
+      'Audio timestamp gap exceeds five seconds; target_samples=5 written_samples=4 encoded_samples=3 gap_samples=2; stop encoding to limit memory usage',
+      'Audio input pts=72398541 video_next_slot=37 fps=90; stage=audio_encode input=710 encoded=37 dropped=694: Audio timestamp gap exceeds five seconds; gap_samples=240001',
+      'Audio input pts=4878022291 video_next_slot=43348 fps=90; stage=video_send input=1 encoded=2: Audio timestamp gap exceeds five seconds; gap_samples=480000'
+    ]
+    for (const message of stall) reportChildDiagnostic(recorder(message))
+    const events = fake.captureEvent.mock.calls.map((call) => call[0])
+    // The dedupe window would suppress later reports of the same fault, so also check the grouping directly.
+    const { stableDiagnostic } = await import('./telemetry')
+    expect(new Set(stall.map((m) => stableDiagnostic(m).category)).size).toBe(1)
+    expect(events[0].fingerprint).toEqual(['rust-recorder', 'encode_failed', 'audio_timestamp_gap'])
+    expect(events[0].exception.values[0].value).toBe('Audio timestamp gap exceeds five seconds')
+    expect(events[0].extra.detail).toContain('gap_samples=2')
+    expect(stableDiagnostic(stall[1]).stage).toBe('audio_encode')
+    for (const ms of [2000, 2001, 2004]) {
+      expect(stableDiagnostic(`Muxer queue remained full for ${ms} ms; stage=mux_enqueue input=${ms}`).category).toBe('muxer_queue_full')
+    }
+    expect(stableDiagnostic('Encoder has processed no frames for over five seconds; stage=video_send input=740').category).toBe('encoder_stalled')
+  })
+
+  it('reports distinct audio root causes without suppressing them as timestamp gaps', async () => {
+    const { initializeTelemetry, reportChildDiagnostic, stableDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    const recorder = (message: string) => diagnostic({ component: 'rust-recorder', code: 'encode_failed', exception: undefined, message })
+    const wrap = (root: string, pts = 72398541) => `Audio input pts=${pts} video_next_slot=37 fps=90; stage=audio_encode input=710 encoded=37 dropped=694: ${root}`
+    expect(reportChildDiagnostic(recorder(wrap('Audio timestamp gap exceeds five seconds; gap_samples=240001')))).toBe('test-event')
+    for (const root of ['Write audio FIFO failed: Cannot allocate memory (-12)', 'Audio FIFO read was incomplete', 'Allocate AAC frame failed: Cannot allocate memory (-12)']) {
+      const expected = stableDiagnostic(root)
+      expect(expected.category).not.toBe('audio_timestamp_gap')
+      for (const prefix of ['', 'encode_failed: ']) {
+        expect(stableDiagnostic(prefix + wrap(root))).toEqual({ ...expected, stage: 'audio_encode' })
+      }
+      expect(reportChildDiagnostic(recorder(wrap(root)))).toBe('test-event')
+      expect(reportChildDiagnostic(recorder(wrap(root, 4878022291)))).toBeUndefined()
+    }
+    const events = fake.captureEvent.mock.calls.map((call) => call[0])
+    expect(events).toHaveLength(4)
+    expect(new Set(events.map((event) => event.fingerprint[2])).size).toBe(4)
+    expect(events[1].exception.values[0].value).toBe('Write audio FIFO failed: Cannot allocate memory (-N)')
+    expect(events[1].tags.stage).toBe('audio_encode')
+    expect(events[1].extra.detail).toContain('Audio input pts=72398541')
+  })
+
+  it('keeps decode titles and fingerprints stable when stderr is appended', async () => {
+    const { initializeTelemetry, reportChildDiagnostic, stableDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    const message = 'ffmpeg decoding failed; stderr: Cannot open C:\\Users\\Alice\\private.mp4'
+    expect(stableDiagnostic(message)).toEqual(stableDiagnostic('ffmpeg decoding failed'))
+    expect(reportChildDiagnostic(diagnostic({ code: 'decode_failed', message,
+      exception: { type: 'DecodeError', frames: [] } }))).toBe('test-event')
+    const event = fake.captureEvent.mock.calls[0][0]
+    expect(event.fingerprint).toEqual(['rust-engine', 'decode_failed', 'ffmpeg decoding failed', 'DecodeError'])
+    expect(event.exception.values[0].value).toBe('ffmpeg decoding failed')
+    expect(event.extra.detail).toContain('; stderr: Cannot open ')
+    expect(event.extra.detail).not.toContain('Alice')
+    expect(reportChildDiagnostic(diagnostic({ code: 'decode_failed', message: 'ffmpeg decoding failed',
+      exception: { type: 'DecodeError', frames: [] } }))).toBeUndefined()
+  })
+
+  it('removes counters and stderr from unknown messages but keeps the exit code', async () => {
+    const { stableDiagnostic } = await import('./telemetry')
+    expect(stableDiagnostic("Engine exited unexpectedly (exit code 1: engine\\x.py line 12 'oops')").title).toBe('Engine exited unexpectedly (exit code 1)')
+    expect(stableDiagnostic('Analysis engine exited unexpectedly (exit code -4058)').title).toBe('Analysis engine exited unexpectedly (exit code -4058)')
+    expect(stableDiagnostic('Frame 120 of 900 failed at 0x7ff6 offset 12').title).toBe('Frame N of N failed at N offset N')
+    expect(stableDiagnostic('Cannot open C:\\Users\\Alice\\x.mp4 now').title).not.toContain('Alice')
+  })
+
+  it('does not report processes ended from outside, but still reports other exits', async () => {
+    const { initializeTelemetry, reportChildDiagnostic } = await import('./telemetry')
+    initializeTelemetry(true)
+    expect(reportChildDiagnostic(diagnostic({ code: 'engine_crashed', exception: undefined, message: 'Analysis engine exited unexpectedly (exit code 1073807364)' }))).toBeUndefined()
+    expect(reportChildDiagnostic(diagnostic({ code: 'engine_crashed', exception: undefined, message: 'Analysis engine exited unexpectedly (exit code 3221225786: x)' }))).toBeUndefined()
+    expect(reportChildDiagnostic(diagnostic({ component: 'rust-recorder', code: 'recorder_crashed', exception: undefined,
+      message: 'Recorder process exited unexpectedly', tags: { exit_code: '0x40010004' } }))).toBeUndefined()
+    expect(fake.captureEvent).not.toHaveBeenCalled()
+    expect(reportChildDiagnostic(diagnostic({ code: 'engine_crashed', exception: undefined, message: 'Analysis engine exited unexpectedly (exit code 3221225477)' }))).toBe('test-event')
+    expect(reportChildDiagnostic(diagnostic({ component: 'rust-recorder', code: 'recorder_crashed', exception: undefined,
+      message: 'Recorder process exited unexpectedly', tags: { exit_code: '0xC0000005' } }))).toBe('test-event')
+  })
+
+  it('allows the same failure again after the dedupe window', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    const { initializeTelemetry, reportChildDiagnostic, CHILD_DIAGNOSTIC_DEDUPE_WINDOW_MS } = await import('./telemetry')
+    initializeTelemetry(true)
+    const repeated = diagnostic()
+    expect(reportChildDiagnostic(repeated)).toBe('test-event')
+
+    vi.setSystemTime(Date.now() + CHILD_DIAGNOSTIC_DEDUPE_WINDOW_MS - 1)
+    expect(reportChildDiagnostic(repeated)).toBeUndefined()
+    expect(fake.captureEvent).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(Date.now() + 1)
+    expect(reportChildDiagnostic(repeated)).toBe('test-event')
+    expect(fake.captureEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('enforces an independent total report budget and resets it after the window', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    const {
+      initializeTelemetry, reportChildDiagnostic, MAX_CHILD_DIAGNOSTICS_PER_WINDOW, CHILD_DIAGNOSTIC_RATE_WINDOW_MS
+    } = await import('./telemetry')
+    initializeTelemetry(true)
+
+    for (let index = 0; index < MAX_CHILD_DIAGNOSTICS_PER_WINDOW; index += 1) {
+      expect(reportChildDiagnostic(diagnostic({
+        message: `distinct failure ${index}`,
+        exception: { type: `Error${index}`, frames: [{ filename: 'aditor/ipc.py', function: '_run', lineno: index + 1 }] }
+      }))).toBe('test-event')
+    }
+    expect(fake.captureEvent).toHaveBeenCalledTimes(MAX_CHILD_DIAGNOSTICS_PER_WINDOW)
+    expect(reportChildDiagnostic(diagnostic({
+      message: 'over budget', exception: { type: 'OverBudget', frames: [{ filename: 'aditor/ipc.py', function: '_run', lineno: 999 }] }
+    }))).toBeUndefined()
+    expect(fake.captureEvent).toHaveBeenCalledTimes(MAX_CHILD_DIAGNOSTICS_PER_WINDOW)
+
+    vi.setSystemTime(Date.now() + CHILD_DIAGNOSTIC_RATE_WINDOW_MS)
+    expect(reportChildDiagnostic(diagnostic({
+      message: 'after budget window', exception: { type: 'AfterWindow', frames: [{ filename: 'aditor/ipc.py', function: '_run', lineno: 1000 }] }
+    }))).toBe('test-event')
+    expect(fake.captureEvent).toHaveBeenCalledTimes(MAX_CHILD_DIAGNOSTICS_PER_WINDOW + 1)
+  })
+
+  it('does not report while disabled or after consent is withdrawn', async () => {
+    const { initializeTelemetry, reportChildDiagnostic, updateTelemetryConsent } = await import('./telemetry')
+    initializeTelemetry(false)
+    expect(reportChildDiagnostic(diagnostic())).toBeUndefined()
+    updateTelemetryConsent(true)
+    expect(reportChildDiagnostic(diagnostic())).toBeUndefined()
+    expect(fake.captureEvent).not.toHaveBeenCalled()
+
+    initializeTelemetry(true)
+    expect(reportChildDiagnostic(diagnostic())).toBe('test-event')
+    updateTelemetryConsent(false)
+    expect(reportChildDiagnostic(diagnostic({ message: 'another failure' }))).toBeUndefined()
+    expect(fake.captureEvent).toHaveBeenCalledTimes(1)
+  })
+})

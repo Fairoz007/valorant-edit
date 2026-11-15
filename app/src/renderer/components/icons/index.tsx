@@ -1,0 +1,86 @@
+// Unified icon entry point: branded feature icons and lucide-react share the existing interface.
+import logoUrl from '../../../../resources/icon.png'
+import {
+  ListVideo,
+  Search,
+  Star,
+  Plus,
+  FolderInput,
+  MoreHorizontal,
+  AlertTriangle,
+  RefreshCw,
+  Trash2,
+  ImageOff,
+  X,
+  FolderOpen,
+  Loader2,
+  ChevronDown,
+  ChevronLeft,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  SkipBack,
+  SkipForward,
+  Maximize,
+  Minimize,
+  Scissors,
+  Menu,
+  ZoomIn,
+  ZoomOut,
+  Undo2,
+  Redo2,
+  FilePlus2,
+  Save,
+  Check,
+  Copy,
+  CopyCheck,
+  Globe,
+  Info
+} from 'lucide-react'
+
+export {
+  ListVideo,
+  Search,
+  Star,
+  Plus,
+  FolderInput,
+  MoreHorizontal,
+  AlertTriangle,
+  RefreshCw,
+  Trash2,
+  ImageOff,
+  X,
+  FolderOpen,
+  Loader2,
+  ChevronDown,
+  ChevronLeft,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  SkipBack,
+  SkipForward,
+  Maximize,
+  Minimize,
+  Scissors,
+  Menu,
+  ZoomIn,
+  ZoomOut,
+  Undo2,
+  Redo2,
+  FilePlus2,
+  Save,
+  Check,
+  Copy,
+  CopyCheck,
+  Globe,
+  Info
+}
+
+export { LayoutGrid, Film, Video, AnalysisQueue, Keyboard, SlidersHorizontal, Sparkles, Download } from './primary'
+
+/** Simplified Pathfinder brand avatar; the sidebar already has navigation labels, so the image is decorative. */
+export function LogoMark(props: { className?: string }): JSX.Element {
+  return <img className={props.className} src={logoUrl} alt="" aria-hidden="true" draggable={false} />
+}

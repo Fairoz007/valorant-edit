@@ -1,0 +1,750 @@
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { EventEmitter } from 'events'
+import { createRecordingService, type RecordingDeps } from './index'
+import { readFrames } from './session'
+import { LiveSession } from './live-session'
+import { ObsRecording } from './obs-session'
+import type { RecordingService, RecordingSettings } from '../../shared/recording'
+import * as disk from './disk'
+import { copySegments, createSegments, fakeCommand, ffmpeg, makeDeps, sessionDir, tempRoot, waitFor } from './test-support'
+
+interface Rig {
+  root: string
+  deps: RecordingDeps
+  settings: RecordingSettings
+  service: RecordingService
+  trace: string
+  pid: number | null
+}
+const rigs: Rig[] = []
+function rig(mode = 'normal'): Rig {
+  const root = tempRoot()
+  const deps = makeDeps(root)
+  const settings = { ...deps.getSettings() }
+  const trace = path.join(root, 'trace.jsonl')
+  deps.getSettings = () => settings
+  deps.notify = vi.fn(); deps.addToLibrary = vi.fn(); deps.enqueueAnalysis = vi.fn()
+  deps.recorderCommand = fakeCommand(mode, { FAKE_RECORDER_TRACE: trace })
+  const value = { root, deps, settings, trace, pid: 1234 } as Rig
+  deps.findApexPid = vi.fn(async () => value.pid)
+  value.service = createRecordingService(deps)
+  vi.spyOn(disk, 'diskFreeBytes').mockResolvedValue(100 * 1024 ** 3)
+  rigs.push(value)
+  return value
+}
+function commands(value: Rig, cmd: string): Record<string, any>[] {
+  return fs.existsSync(value.trace) ? fs.readFileSync(value.trace, 'utf8').trim().split('\n').filter(Boolean)
+    .map((line) => JSON.parse(line)).filter((entry) => entry.cmd === cmd) : []
+}
+afterEach(async () => {
+  for (const value of rigs.splice(0)) {
+    await value.service.stop()
+    fs.rmSync(value.root, { recursive: true, force: true })
+  }
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
+
+describe('recording service state machine', () => {
+  it('reports failed live persistence and preserves the session instead of leaving shutdown stuck', async () => {
+    const value = rig()
+    value.deps.onDiagnostic = vi.fn()
+    value.settings.autoRecord = false
+    value.service.start()
+    expect(await value.service.startManual()).toBe(true)
+    const [start] = commands(value, 'start')
+    expect(JSON.parse(fs.readFileSync(path.join(start.session_dir, 'recording.json'), 'utf8')).livePending).toBe(true)
+    vi.spyOn(LiveSession.prototype, 'flush').mockRejectedValue(new Error('live file busy'))
+    await expect(value.service.stopManual()).resolves.toBeUndefined()
+    expect(value.service.status().error?.code).toBe('finalize_failed')
+    expect(value.deps.onDiagnostic).toHaveBeenCalledExactlyOnceWith({
+      component: 'recording-service', code: 'finalize_failed', message: 'Recording finalization failed', tags: {}
+    })
+    expect(JSON.parse(fs.readFileSync(path.join(start.session_dir, 'recording.json'), 'utf8')).livePending).toBe(true)
+    expect(fs.existsSync(start.session_dir)).toBe(true)
+    expect(fs.existsSync(path.join(start.session_dir, 'live-complete.json'))).toBe(false)
+    expect(value.deps.addToLibrary).not.toHaveBeenCalled()
+  })
+  it('reports polling and manual game query failures without forwarding command output or changing the rejection', async () => {
+    const value = rig()
+    value.settings.autoRecord = false
+    const error = Object.assign(new Error('tasklist: private-process.exe token=private'), {
+      code: 'ETIMEDOUT', signal: 'SIGTERM', killed: true, stdout: 'private-process.exe'
+    })
+    value.deps.findGame = vi.fn().mockRejectedValue(error)
+    const report = vi.fn()
+    value.deps.onDiagnostic = report
+    value.service.start()
+    await waitFor(() => report.mock.calls.length > 0)
+    expect(report).toHaveBeenCalledWith({ component: 'recording-service', code: 'game_query_failed',
+      message: 'Game process query failed', tags: { error_code: 'ETIMEDOUT', signal: 'SIGTERM', killed: 'true' } })
+    expect(JSON.stringify(report.mock.calls)).not.toContain('private')
+    report.mockClear()
+    value.deps.findGame = vi.fn().mockRejectedValue(Object.assign(new Error("ENOENT: no such file, lstat 'C:/Users/private/x'"),
+      { code: 'ENOENT', syscall: 'lstat', path: 'C:/Users/private/x' }))
+    await expect(value.service.startManual()).rejects.toThrow()
+    expect(report).toHaveBeenCalledWith({ component: 'recording-service', code: 'game_query_failed',
+      message: 'Game process query failed', tags: { error_code: 'ENOENT', syscall: 'lstat' } })
+    expect(JSON.stringify(report.mock.calls)).not.toContain('private')
+    report.mockClear()
+    value.deps.findGame = vi.fn().mockRejectedValue(error)
+    report.mockImplementation(() => { throw new Error('diagnostic handler failed') })
+    await expect(value.service.startManual()).rejects.toBe(error)
+    expect(report).toHaveBeenCalled()
+  })
+  it('reports OBS startup failure without exposing the password or blocking the built-in fallback', async () => {
+    const value = rig()
+    value.settings.autoRecord = false
+    value.settings.backend = 'obs'
+    value.settings.obsFallbackBuiltin = true
+    value.deps.onDiagnostic = vi.fn()
+    vi.spyOn(ObsRecording.prototype, 'start').mockRejectedValue(Object.assign(new Error('password=private'), { code: 4009 }))
+    value.service.start()
+    expect(await value.service.startManual()).toBe(true)
+    expect(value.deps.onDiagnostic).toHaveBeenCalledExactlyOnceWith({ component: 'recording-service', code: 'obs_start_failed',
+      message: 'OBS recording start failed', tags: { error_code: '4009' } })
+    expect(value.service.status().backend).toBe('builtin')
+  })
+  it.each([['cloud', '雲端同步'], ['network', '網路磁碟']] as const)('warns once per output folder when recording to %s storage', async (kind, text) => {
+    const value = rig()
+    value.deps.probeStorage = vi.fn(async () => kind)
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.notify).mock.calls.some(([level, message]) => level === 'warning' && message.includes(text)))
+    await waitFor(() => value.service.status().segments === 2)
+    value.pid = null
+    await waitFor(() => value.service.status().phase === 'idle')
+    value.pid = 5678
+    await waitFor(() => commands(value, 'start').length === 2)
+    expect(value.deps.probeStorage).toHaveBeenCalledOnce()
+    expect(vi.mocked(value.deps.notify).mock.calls.filter(([, message]) => message.includes(text))).toHaveLength(1)
+  })
+
+  it('records Valorant with its own capture rects and as one file even when per-match mode is set', async () => {
+    const value = rig()
+    const icons = path.join(value.root, 'icons')
+    fs.mkdirSync(icons)
+    fs.copyFileSync(path.join(value.root, 'profile.json'), path.join(icons, 'profile.json'))
+    fs.mkdirSync(path.join(value.root, 'valorant', 'icons'), { recursive: true })
+    fs.writeFileSync(path.join(value.root, 'valorant', 'icons', 'profile.json'),
+      JSON.stringify({ templates_version: 'v', capture_rois: { banner: [1436, 84, 480, 256], spec: [20, 790, 440, 100] } }))
+    value.deps.profileDir = icons
+    value.deps.findGame = vi.fn(async () => ({ game: 'valorant' as const, pid: 4321 }))
+    // The Riot Client is not running: no match boundaries, so the session is kept whole.
+    value.deps.createValorantClient = () => Object.assign(new EventEmitter(), { probe: async () => false, start: vi.fn(), stop: vi.fn() }) as never
+    value.settings.mode = 'match'
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length === 1)
+    expect(commands(value, 'start')[0]).toMatchObject({ pid: 4321, frames: { banner: [1436, 84, 480, 256], spec: [20, 790, 440, 100] } })
+    const dir = commands(value, 'start')[0].session_dir as string
+    await waitFor(() => fs.existsSync(path.join(dir, 'recording.json')))
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'session', game: 'valorant' })
+    expect(vi.mocked(value.deps.notify).mock.calls.some(([level, message]) => level === 'warning' && message.includes('VALORANT'))).toBe(true)
+  })
+
+  it('cuts Valorant per match from the Riot Client when it answers', async () => {
+    const value = rig()
+    const icons = path.join(value.root, 'icons')
+    fs.mkdirSync(icons)
+    fs.copyFileSync(path.join(value.root, 'profile.json'), path.join(icons, 'profile.json'))
+    fs.mkdirSync(path.join(value.root, 'valorant', 'icons'), { recursive: true })
+    fs.writeFileSync(path.join(value.root, 'valorant', 'icons', 'profile.json'),
+      JSON.stringify({ templates_version: 'v', capture_rois: { banner: [1031, 84, 885, 256], spec: [647, 20, 655, 64] } }))
+    value.deps.profileDir = icons
+    value.deps.findGame = vi.fn(async () => ({ game: 'valorant' as const, pid: 4321 }))
+    const client = Object.assign(new EventEmitter(), { probe: async () => true, start: vi.fn(), stop: vi.fn() })
+    value.deps.createValorantClient = () => client as never
+    value.settings.mode = 'match'
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    const dir = commands(value, 'start')[0].session_dir as string
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'match', game: 'valorant' })
+    expect(client.start).toHaveBeenCalledOnce()
+    client.emit('event', { type: 'match_start', at: Date.now() })
+    await waitFor(() => fs.existsSync(path.join(dir, 'events.jsonl')) &&
+      fs.readFileSync(path.join(dir, 'events.jsonl'), 'utf8').includes('"reason":"game_client"'))
+    expect(vi.mocked(value.deps.notify).mock.calls.some(([, message]) => message.includes('逐局分割'))).toBe(false)
+    const distrust = vi.spyOn(LiveSession.prototype, 'distrust')
+    client.emit('unavailable', new Error('offline'))
+    expect(distrust).toHaveBeenCalledOnce()
+  })
+
+  it('keeps recording when the storage probe fails', async () => {
+    const value = rig()
+    value.deps.probeStorage = vi.fn(async () => { throw new Error('probe failed') })
+    value.service.start()
+    await waitFor(() => value.service.status().segments === 2)
+    expect(value.service.status().phase).toBe('recording')
+  })
+
+  it('automatically starts and stops, passes ROI and media settings, tracks segments and dropped frames, and returns immutable snapshots', async () => {
+    const value = rig()
+    value.settings.height = 1080; value.settings.micEnabled = false; value.settings.micGain = 0.4
+    value.settings.renderDevice = 'speaker'; value.settings.captureDevice = 'mic'; value.settings.captureMethod = 'dda'
+    value.settings.gpu = '10de:2684'
+    value.service.start()
+    await waitFor(() => value.service.status().segments === 2)
+    const snapshot = value.service.status()
+    expect(snapshot).toMatchObject({ phase: 'recording', encoder: 'hevc_nvenc', width: 1920, height: 1080, durationSec: 4, droppedFrames: 3 })
+    expect(Object.isFrozen(snapshot)).toBe(true)
+    expect(snapshot.sessionId).toMatch(/^\d{8}-\d{6}-[0-9a-f]{4}$/)
+    const [start] = commands(value, 'start')
+    expect(start.frames).toEqual({ banner: [560, 700, 800, 180], spec: [60, 1028, 480, 40], base: [1920, 1080] })
+    expect(start.encode).toMatchObject({ height: 1080, codec: 'hevc', gpu: '10de:2684', bitrate_kbps: 10000, preset: 'speed', aspect: 'native' })
+    expect(start.audio).toEqual({ render: 'speaker', capture: 'mic', mic_enabled: false, mic_gain: 0.4,
+      render_enabled: true, render_gain: 1, render_source: 'device', exclude_pid: process.pid, mic_mono: false })
+    expect(start.capture).toBe('dda')
+    expect(start.capture_cursor).toBe(true)
+    await waitFor(() => fs.existsSync(path.join(start.session_dir, 'events.jsonl')) &&
+      fs.readFileSync(path.join(start.session_dir, 'events.jsonl'), 'utf8').includes('window_lost'))
+    expect(fs.readFileSync(path.join(start.session_dir, 'events.jsonl'), 'utf8')).toContain('window_lost')
+    value.pid = null
+    await waitFor(() => value.service.status().phase === 'idle')
+    expect(commands(value, 'stop')).toHaveLength(1)
+    expect(snapshot.phase).toBe('recording')
+    expect(fs.existsSync(start.session_dir)).toBe(false)
+  })
+
+  it('keeps the same recording through a transient null and stops after confirmed absence', async () => {
+    const value = rig()
+    value.service.start()
+    await waitFor(() => value.service.status().segments === 2)
+    const sessionId = value.service.status().sessionId
+    const find = vi.mocked(value.deps.findApexPid!)
+    const polls = find.mock.calls.length
+    find.mockResolvedValueOnce(null)
+    await waitFor(() => find.mock.calls.length >= polls + 3)
+    expect(value.service.status()).toMatchObject({ phase: 'recording', sessionId })
+    expect(commands(value, 'start')).toHaveLength(1)
+    expect(commands(value, 'stop')).toHaveLength(0)
+    value.pid = null
+    await waitFor(() => value.service.status().phase === 'idle')
+    expect(commands(value, 'stop')).toHaveLength(1)
+  })
+
+  it.each(['fit', 'stretch'] as const)('Pass all new video settings to start: %s', async (aspectMode) => {
+    const value = rig()
+    Object.assign(value.settings, { fps: 20, preset: 'quality', forceAspect: true, aspectMode,
+      systemAudioEnabled: false, systemGain: 0.35, gameAudioOnly: true, micMono: true, captureCursor: false })
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    const [start] = commands(value, 'start')
+    expect(start.encode).toMatchObject({ fps: 20, preset: 'quality', aspect: aspectMode })
+    expect(start.capture_cursor).toBe(false)
+    expect(start.audio).toMatchObject({ render_enabled: false, render_gain: 0.35, render_source: 'game', mic_mono: true })
+  })
+
+  it('shows recorder warnings as non-fatal notices and continues recording without a restart', async () => {
+    const value = rig('warning')
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.notify).mock.calls.some(([kind]) => kind === 'warning'))
+    expect(value.service.status()).toMatchObject({ phase: 'recording', error: null })
+    expect(commands(value, 'start')).toHaveLength(1)
+    expect(commands(value, 'stop')).toHaveLength(0)
+  })
+
+  it('auto never uses hook; an explicit hook passes hook_dir and missing files configuration falls back to dda', async () => {
+    const value = rig()
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    const [defaultStart] = commands(value, 'start')
+    expect(defaultStart.capture).toBe('wgc')
+    expect(defaultStart.hook_dir).toBeUndefined()
+    await value.service.stopManual()
+    value.settings.captureMethod = 'hook'
+    expect(await value.service.startManual()).toBe(true)
+    const [, first] = commands(value, 'start')
+    expect(first).toMatchObject({ capture: 'hook', hook_dir: path.join(value.root, 'obs-hook') })
+    await value.service.stopManual()
+    value.deps.obsHookDir = undefined
+    expect(await value.service.startManual()).toBe(true)
+    const [, , second] = commands(value, 'start')
+    expect(second.capture).toBe('dda')
+    expect(second.hook_dir).toBeUndefined()
+  })
+
+  it('notifies once and switches to dda immediately on hook_unavailable from start, keeps dda for the same PID, and retries the hook for a new PID', async () => {
+    const value = rig('hook-unavailable')
+    value.settings.captureMethod = 'hook'
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    const starts = commands(value, 'start')
+    expect(starts).toHaveLength(2)
+    expect(starts[0]).toMatchObject({ pid: 1234, capture: 'hook', hook_dir: path.join(value.root, 'obs-hook') })
+    expect(starts[1]).toMatchObject({ pid: 1234, capture: 'dda' })
+    expect(starts[1].hook_dir).toBeUndefined()
+    const warnings = vi.mocked(value.deps.notify).mock.calls.filter(([kind]) => kind === 'warning')
+    expect(warnings).toEqual([['warning', 'Hook擷取無法使用，本次改用螢幕擷取（DDA）：注入逾時']])
+
+    // After manually stopping and restarting with the same PID, keep using DDA without retrying the hook or sending another notice.
+    await value.service.stopManual()
+    expect(await value.service.startManual()).toBe(true)
+    const afterManual = commands(value, 'start')
+    expect(afterManual).toHaveLength(3)
+    expect(afterManual[2]).toMatchObject({ pid: 1234, capture: 'dda' })
+    expect(vi.mocked(value.deps.notify).mock.calls.filter(([kind]) => kind === 'warning')).toHaveLength(1)
+
+    // Clear the fallback state after the PID changes and try the hook again.
+    value.pid = 5678
+    await waitFor(() => commands(value, 'start').length >= 5)
+    const afterNewPid = commands(value, 'start')
+    expect(afterNewPid[3]).toMatchObject({ pid: 5678, capture: 'hook', hook_dir: path.join(value.root, 'obs-hook') })
+    expect(afterNewPid[4]).toMatchObject({ pid: 5678, capture: 'dda' })
+  })
+
+  it.each(['dda-unsupported', 'async-dda-unsupported'])('falls back from DDA to WGC once per PID on %s', async (mode) => {
+    const value = rig(mode)
+    value.settings.captureMethod = 'auto'
+    value.deps.borderlessCapture = false
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length === 2 && value.service.status().phase === 'recording')
+    expect(commands(value, 'start').map((start) => start.capture)).toEqual(['dda', 'wgc'])
+    expect(vi.mocked(value.deps.notify).mock.calls.filter(([kind]) => kind === 'warning')).toEqual([
+      ['warning', '螢幕擷取（DDA）無法在此系統使用，本次改用視窗擷取（WGC）']
+    ])
+    await value.service.stopManual()
+    expect(await value.service.startManual()).toBe(true)
+    expect(commands(value, 'start').map((start) => start.capture)).toEqual(['dda', 'wgc', 'wgc'])
+    expect(value.settings.captureMethod).toBe('auto')
+    value.pid = 5678
+    await waitFor(() => commands(value, 'start').length === 5 && value.service.status().phase === 'recording')
+    expect(commands(value, 'start').slice(3).map((start) => [start.pid, start.capture])).toEqual([[5678, 'dda'], [5678, 'wgc']])
+  })
+
+  it('uses the current setting when restarting recording for the same PID after switching from hook to WGC', async () => {
+    const value = rig('hook-unavailable')
+    value.settings.captureMethod = 'hook'
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    await value.service.stopManual()
+
+    value.settings.captureMethod = 'wgc'
+    expect(await value.service.startManual()).toBe(true)
+    expect(commands(value, 'start').map((start) => start.capture)).toEqual(['hook', 'dda', 'wgc'])
+    expect(value.settings.captureMethod).toBe('wgc')
+    expect(commands(value, 'start').at(-1)!.hook_dir).toBeUndefined()
+
+    await value.service.stopManual()
+    value.settings.captureMethod = 'hook'
+    expect(await value.service.startManual()).toBe(true)
+    expect(commands(value, 'start').at(-1)!.capture).toBe('dda')
+  })
+
+  it('notifies once and immediately restarts with dda on a hook_unavailable error event during recording', async () => {
+    const value = rig('async-hook-unavailable')
+    value.settings.captureMethod = 'hook'
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length === 2 && value.service.status().phase === 'recording')
+    const starts = commands(value, 'start')
+    expect(starts[0]).toMatchObject({ capture: 'hook', hook_dir: path.join(value.root, 'obs-hook') })
+    expect(starts[1]).toMatchObject({ capture: 'dda' })
+    expect(starts[1].hook_dir).toBeUndefined()
+    const warnings = vi.mocked(value.deps.notify).mock.calls.filter(([kind]) => kind === 'warning')
+    expect(warnings).toEqual([['warning', 'Hook擷取無法使用，本次改用螢幕擷取（DDA）：遊戲材質遺失']])
+  })
+
+  it.each(['window_not_found', 'capture_failed'])('handles %s quietly when the game closes, including a concurrent stop failure', async (code) => {
+    const value = rig()
+    const gone = path.join(value.root, 'window-gone')
+    value.deps.recorderCommand = fakeCommand('async-window-lost', { FAKE_RECORDER_TRACE: value.trace,
+      FAKE_WINDOW_GONE: gone, FAKE_WINDOW_ERROR_CODE: code, FAKE_WINDOW_STOP_ERROR: '1' })
+    value.settings.captureMethod = 'hook'
+    value.service = createRecordingService(value.deps)
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length >= 2, 5000)
+    value.pid = null
+    await waitFor(() => value.service.status().phase === 'idle', 5000)
+    const starts = commands(value, 'start').length
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    expect(commands(value, 'start').length).toBe(starts)
+    expect(commands(value, 'start').every((start) => start.capture === 'hook')).toBe(true)
+    const notices = vi.mocked(value.deps.notify).mock.calls.filter(([kind]) => kind === 'error' || kind === 'warning')
+    expect(notices).toEqual([])
+    expect(value.service.status().error).toBeNull()
+  })
+
+  it('auto resolves to dda on Windows builds that cannot hide the window capture border', async () => {
+    const value = rig()
+    value.deps.borderlessCapture = false
+    value.service = createRecordingService(value.deps)
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    expect(commands(value, 'start')[0].capture).toBe('dda')
+  })
+
+  it('waits for Apex startup to stabilize before capture when the game launches while Valorant Editor runs', async () => {
+    const value = rig()
+    value.deps.gameStartDelayMs = 400
+    value.service = createRecordingService(value.deps)
+    value.pid = null
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= 2)
+    value.pid = 1234
+    const launchedAt = Date.now()
+    await waitFor(() => commands(value, 'start').length > 0, 5000)
+    expect(Date.now() - launchedAt).toBeGreaterThanOrEqual(400)
+  })
+  it('starts without the startup delay when Apex is already running when Valorant Editor starts', async () => {
+    const value = rig()
+    value.deps.gameStartDelayMs = 5000
+    value.service = createRecordingService(value.deps)
+    const startedAt = Date.now()
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length > 0, 4000)
+    expect(Date.now() - startedAt).toBeLessThan(4000)
+  })
+  it('keeps the startup delay when the first process query fails and Apex appears later', async () => {
+    const value = rig()
+    value.deps.gameStartDelayMs = 400
+    value.pid = 1234
+    const find = vi.mocked(value.deps.findApexPid!)
+    find.mockRejectedValueOnce(new Error('tasklist failed'))
+    value.service = createRecordingService(value.deps)
+    value.service.start()
+    await waitFor(() => find.mock.calls.length >= 2)
+    const seenAt = Date.now()
+    await waitFor(() => commands(value, 'start').length > 0, 5000)
+    expect(Date.now() - seenAt).toBeGreaterThanOrEqual(350)
+  })
+  it('logs why auto-start is skipped once per reason', async () => {
+    const value = rig()
+    const log = vi.fn()
+    value.deps.log = log
+    value.settings.autoRecord = false
+    value.service = createRecordingService(value.deps)
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= 4)
+    expect(log.mock.calls.filter(([line]) => line === 'auto-start skipped: auto record disabled')).toHaveLength(1)
+    value.service.setPaused(true)
+    value.settings.autoRecord = true
+    await waitFor(() => log.mock.calls.some(([line]) => line === 'auto-start skipped: paused'))
+    value.service.setPaused(false)
+    await waitFor(() => value.service.status().phase === 'recording')
+  })
+  it('recalculates the startup delay after the game restarts with a new PID', async () => {
+    const value = rig()
+    value.deps.gameStartDelayMs = 300
+    value.service = createRecordingService(value.deps)
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length === 1, 5000)
+    value.pid = null
+    await waitFor(() => value.service.status().phase === 'idle', 5000)
+    value.pid = 5678
+    const restartedAt = Date.now()
+    await waitFor(() => commands(value, 'start').length === 2, 5000)
+    expect(Date.now() - restartedAt).toBeGreaterThanOrEqual(300)
+  })
+  it('pause prevents automatic recording until resumed, and manual stop does not restart on the next poll', async () => {
+    const value = rig()
+    value.service.setPaused(true)
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= 3)
+    expect(commands(value, 'start')).toHaveLength(0)
+    value.service.setPaused(false)
+    await waitFor(() => value.service.status().phase === 'recording')
+    value.service.setPaused(true)
+    expect(value.service.status().phase).toBe('recording')
+    await value.service.stopManual()
+    value.service.setPaused(false)
+    const polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    expect(commands(value, 'start')).toHaveLength(1)
+    expect(value.service.status().phase).toBe('idle')
+    expect(await value.service.startManual()).toBe(true)
+    await value.service.stopManual()
+    expect(commands(value, 'start')).toHaveLength(2)
+  })
+
+  it('manual start ignores autoRecord and pause settings and returns false when Apex is not running', async () => {
+    const value = rig(); value.settings.autoRecord = false; value.pid = null
+    value.service.start(); value.service.setPaused(true)
+    expect(await value.service.startManual()).toBe(false)
+    value.pid = 1234
+    expect(await value.service.startManual()).toBe(true)
+    expect(value.service.status()).toMatchObject({ phase: 'recording', paused: true })
+    await value.service.stopManual()
+  })
+
+  it('applies autoRecord setting changes without a restart and selects the output folder from the watched folder', async () => {
+    const value = rig(); value.settings.autoRecord = false
+    const watch = path.join(value.root, 'watch')
+    value.deps.getWatchFolders = () => [watch]
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= 3)
+    expect(commands(value, 'start')).toHaveLength(0)
+    value.settings.autoRecord = true
+    await waitFor(() => value.service.status().phase === 'recording')
+    expect(commands(value, 'start')[0].session_dir).toContain(path.join(watch, '.sessions'))
+    expect(fs.existsSync(watch)).toBe(true)
+  })
+
+  it.each(['no-hw', 'async-no-hw'])('Without a hardware encoder, fail immediately without retrying: %s', async (mode) => {
+    const value = rig(mode)
+    value.service.start()
+    await waitFor(() => value.service.status().error?.code === 'no_hw_encoder')
+    const polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    expect(commands(value, 'start')).toHaveLength(1)
+    expect(value.deps.notify).toHaveBeenCalledWith('error', expect.stringContaining('硬體編碼器'))
+    expect(Object.isFrozen(value.service.status().error)).toBe(true)
+  })
+
+  it('tells the user to update an outdated NVIDIA driver and keeps the recorder details', async () => {
+    const value = rig('no-hw-nvidia')
+    value.service.start()
+    await waitFor(() => value.service.status().error?.code === 'no_hw_encoder')
+    const message = value.service.status().error!.message
+    expect(message).toMatch(/^NVIDIA 顯示卡驅動版本過舊/)
+    // Details start after the recorder's internal prefixes: no extra start-failure or RecorderError wrapping.
+    expect(message).toContain('詳細資訊：The NVIDIA driver supports NVENC API 12.2 but 13.0 is required')
+    expect(message).not.toContain('nvidia_driver_outdated')
+    expect(message).not.toContain('無法開始錄影')
+    expect(message).not.toContain('RecorderError')
+    expect(value.deps.notify).toHaveBeenCalledWith('error', message)
+    expect(commands(value, 'start')).toHaveLength(1)
+  })
+
+  it.each(['audio-device-invalidated', 'audio-device-missing'])('warns about an unavailable audio device without repeatedly starting: %s', async (mode) => {
+    vi.useFakeTimers()
+    const value = rig(mode)
+    value.deps.onDiagnostic = vi.fn()
+    value.service.start()
+    await waitFor(() => value.service.status().error?.code === 'audio_failed')
+    expect(value.service.status().error?.message).toContain('重新選擇系統聲音裝置或麥克風裝置')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(commands(value, 'start')).toHaveLength(1)
+    expect(value.service.status().error?.code).toBe('audio_failed')
+    expect(await value.service.startManual()).toBe(false)
+    expect(commands(value, 'start')).toHaveLength(2)
+    expect(value.deps.onDiagnostic).toHaveBeenCalledWith(expect.objectContaining({ component: 'rust-recorder', code: 'audio_failed' }))
+    expect(vi.mocked(value.deps.onDiagnostic).mock.calls.some(([report]) => report.component === 'recording-service')).toBe(false)
+  })
+
+  it('keeps recording with a warning when the default audio device is missing', async () => {
+    // The recorder downgrades a missing default endpoint to a warning and keeps recording with silence.
+    const value = rig('audio-default-missing')
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    await waitFor(() => vi.mocked(value.deps.notify).mock.calls.some(([level]) => level === 'warning'))
+    expect(value.service.status().error).toBeNull()
+    expect(commands(value, 'start')).toHaveLength(1)
+  })
+
+  it('uses 1/2/4/8/16-second crash backoff and allows at most 5 restarts within 10 minutes', async () => {
+    vi.useFakeTimers()
+    const value = rig('crash')
+    value.settings.autoRecord = false
+    value.service.start()
+    expect(await value.service.startManual()).toBe(true)
+    for (const [i, seconds] of [1, 2, 4, 8, 16].entries()) {
+      await waitFor(() => value.service.status().phase === 'error')
+      await vi.advanceTimersByTimeAsync(seconds * 1000 - 1)
+      expect(commands(value, 'start')).toHaveLength(i + 1)
+      await vi.advanceTimersByTimeAsync(1)
+      await waitFor(() => commands(value, 'start').length === i + 2)
+      await waitFor(() => value.service.status().phase === 'error')
+    }
+    await waitFor(() => value.service.status().error?.code === 'restart_limit')
+    expect(commands(value, 'start')).toHaveLength(6)
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(commands(value, 'start')).toHaveLength(6)
+  }, 15000)
+
+  it('warns about disk space once and stops below the threshold without restarting automatically', async () => {
+    vi.useFakeTimers()
+    const value = rig()
+    value.settings.autoRecord = false
+    vi.mocked(disk.diskFreeBytes).mockResolvedValue(5 * 1024 ** 3)
+    value.service.start()
+    expect(await value.service.startManual()).toBe(true)
+    await waitFor(() => vi.mocked(value.deps.notify).mock.calls.some(([kind]) => kind === 'diskWarn'))
+    await vi.advanceTimersByTimeAsync(30000)
+    await waitFor(() => vi.mocked(disk.diskFreeBytes).mock.calls.length >= 3)
+    expect(vi.mocked(value.deps.notify).mock.calls.filter(([kind]) => kind === 'diskWarn')).toHaveLength(1)
+    vi.mocked(disk.diskFreeBytes).mockResolvedValue(1024 ** 3)
+    await vi.advanceTimersByTimeAsync(30000)
+    await waitFor(() => value.service.status().error?.code === 'disk_full')
+    expect(commands(value, 'stop')).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(commands(value, 'start')).toHaveLength(1)
+  })
+
+  it('checks the stop threshold before starting and reports statfs failures without launching the child process', async () => {
+    const value = rig()
+    vi.mocked(disk.diskFreeBytes).mockResolvedValue(1024 ** 3)
+    value.service.start()
+    await waitFor(() => value.service.status().error?.code === 'disk_full')
+    expect(commands(value, 'start')).toHaveLength(0)
+    vi.mocked(disk.diskFreeBytes).mockRejectedValueOnce(new Error('statfs 失敗'))
+    expect(await value.service.startManual()).toBe(false)
+    expect(value.service.status().error?.message).toContain('statfs 失敗')
+  })
+
+  it('coalesces status updates within 250 ms and supports unsubscribing', async () => {
+    vi.useFakeTimers()
+    const value = rig()
+    const listener = vi.fn()
+    const unsubscribe = value.service.onStatus(listener)
+    value.service.setPaused(true); value.service.setPaused(false); value.service.setPaused(true)
+    await vi.advanceTimersByTimeAsync(249)
+    expect(listener).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener.mock.calls[0][0].paused).toBe(true)
+    unsubscribe(); value.service.setPaused(false)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it('keeps capability checks separate from recording and returns null when aditorrec is missing', async () => {
+    const value = rig()
+    expect((await value.service.capabilities())?.encoders).toContain('hevc_nvenc')
+    value.deps.recorderCommand.command = path.join(value.root, 'missing.exe')
+    expect(await value.service.capabilities()).toBeNull()
+  })
+
+  it('service shutdown cancels a process that is still starting and does not leave a new recording behind', async () => {
+    const value = rig('start-stall')
+    value.service.start()
+    await waitFor(() => commands(value, 'start').length === 1)
+    await value.service.stop()
+    expect(value.service.status().phase).toBe('idle')
+    expect(fs.readdirSync(path.join(value.deps.defaultOutputDir, '.sessions'))).toEqual([])
+  })
+
+  it('starts recording without the full encoder probe that hello runs', async () => {
+    const value = rig()
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    expect(commands(value, 'ping')).toHaveLength(1)
+    expect(commands(value, 'hello')).toHaveLength(0)
+  })
+
+  it('uses only the latest PID when the game restarts during a slow handshake and does not finish the new session twice', async () => {
+    const value = rig('slow-ping')
+    value.service.start()
+    await waitFor(() => commands(value, 'ping').length === 1)
+    value.pid = null
+    const polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    value.pid = 5678
+    await waitFor(() => value.service.status().phase === 'recording')
+    expect(commands(value, 'start').map((entry) => entry.pid)).toEqual([5678])
+    expect(commands(value, 'stop')).toHaveLength(0)
+  })
+
+  it('calls onGameExit once when Apex exits (non-null PID to null) with openOnGameExit enabled, but not when disabled, initially absent, or replaced by another PID', async () => {
+    const value = rig()
+    const onGameExit = vi.fn()
+    value.deps.onGameExit = onGameExit
+    value.settings.autoRecord = false
+    value.pid = null
+    value.service.start()
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= 3)
+    expect(onGameExit).not.toHaveBeenCalled()
+
+    value.pid = 1234
+    let polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    value.pid = 5678
+    polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    expect(onGameExit).not.toHaveBeenCalled()
+
+    value.pid = null
+    polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 4)
+    expect(onGameExit).toHaveBeenCalledTimes(1)
+
+    value.settings.openOnGameExit = false
+    value.pid = 9999
+    polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    value.pid = null
+    polls = vi.mocked(value.deps.findApexPid!).mock.calls.length
+    await waitFor(() => vi.mocked(value.deps.findApexPid!).mock.calls.length >= polls + 3)
+    expect(onGameExit).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe.skipIf(!ffmpeg)('recording service integration with real finalization', () => {
+  let fixtureRoot: string
+  let segments: string
+  beforeAll(() => { fixtureRoot = tempRoot(); segments = createSegments(fixtureRoot) })
+  afterAll(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }))
+
+  it('produces a video after Apex exits, adds it to the library, queues analysis, and publishes a completion event', async () => {
+    const value = rig()
+    value.settings.postAnalysis = 'afterExit'
+    value.deps.ffmpegPath = ffmpeg!
+    value.deps.recorderCommand.env!.FAKE_SEGMENT_DIR = segments
+    const finalized = vi.fn(); value.service.onFinalized(finalized)
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    value.pid = null
+    await waitFor(() => finalized.mock.calls.length === 1)
+    const [output] = finalized.mock.calls[0][0]
+    expect(fs.existsSync(output)).toBe(true)
+    expect(value.service.status().phase).toBe('idle')
+    expect(value.deps.addToLibrary).toHaveBeenCalledWith([output])
+    expect(value.deps.enqueueAnalysis).toHaveBeenCalledWith(output)
+  })
+
+  it('preserves the directory and reports an error when finalization fails, then recovers successfully on the next startup', async () => {
+    const value = rig()
+    value.deps.recorderCommand.env!.FAKE_SEGMENT_DIR = segments
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    value.pid = null
+    await waitFor(() => value.service.status().error?.code === 'finalize_failed')
+    const dir = commands(value, 'start')[0].session_dir
+    expect(fs.existsSync(path.join(dir, 'index.jsonl'))).toBe(true)
+    expect(value.deps.notify).toHaveBeenCalledWith('error', expect.stringContaining('保留段落'))
+    await value.service.stop()
+    value.deps.ffmpegPath = ffmpeg!
+    value.service = createRecordingService(value.deps)
+    const finalized = vi.fn(); value.service.onFinalized(finalized)
+    value.service.start()
+    await waitFor(() => finalized.mock.calls.length === 1)
+    expect(fs.existsSync(dir)).toBe(false)
+  })
+
+  it('recovers previous sessions before starting a new one and does not delete the active recording', async () => {
+    const value = rig()
+    value.deps.ffmpegPath = ffmpeg!
+    const old = sessionDir(value.root)
+    copySegments(segments, old)
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    expect(fs.existsSync(old)).toBe(false)
+    const current = commands(value, 'start')[0].session_dir
+    expect(fs.existsSync(current)).toBe(true)
+    expect(value.deps.addToLibrary).toHaveBeenCalledOnce()
+  })
+})
+
+describe('recorder small-frame regions', () => {
+  it('passes the profile capture rects so every game aspect fits, falling back to the reference ROIs', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aditor-frames-'))
+    const write = (doc: object): void => fs.writeFileSync(path.join(dir, 'profile.json'), JSON.stringify(doc))
+    const rois = { banner_roi: [560, 700, 800, 180], spec_roi: [60, 1028, 480, 40] }
+    write({ ...rois, capture_rois: { banner: [560, 652, 800, 228], spec: [60, 1028, 480, 44] } })
+    expect(await readFrames(dir)).toEqual({ banner: [560, 652, 800, 228], spec: [60, 1028, 480, 44], base: [1920, 1080] })
+    write({ ...rois, capture_rois: { banner: rois.banner_roi, spec: rois.spec_roi, killfeed: [850, 42, 1070, 438] } })
+    expect(await readFrames(dir)).toMatchObject({ killfeed: [850, 42, 1070, 438] })
+    write({ ...rois, capture_rois: { banner: rois.banner_roi, spec: rois.spec_roi, killfeed: [850, 42, 1071, 438] } })
+    await expect(readFrames(dir)).rejects.toMatchObject({ code: 'profile_invalid' })
+    write(rois)
+    expect(await readFrames(dir)).toEqual({ banner: [560, 700, 800, 180], spec: [60, 1028, 480, 40], base: [1920, 1080] })
+    write({ ...rois, capture_rois: { banner: [560, 1000, 800, 228], spec: [60, 1028, 480, 44] } })
+    await expect(readFrames(dir)).rejects.toThrow()
+  })
+
+  it('reports a missing template set for a detected game that has none yet as profile_invalid', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aditor-frames-'))
+    await expect(readFrames(path.join(dir, 'valorant', 'icons'), 'valorant')).rejects.toMatchObject({ code: 'profile_invalid' })
+    await expect(readFrames(path.join(dir, 'icons'), 'apex')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})

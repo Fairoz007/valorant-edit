@@ -1,0 +1,91 @@
+/* App shell: 56px icon rail plus main content. */
+.app { display: grid; grid-template-columns: var(--rail-w) 1fr; height: 100vh; min-width: 760px; position: relative; }
+.app-main { min-width: 0; min-height: 0; overflow: auto; position: relative; }
+
+.rail { background: var(--bg-rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 4px; }
+.rail .logo { width: 34px; height: 34px; margin-bottom: 14px; border-radius: var(--r-sm); object-fit: contain; }
+.rail-btn { position: relative; width: 44px; height: 44px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--text-3); display: grid; place-items: center; transition: background var(--dur-fast), color var(--dur-fast); }
+.rail-btn:hover { background: var(--bg-hover); color: var(--text-1); }
+.rail-btn.active { color: var(--text-1); background: var(--bg-active); }
+.rail-btn.active::before { content: ''; position: absolute; left: -6px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.rail-btn .badge { position: absolute; top: 4px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+/* Newer version available/downloading/downloaded, or an update that failed after one was found. */
+.rail-btn .update-dot { position: absolute; top: 6px; right: 5px; width: 8px; height: 8px; border-radius: var(--r-pill); background: var(--success); }
+.rail-btn .update-dot.failed { background: var(--warning); }
+.rail-spacer { flex: 1; }
+
+/* Live tooltip (CSS only). */
+[data-tip] { position: relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); background: #000; border: 1px solid var(--line-strong); padding: 4px 8px; border-radius: var(--r-xs); font-size: var(--fs-small); font-weight: 700; white-space: nowrap; z-index: 120; pointer-events: none; }
+
+/* Toast */
+.toast-host { position: fixed; left: calc(var(--rail-w) + 20px); bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 90; }
+.toast { background: var(--bg-popover); border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 10px 14px; box-shadow: var(--shadow-pop); display: flex; align-items: center; gap: 12px; font-weight: 700; }
+.toast button { border: 0; background: none; color: var(--accent-bright); font-weight: 700; padding: 0; }
+
+/* Keyboard shortcut dialog (generated from KEY_TABLE; see shell/ShortcutsDialog.tsx). */
+.sc-dialog {
+  width: min(720px, calc(100vw - 2 * var(--sp-6)));
+  max-height: calc(100vh - 2 * var(--sp-6));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-popover);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+}
+.sc-head { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.sc-head h2 { flex: 1; font-family: var(--font-display); font-size: var(--fs-subtitle); }
+.sc-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-2) var(--sp-4) var(--sp-4); }
+.sc-body:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
+.sc-group h3 { margin: var(--sp-4) 0 var(--sp-1); font-size: var(--fs-small); font-weight: var(--fw-bold); color: var(--text-2); }
+.sc-list { margin: 0; }
+.sc-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); padding: 6px 0; border-bottom: 1px solid var(--line); }
+.sc-row dt { color: var(--text-1); }
+.sc-row dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; flex: none; }
+.sc-hint { flex: none; margin: 0; padding: var(--sp-2) var(--sp-4) var(--sp-3); color: var(--text-3); font-size: var(--fs-small); }
+
+/* Overlay (dialog container). */
+.overlay-host { position: fixed; inset: 0; z-index: 100; background: var(--bg-scrim); display: grid; place-items: center; }
+
+.placeholder-page { padding: var(--sp-6); color: var(--text-2); }
+
+/* Circular queue progress (shared by the icon rail and queue bar; --p = 0–100). */
+.ring {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent-bright) calc(var(--p, 0) * 1%), var(--line-strong) 0);
+  display: grid;
+  place-items: center;
+}
+
+/* Analysis queue popover (next to the icon rail; the strip variant is positioned by the queue-bar container). */
+.qpop {
+  position: absolute;
+  left: calc(var(--rail-w) + 12px);
+  bottom: 76px;
+  width: 380px;
+  z-index: 95;
+  background: var(--bg-popover);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  padding: 14px 16px;
+}
+.qpop.strip { left: 0; right: auto; top: calc(100% + 6px); bottom: auto; width: 440px; z-index: 30; }
+.qpop-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.qpop-head h3 { flex: 1; font-family: var(--font-display); font-size: var(--fs-body-lg); font-weight: var(--fw-bold); }
+.qpop .dim { color: var(--text-3); font-size: var(--fs-small); }
+.qpop-empty { color: var(--text-3); font-size: var(--fs-small); padding: 6px 0; }
+.qrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.qrow:last-child { border-bottom: 0; }
+.qname { min-width: 0; }
+.qtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: var(--fw-bold); }
+.qrow .bar { grid-column: 1 / -1; height: 3px; background: var(--bg-active); border-radius: 2px; overflow: hidden; }
+.qrow .bar i { display: block; height: 100%; background: var(--accent-bright); }
+
+/* Identify the queue with a list and clock; retain the circular progress badge while tasks are active. */
+.queue-indicator { position: relative; display: inline-grid; place-items: center; flex: none; }
+.queue-indicator .queue-progress { position: absolute; width: 8px; height: 8px; right: -2px; bottom: 0; }
+.queue-indicator:not([data-active="true"]) .queue-progress { display: none; }

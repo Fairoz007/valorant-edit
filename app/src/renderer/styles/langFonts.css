@@ -1,0 +1,17 @@
+/* Select a CJK font by interface language to avoid Japanese/Simplified Chinese glyphs appearing in Traditional Chinese text. i18n/index.ts sets <html lang> at startup.
+   tokens.css must remain byte-for-byte identical to the design mock, so language-specific font variables live here. */
+:root[lang='zh-CN'] {
+  --font-display: 'Montserrat', 'Noto Sans SC', 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  --font-ui: 'Lato', 'Noto Sans SC', 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', 'Consolas', 'Microsoft YaHei UI', monospace;
+}
+:root[lang='ja'] {
+  --font-display: 'Montserrat', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo UI', 'Segoe UI', sans-serif;
+  --font-ui: 'Lato', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo UI', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', 'Consolas', 'Yu Gothic UI', monospace;
+}
+:root[lang='ko'] {
+  --font-display: 'Montserrat', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif;
+  --font-ui: 'Lato', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', 'Consolas', 'Malgun Gothic', monospace;
+}

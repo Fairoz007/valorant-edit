@@ -1,0 +1,337 @@
+import os from 'os'
+import { spawn, ChildProcess } from 'child_process'
+import { EventEmitter } from 'events'
+import { StringDecoder } from 'string_decoder'
+import { checkExecutable, spawnFailure } from './child-spawn'
+import { emitChildDiagnostic, type ChildDiagnosticHandler } from '../shared/child-diagnostics'
+
+const STDERR_TAIL_CHARS = 1000
+
+/** Replace the user's home directory (and any X:\Users\name path) with ~ so error text is safe to show and copy. */
+export function redactHome(text: string): string {
+  const home = os.homedir()
+  const escaped = home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(escaped, 'gi'), '~').replace(/[A-Za-z]:[\\/]Users[\\/][^\\/\s'"]+/gi, '~')
+}
+
+export class EngineError extends Error {
+  code: string
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'EngineError'
+    this.code = code
+  }
+}
+
+interface PendingRequest {
+  id: string
+  sent: boolean
+  resolve: (value: unknown) => void
+  reject: (reason: unknown) => void
+  onProgress?: (p: { t: number; duration: number }) => void
+}
+
+export interface EngineClientOptions {
+  onDiagnostic?: ChildDiagnosticHandler
+  command: string
+  args: string[]
+  env?: Record<string, string>
+  /** Test injection: set process priority. */
+  setPriority?: (pid: number) => void
+}
+
+export class EngineClient extends EventEmitter {
+  private opts: EngineClientOptions
+  private proc: ChildProcess | null = null
+  private stdoutBuf = ''
+  private stdoutDecoder = new StringDecoder('utf8')
+  private stderrTail = ''
+  private pending = new Map<string, PendingRequest>()
+  private reqSeq = 0
+  private engineVersion = ''
+  private readyResolve: ((val: { engineVersion: string }) => void) | null = null
+  private readyReject: ((err: Error) => void) | null = null
+  private readyPromise: Promise<{ engineVersion: string }> | null = null
+  private isStopping = false
+  private crashTimes: number[] = []
+  private maxCrashesInWindow = 3
+  private crashWindowMs = 60000
+
+  constructor(opts: EngineClientOptions) {
+    super()
+    this.opts = opts
+  }
+
+  async start(): Promise<{ engineVersion: string }> {
+    this.isStopping = false
+    return this._spawn()
+  }
+
+  private _spawn(): Promise<{ engineVersion: string }> {
+    if (this.readyPromise) {
+      return this.readyPromise
+    }
+
+    this.readyPromise = new Promise<{ engineVersion: string }>((resolve, reject) => {
+      this.readyResolve = resolve
+      this.readyReject = reject
+
+      const failed = (err: unknown): void => {
+        const failure = spawnFailure(err)
+        emitChildDiagnostic(this.opts.onDiagnostic, { component: 'rust-engine', code: 'engine_spawn', message: failure.report, tags: failure.tags })
+        this.readyReject?.(new EngineError('engine_spawn', failure.message))
+        this.readyResolve = null
+        this.readyReject = null
+      }
+      try {
+        checkExecutable(this.opts.command)
+        const p = spawn(this.opts.command, this.opts.args, {
+          env: { ...process.env, ...this.opts.env },
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+        this.proc = p
+        this.stdoutBuf = ''
+        this.stdoutDecoder = new StringDecoder('utf8')
+        this.stderrTail = ''
+
+        // Analysis can start while a game is running (per-match analysis, watched folders). Below-normal lets the game
+        // keep its CPU time; FFmpeg processes spawned by the engine inherit this priority class on Windows.
+        let spawned = false
+        p.once('spawn', () => {
+          spawned = true
+          if (p.pid === undefined) return
+          try {
+            if (this.opts.setPriority) this.opts.setPriority(p.pid)
+            else os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL)
+          } catch (err) {
+            emitChildDiagnostic(this.opts.onDiagnostic, { component: 'rust-engine', code: 'engine_priority', message: String(err) })
+          }
+        })
+
+        p.stdout?.on('data', (chunk: Buffer) => {
+          this._onData(chunk)
+        })
+
+        p.stderr?.on('data', (chunk: Buffer) => {
+          const msg = chunk.toString('utf-8')
+          // Keep the tail so a crash can report why the engine died (including native engine diagnostics).
+          this.stderrTail = (this.stderrTail + msg).slice(-STDERR_TAIL_CHARS)
+          if (process.env.DEBUG_ENGINE) {
+            console.error('[Engine stderr]', msg)
+          }
+        })
+
+        // A write callback does not consume the stream's error event; close rejects pending requests and restarts.
+        p.stdin?.on('error', () => {
+          if (this.proc === p) p.kill()
+        })
+
+        p.on('error', failed)
+
+        p.on('close', (code) => {
+          this._onClose(code, spawned)
+        })
+      } catch (err) {
+        failed(err)
+      }
+    })
+
+    // A synchronous spawn/preflight failure has no close event to clear the cached startup.
+    void this.readyPromise.catch(() => { if (!this.proc) this.readyPromise = null })
+    return this.readyPromise
+  }
+
+  private _onData(chunk: Buffer): void {
+    this.stdoutBuf += this.stdoutDecoder.write(chunk)
+    let nlIdx: number
+    while ((nlIdx = this.stdoutBuf.indexOf('\n')) !== -1) {
+      const line = this.stdoutBuf.slice(0, nlIdx).trim()
+      this.stdoutBuf = this.stdoutBuf.slice(nlIdx + 1)
+      if (!line) continue
+      this._handleLine(line)
+    }
+  }
+
+  private _handleLine(line: string): void {
+    let msg: Record<string, unknown>
+    try {
+      msg = JSON.parse(line)
+    } catch {
+      return
+    }
+
+    if (msg.type === 'ready') {
+      this.engineVersion = String(msg.engine_version || '')
+      if (this.readyResolve) {
+        this.readyResolve({ engineVersion: this.engineVersion })
+        this.readyResolve = null
+        this.readyReject = null
+      }
+      return
+    }
+
+    const id = msg.id as string
+    if (!id) return
+    const req = this.pending.get(id)
+    if (!req) return
+
+    if (msg.type === 'progress') {
+      if (req.onProgress) {
+        req.onProgress({
+          t: Number(msg.t || 0),
+          duration: Number(msg.duration || 0)
+        })
+      }
+    } else if (msg.type === 'result') {
+      this.pending.delete(id)
+      req.resolve(msg.data)
+    } else if (msg.type === 'error') {
+      let stderr = typeof msg.stderr_tail === 'string' ? msg.stderr_tail : ''
+      if (stderr.length > 400) {
+        stderr = stderr.slice(-400)
+        const newline = stderr.indexOf('\n')
+        stderr = newline < 0 ? '' : stderr.slice(newline + 1)
+      }
+      const message = String(msg.message || 'Unknown engine error') +
+        (stderr ? `; stderr: ${stderr}` : '')
+      emitChildDiagnostic(this.opts.onDiagnostic, { component: 'rust-engine', code: String(msg.code || 'internal'), message, exception: msg.exception })
+      this.pending.delete(id)
+      req.reject(new EngineError(String(msg.code || 'internal'), String(msg.message || 'unknown error')))
+    }
+  }
+
+  private _lastStderrLine(): string {
+    return this.stderrTail.split('\n').map((l) => l.trim()).filter(Boolean).pop() ?? ''
+  }
+
+  /** User-facing errors get the last stderr line with the home dir redacted; diagnostics get the full tail. */
+  private _crashReason(exitCode: number | null, full = false): string {
+    const detail = full ? this.stderrTail.trim() : redactHome(this._lastStderrLine())
+    return `exit code ${exitCode ?? 'signal'}${detail ? `: ${detail}` : ''}`
+  }
+
+  private _onClose(_code: number | null, spawned: boolean): void {
+    const reason = this._crashReason(_code)
+    this.proc = null
+    this.stdoutBuf = ''
+    this.stdoutDecoder = new StringDecoder('utf8')
+    this.readyPromise = null
+
+    if (this.readyReject) {
+      this.readyReject(new EngineError('engine_crashed', `Engine exited before it was ready (${reason})`))
+      this.readyResolve = null
+      this.readyReject = null
+    }
+
+    // Reject all pending requests
+    const pendingList = Array.from(this.pending.values())
+    this.pending.clear()
+    for (const req of pendingList) {
+      req.reject(this.isStopping
+        ? new EngineError('engine_stopped', 'Engine was stopped during the request')
+        : new EngineError('engine_crashed', `Engine process crashed during the request (${reason})`))
+    }
+
+    if (this.isStopping) {
+      return
+    }
+
+    // Record crash
+    const now = Date.now()
+    this.crashTimes.push(now)
+    this.crashTimes = this.crashTimes.filter((t) => now - t <= this.crashWindowMs)
+    // A failed spawn was already reported as engine_spawn; restarting at once would fail the same way, so the next request retries.
+    if (!spawned) return
+    emitChildDiagnostic(this.opts.onDiagnostic, { component: 'rust-engine', code: 'engine_crashed', message: `Analysis engine exited unexpectedly (${this._crashReason(_code, true)})` })
+
+    this.emit('crash')
+
+    if (this.crashTimes.length < this.maxCrashesInWindow) {
+      // Auto restart
+      this._spawn().catch(() => {})
+    }
+  }
+
+  request<T>(
+    cmd: string,
+    args: object,
+    onProgress?: (p: { t: number; duration: number }) => void
+  ): { id: string; promise: Promise<T> } {
+    const id = `req_${Date.now()}_${++this.reqSeq}`
+
+    const promise = new Promise<T>((resolve, reject) => {
+      // After stop() (app quitting), do not spawn a new engine that would outlive the app.
+      if (this.isStopping && !this.proc) return reject(new EngineError('engine_stopped', 'Engine is stopped'))
+      // Check if dead due to repeated crashes
+      const now = Date.now()
+      this.crashTimes = this.crashTimes.filter((t) => now - t <= this.crashWindowMs)
+      if (this.crashTimes.length >= this.maxCrashesInWindow && !this.proc) {
+        return reject(
+          new EngineError('engine_crashed', `Engine crashed ${this.maxCrashesInWindow} times in ${this.crashWindowMs / 1000}s and will not restart${this.stderrTail.trim() ? ` (last stderr: ${redactHome(this._lastStderrLine())})` : ''}`)
+        )
+      }
+
+      this.pending.set(id, { id, sent: false, resolve: resolve as (val: unknown) => void, reject, onProgress })
+      const fail = (error: unknown): void => {
+        this.pending.delete(id)
+        reject(error)
+      }
+      const sendReq = () => {
+        const request = this.pending.get(id)
+        if (!request) return
+        if (!this.proc || !this.proc.stdin || this.proc.stdin.destroyed) {
+          return fail(new EngineError('engine_crashed', 'Engine process is not running or its stdin is closed'))
+        }
+        request.sent = true
+        const line = JSON.stringify({ id, cmd, args }) + '\n'
+        this.proc.stdin.write(line, 'utf-8', (err) => {
+          if (err) {
+            this.pending.delete(id)
+            reject(new EngineError('engine_crashed', `Engine input pipe failed: ${redactHome(err.message)}`))
+          }
+        })
+      }
+
+      if (!this.proc || this.readyResolve) {
+        // Still starting or need restart
+        this._spawn()
+          .then(() => sendReq())
+          .catch(fail)
+      } else {
+        sendReq()
+      }
+    })
+
+    return { id, promise }
+  }
+
+  cancel(targetId: string): void {
+    const request = this.pending.get(targetId)
+    if (request && !request.sent) {
+      this.pending.delete(targetId)
+      request.reject(new EngineError('cancelled', 'Analysis cancelled before the engine was ready'))
+      return
+    }
+    if (!this.proc || !this.proc.stdin || this.proc.stdin.destroyed) return
+    const cancelId = `cancel_${Date.now()}_${++this.reqSeq}`
+    const line = JSON.stringify({ id: cancelId, cmd: 'cancel', args: { target: targetId } }) + '\n'
+    this.proc.stdin.write(line, 'utf-8')
+  }
+
+  async stop(): Promise<void> {
+    this.isStopping = true
+    if (this.proc) {
+      const p = this.proc
+      this.proc = null
+      return new Promise<void>((resolve) => {
+        p.on('close', () => resolve())
+        try {
+          p.stdin?.end()
+          p.kill()
+        } catch {
+          resolve()
+        }
+      })
+    }
+  }
+}

@@ -1,0 +1,72 @@
+appId: com.valoranteditor.app
+productName: Valorant Editor
+directories:
+  output: ../dist
+  buildResources: build
+files:
+  - out/**/*
+  - '!out/**/*.map'
+  - package.json
+  - '!node_modules/**/*.map'
+  - '!node_modules/**/*.d.ts'
+  - '!node_modules/**/*.d.mts'
+  - '!node_modules/**/*.d.cts'
+extraResources:
+  - from: ../build/engine/aditor
+    to: engine/aditor
+    filter:
+      - aditor.exe
+  - from: ../build/ffmpeg
+    to: ffmpeg
+    filter:
+      - bin/*.dll
+      - bin/ffmpeg.exe
+      - bin/ffprobe.exe
+      - bin/aditorrec.exe
+      - LICENSE.txt
+      - third-party-licenses/**/*
+      - build-config/configure.txt
+      - build-config/ffmpeg-components.json
+      - build-config/build-recipe-commit.txt
+  - from: ../build/obs-hook
+    to: obs-hook
+  - from: resources
+    to: resources
+    filter:
+      - tray-*.png
+      - icon.png
+  - from: ../templates
+    to: templates
+  - from: ../LICENSE
+    to: LICENSE
+  - from: ../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+electronLanguages:
+  - en-US
+  - zh-TW
+  - zh-CN
+  - ja
+  - ko
+# Auto-update source: each release must upload the installer, .blockmap, and latest.yml (build.ps1 only generates them; it does not upload).
+publish:
+  provider: github
+  owner: Fairoz007
+  repo: valorant-edit
+# Filenames must not contain spaces: GitHub replaces spaces with "." in uploaded filenames, which no longer matches latest.yml.
+portable:
+  artifactName: ValorantEditor-${version}-Portable.${ext}
+nsis:
+  artifactName: ValorantEditor-Setup-${version}.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

@@ -1,0 +1,129 @@
+/* Aditor — design tokens (can be copied directly into app/src/renderer/styles/tokens.css)
+   Sources and rationale: docs/superpowers/specs/2026-10-16-ui-redesign.md §1, §4 */
+:root {
+  /* Surfaces (Outplayed base #131313, layered with translucent white) */
+  --bg-app: #131313;
+  --bg-rail: #0d0d0e;
+  --bg-surface: #1b1b1d;
+  --bg-raised: #242427;
+  --bg-input: #0f0f10;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-scrim: rgba(0, 0, 0, 0.62);
+  --bg-popover: #1f1f22; /* Opaque, without backdrop-filter */
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  /* Text */
+  --text-1: #f6f6f6;
+  --text-2: #b6b6b6;
+  --text-3: #9a9a9a; /* Contrast against #131313 6.0, #1b1b1d 5.6, #242427 5.0, #2c2c30 4.6 */
+  --text-disabled: #6c6c6c;
+
+  /* Brand: Apex red (--accent for fills; --accent-bright for text/lines on dark backgrounds) */
+  --accent: #d92e25;
+  --accent-hover: #c22820; /* Darker on hover/press: white text 5.8:1 (previous #EE3A30 was only 3.97) */
+  --accent-press: #a8231c;
+  --accent-bright: #ff5348;
+  --accent-soft: rgba(217, 46, 37, 0.16);
+  --on-accent: #ffffff;
+
+  /* Status colors */
+  --favorite: #ffd500;
+  --success: #34d399;
+  --warning: #ffd500;
+  --danger: #ff7a93; /* Error-specific pink, distinct from brand red */
+  --info: #38bdf8;
+
+  /* Event types (encoded by shape, color, and icon, rather than color alone) */
+  --ev-knock: #ff8a2b; /* Circle · crosshair (ΔE 35.6 from brand red) */
+  --ev-assist-knock: #38bdf8; /* Hexagon · plus */
+  --ev-assist-elim: #2dd4bf; /* Diamond · cross */
+  --ev-elim: #f2e65a; /* Square · skull */
+  --ev-squad-wipe: #b66dff; /* Star · sparkle */
+  --ev-death: #cbd5e1; /* Valorant death: square · skull */
+  --ev-uncounted-alpha: 0.65; /* Uncounted: hollow ring + 65% opacity (ring ≥3:1) */
+
+  /* Timeline */
+  --tl-bg: #101011;
+  --tl-ruler: #828282;
+  --tl-spectating-fill: rgba(168, 168, 168, 0.14);
+  --tl-spectating-hatch: rgba(168, 168, 168, 0.3);
+  --tl-round-win: rgba(45, 212, 191, 0.6); /* Valorant round won: strip under the ruler. */
+  --tl-round-loss: rgba(248, 113, 113, 0.6); /* Valorant round lost. */
+  --tl-unanalyzed: rgba(255, 213, 0, 0.1);
+  --tl-heat: 143, 163, 191; /* Blue-gray rather than brand red; alpha 0.3–0.9 */
+  --tl-clip-suggest-line: rgba(255, 255, 255, 0.85); /* AI suggestion: dashed white line */
+  --tl-clip-suggest-fill: rgba(255, 255, 255, 0.08);
+  --tl-clip-line: #f6f6f6; /* Added/manual: solid 2px white line + corner checkmark */
+  --tl-clip-fill: rgba(255, 255, 255, 0.16);
+  --tl-playhead: #ffffff;
+  --tl-project-line: #56d6c5;
+  --tl-project-fill: rgba(86, 214, 197, 0.22);
+  --tl-blade-line: #ffd166;
+  --tl-blade-fill: rgba(255, 209, 102, 0.2);
+
+  /* Typography */
+  --font-display: 'Montserrat', 'Noto Sans TC', 'Microsoft JhengHei UI', 'Segoe UI', sans-serif;
+  --font-ui: 'Lato', 'Noto Sans TC', 'Microsoft JhengHei UI', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', 'Consolas', 'Microsoft JhengHei UI', monospace;
+  --lh-body: 1.5; /* Chinese body text */
+  --lh-tight: 1.35; /* Chinese headings */
+  --fs-caption: 11px;
+  --fs-small: 12px;
+  --fs-body: 13px;
+  --fs-body-lg: 14px;
+  --fs-subtitle: 16px;
+  --fs-title: 18px;
+  --fs-h2: 22px;
+  --fs-h1: 26px;
+  --fs-display: 40px;
+  --fw-regular: 400;
+  --fw-bold: 700;
+  --fw-heavy: 900;
+
+  /* Spacing (4px base) */
+  --sp-0: 2px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  /* Corner radius (3 is the Outplayed default, 10 is its --corner) */
+  --r-xs: 3px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-pill: 999px;
+
+  /* Layout */
+  --rail-w: 56px;
+  --topbar-h: 52px;
+  --aside-w: 380px;
+  --tl-source-h: 132px;
+  --tl-project-h: 92px;
+  --card-min: 280px;
+
+  /* Motion */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5); /* Small overlays only */
+  --focus-ring: 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
+}
+
+:root[data-theme='light'] {
+  --tl-project-line: #087f73;
+  --tl-project-fill: rgba(8, 127, 115, 0.18);
+  --tl-blade-line: #946000;
+  --tl-blade-fill: rgba(148, 96, 0, 0.18);
+}

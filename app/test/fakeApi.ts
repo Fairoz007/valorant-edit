@@ -1,0 +1,143 @@
+// Fake window.api implementation for component tests (matches the shape in preload/index.ts).
+// Every method is a vi.fn: tests can inspect calls or replace individual methods with overrides; on* subscriptions can be triggered with emit.
+import { vi } from 'vitest'
+import { DEFAULT_SETTINGS, type Settings } from '../src/shared/settings'
+import type { LibraryEntry } from '../src/main/library'
+
+type Listener = (payload?: unknown) => unknown
+
+export interface FakeApiOptions {
+  entries?: LibraryEntry[]
+  settings?: Partial<Settings>
+  /** Overrides for other fields (shallow-merged into each namespace). */
+  overrides?: Record<string, Record<string, unknown>>
+}
+
+export function createFakeApi(opts: FakeApiOptions = {}) {
+  const listeners = new Map<string, Set<Listener>>()
+  const sub = (channel: string) =>
+    vi.fn((cb: Listener) => {
+      const set = listeners.get(channel) ?? new Set<Listener>()
+      set.add(cb)
+      listeners.set(channel, set)
+      return () => {
+        set.delete(cb)
+      }
+    })
+  // Assume first-run setup is complete by default so its dialog does not cover the screen under test.
+  let settings: Settings = { ...DEFAULT_SETTINGS, onboardingDone: true, ...opts.settings }
+  let entries = opts.entries ?? []
+
+  const ns = {
+    engine: {
+      probe: vi.fn(async () => null),
+      analyze: vi.fn(async () => null),
+      autoclip: vi.fn(async () => ({ clips: [] }))
+    },
+    library: {
+      getEntries: vi.fn(async () => entries),
+      add: vi.fn(async () => undefined),
+      addDroppedFiles: vi.fn(async (_files: File[]) => []),
+      remove: vi.fn(async (_path: string, _opts?: { deleteSource?: boolean }) => undefined),
+      removeMany: vi.fn(async (paths: string[], _opts?: { deleteSource?: boolean }) => ({ removed: paths, failed: [] as string[] })),
+      toggleFavorite: vi.fn(async () => undefined),
+      selectFiles: vi.fn(async () => [] as string[]),
+      selectFolder: vi.fn(async () => undefined),
+      getWatchFolders: vi.fn(async () => []),
+      addWatchFolder: vi.fn(async () => undefined),
+      removeWatchFolder: vi.fn(async () => undefined),
+      fileExists: vi.fn(async () => true),
+      getLoadNotice: vi.fn(async () => null),
+      computeHl: vi.fn(async () => undefined),
+      onUpdated: sub('library:updated')
+    },
+    queue: {
+      enqueue: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => undefined),
+      getState: vi.fn(async () => ({ queue: { analyzing: null, queued: [] }, current: null }))
+    },
+    cache: {
+      loadByVideo: vi.fn(async () => null),
+      save: vi.fn(async () => true),
+      saveSync: vi.fn(() => true)
+    },
+    proxy: {
+      get: vi.fn(async () => null),
+      generate: vi.fn(async () => null),
+      onProgress: sub('proxy:progress'),
+      delete: vi.fn(async () => true),
+      usage: vi.fn(async () => ({ count: 0, bytes: 0 }))
+    },
+    projects: {
+      save: vi.fn(async () => true),
+      list: vi.fn(async () => []),
+      remove: vi.fn(async () => true),
+      flushSync: vi.fn(() => true),
+      onFlushRequest: sub('projects:flushRequest'),
+      lastError: vi.fn(async () => null),
+      flushDone: vi.fn()
+    },
+    settings: {
+      get: vi.fn(async () => settings),
+      set: vi.fn(async (partial: Partial<Settings>) => {
+        settings = { ...settings, ...partial }
+        return { settings, persisted: true }
+      }),
+      onChanged: sub('settings:changed')
+    },
+    export: {
+      detectEncoders: vi.fn(async () => ['libopenh264']),
+      selectOutDir: vi.fn(async () => null),
+      openFolder: vi.fn(async () => true),
+      openh264Status: vi.fn(async () => ({ installed: true })),
+      downloadOpenH264: vi.fn(async () => 'ok'),
+      start: vi.fn(async () => ({ ok: true, outputs: [], notices: [] })),
+      cancel: vi.fn(async () => ({ cancelled: false })),
+      diskSpace: vi.fn(async () => ({ freeBytes: 500 * 1024 ** 3, totalBytes: 1000 * 1024 ** 3 })),
+      checkOutDir: vi.fn(async () => ({ ok: true })),
+      onProgress: sub('export:progress'),
+      onOpenH264Progress: sub('export:openh264Progress')
+    }
+  }
+  for (const [name, patch] of Object.entries(opts.overrides ?? {})) {
+    Object.assign((ns as Record<string, Record<string, unknown>>)[name] ?? {}, patch)
+  }
+
+  return {
+    api: ns,
+    /** Trigger subscribers for a channel (for example, library:updated). */
+    emit(channel: string, payload?: unknown): void {
+      const results: unknown[] = []
+      for (const cb of [...(listeners.get(channel) ?? [])]) {
+        try {
+          const result = cb(payload)
+          results.push(result)
+          if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+            void Promise.resolve(result as PromiseLike<unknown>).catch(() => undefined)
+          }
+        } catch {
+          results.push(false)
+        }
+      }
+      if (channel === 'projects:flushRequest' && results.length > 0) {
+        ns.projects.flushDone(results.every((result) => result !== false && !(result && typeof (result as PromiseLike<unknown>).then === 'function')))
+      }
+    },
+    setEntries(next: LibraryEntry[]): void {
+      entries = next
+    },
+    getSettings: () => settings
+  }
+}
+
+export type FakeApi = ReturnType<typeof createFakeApi>
+
+/** Attach the fake API to window (return a restore function). */
+export function installFakeApi(fake: FakeApi): () => void {
+  const w = window as unknown as { api?: unknown }
+  const prev = w.api
+  w.api = fake.api
+  return () => {
+    w.api = prev
+  }
+}

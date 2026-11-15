@@ -1,0 +1,179 @@
+// Wiring test for the library removal channels: the renderer may only ask for the source file to be deleted
+// with an explicit `deleteSource: true`; every other shape keeps the file.
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+
+type Fn = (...a: any[]) => any
+const handlers = new Map<string, Fn>()
+vi.mock('electron', () => ({
+  ipcMain: { handle: (ch: string, fn: Fn) => void handlers.set(ch, fn), on: () => {}, removeHandler: () => {} },
+  dialog: {},
+  BrowserWindow: { fromWebContents: () => null, getAllWindows: () => [] },
+  app: { getPath: () => os.tmpdir(), isPackaged: false, getVersion: () => '0' },
+  shell: {},
+  safeStorage: { isEncryptionAvailable: () => false }
+}))
+
+import { findVideosInDir, registerIpcHandlers } from './ipc-handlers'
+import { Library } from './library'
+import { proxyPath } from './proxy'
+import { proxyDir } from '../shared/paths'
+
+describe('library:remove / library:removeMany (source file option)', () => {
+  let dir: string
+  let library: Library
+  let queue: { enqueue: ReturnType<typeof vi.fn> }
+
+  beforeEach(() => {
+    handlers.clear()
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aditor-lib-ipc-'))
+    library = new Library(path.join(dir, 'library.json'))
+    queue = { enqueue: vi.fn() }
+    const queueMock = { on: () => {}, payload: () => ({}), ...queue, withStoppedAnalysis: async (_paths: string[], remove: () => unknown) => remove() } as any
+    registerIpcHandlers(library, queueMock, () => [])
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  /** An imported video with a real file on disk. */
+  const imported = (name: string): string => {
+    const file = path.join(dir, name)
+    fs.writeFileSync(file, 'video')
+    library.add([file], 'external')
+    return file
+  }
+
+  test.each(['library:add', 'library:toggleFavorite', 'library:setGame', 'library:remove', 'library:removeMany'])('%s rejects failed persistence and retains changes for retry', async (channel) => {
+    const file = imported('save-failure.mp4')
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw new Error('disk full')
+    })
+    const args = channel === 'library:add' ? [[path.join(dir, 'new.mp4')]]
+      : channel === 'library:removeMany' ? [[file]]
+        : channel === 'library:setGame' ? [file, 'valorant'] : [file]
+    await expect(Promise.resolve().then(() => handlers.get(channel)!({}, ...args))).rejects.toThrow('無法儲存媒體庫')
+    expect(queue.enqueue).not.toHaveBeenCalled()
+    expect(fs.existsSync(file)).toBe(true)
+    rename.mockRestore()
+    expect(library.flush()).toBe(true)
+    const reloaded = new Library(path.join(dir, 'library.json'))
+    expect(reloaded.getEntries()).toEqual(library.getEntries())
+  })
+
+  test('deletes the source file only when deleteSource is exactly true', async () => {
+    const file = imported('a.mp4')
+    expect(await handlers.get('library:remove')!({}, file, { deleteSource: true })).toBe(true)
+    expect(fs.existsSync(file)).toBe(false)
+  })
+
+  test.each(['library:remove', 'library:removeMany'])('%s removes media caches and preserves outside thumbnails and edits', async (channel) => {
+    const appData = process.env.APPDATA
+    process.env.APPDATA = dir
+    try {
+      const first = imported('cached.mp4')
+      const second = imported('outside.mp4')
+      const proxy = proxyPath(first)
+      const thumb = path.join(proxyDir(), 'thumbs', 'cached.jpg')
+      const outside = path.join(dir, 'outside.jpg')
+      const edits = path.join(dir, 'cached.aditor.json')
+      fs.mkdirSync(path.dirname(thumb), { recursive: true })
+      for (const file of [proxy, `${proxy}.source`, thumb, outside, edits]) fs.writeFileSync(file, 'keep or remove')
+      library.update(first, { thumb })
+      library.update(second, { thumb: outside })
+
+      if (channel === 'library:remove') {
+        expect(await handlers.get(channel)!({}, first)).toBe(true)
+        expect(await handlers.get(channel)!({}, second)).toBe(true)
+      } else {
+        expect(await handlers.get(channel)!({}, [first, second])).toEqual({ removed: [first, second], failed: [] })
+      }
+      for (const file of [proxy, `${proxy}.source`, thumb]) expect(fs.existsSync(file)).toBe(false)
+      for (const file of [outside, edits, first, second]) expect(fs.existsSync(file)).toBe(true)
+    } finally {
+      if (appData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = appData
+    }
+  })
+
+  test('keeps the source file without options or with an invalid option', async () => {
+    const noOptions = imported('b.mp4')
+    expect(await handlers.get('library:remove')!({}, noOptions)).toBe(true)
+    expect(fs.existsSync(noOptions)).toBe(true)
+
+    const wrongType = imported('c.mp4')
+    expect(await handlers.get('library:remove')!({}, wrongType, { deleteSource: 'yes' })).toBe(true)
+    expect(fs.existsSync(wrongType)).toBe(true)
+
+    const notAnObject = imported('d.mp4')
+    expect(await handlers.get('library:remove')!({}, notAnObject, null)).toBe(true)
+    expect(fs.existsSync(notAnObject)).toBe(true)
+  })
+
+  test.each(['library:remove', 'library:removeMany'])('%s succeeds when cache deletion fails', async (channel) => {
+    const file = imported('locked-cache.mp4')
+    const remove = vi.spyOn(fs, 'rmSync').mockImplementation(() => { throw new Error('cache is busy') })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const result = await handlers.get(channel)!({}, channel === 'library:remove' ? file : [file])
+      expect(result).toEqual(channel === 'library:remove' ? true : { removed: [file], failed: [] })
+      expect(library.get(file)).toBeUndefined()
+      expect(log).toHaveBeenCalledWith('Failed to remove media cache:', expect.any(String), expect.any(Error))
+    } finally {
+      remove.mockRestore()
+    }
+  })
+
+  test('removeMany forwards the option and ignores invalid arguments', async () => {
+    const deleted = imported('e.mp4')
+    expect(await handlers.get('library:removeMany')!({}, [deleted], { deleteSource: true })).toEqual({ removed: [deleted], failed: [] })
+    expect(fs.existsSync(deleted)).toBe(false)
+
+    const kept = imported('f.mp4')
+    expect(await handlers.get('library:removeMany')!({}, [kept], { deleteSource: false })).toEqual({ removed: [kept], failed: [] })
+    expect(fs.existsSync(kept)).toBe(true)
+
+    expect(await handlers.get('library:removeMany')!({}, 'not-an-array', { deleteSource: true })).toEqual({ removed: [], failed: [] })
+  })
+
+  test('recording sources are deleted even without the option', async () => {
+    const file = path.join(dir, 'recording.mp4')
+    fs.writeFileSync(file, 'video')
+    library.add([file], 'recording')
+    expect(await handlers.get('library:remove')!({}, file)).toBe(true)
+    expect(fs.existsSync(file)).toBe(false)
+  })
+
+  test('queue:enqueue rejects unsafe paths before reaching the queue', async () => {
+    for (const bad of ['http://x/a.mp4', 'concat:a|b', '\\\\srv\\share\\a.mp4', 'D:\\v\\a.exe', 5, null]) {
+      expect(() => handlers.get('queue:enqueue')!({}, bad, true)).toThrow()
+    }
+    expect(queue.enqueue).not.toHaveBeenCalled()
+
+    const file = imported('g.mp4')
+    await handlers.get('queue:enqueue')!({}, file, true)
+    expect(queue.enqueue).toHaveBeenCalledWith(file, true)
+  })
+})
+
+describe('findVideosInDir (Import folder)', () => {
+  test('skips recorder work folders and unfinished outputs like the folder watcher', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aditor-import-dir-'))
+    try {
+      const session = path.join(dir, '.sessions', '20261113-120000-abcd')
+      const day = path.join(dir, '2026-11-13')
+      fs.mkdirSync(session, { recursive: true })
+      fs.mkdirSync(day)
+      for (const file of [path.join(session, 'init.mp4'), path.join(day, 'Apex_2026-11-13_12-00.part.mp4'),
+        path.join(dir, 'clip_match01.partial.mkv'), path.join(dir, 'notes.txt'), path.join(day, 'Apex_2026-11-13_12-00.mp4')]) {
+        fs.writeFileSync(file, 'x')
+      }
+      expect(findVideosInDir(dir)).toEqual([path.join(day, 'Apex_2026-11-13_12-00.mp4')])
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
