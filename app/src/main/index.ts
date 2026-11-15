@@ -14,6 +14,7 @@ import { registerIpcHandlers } from './ipc-handlers'
 import { createCloseGate } from './project-ipc'
 import { currentE2EConfig } from './e2e'
 import { applyWindowSecurity } from './window-security'
+import { applyAppUserModelId } from './app-identity'
 import { sanitizeAnalyzeArgs, sanitizeAutoclipArgs, sanitizeProbeArgs } from './ipc-guards'
 import { aditorrecCommand, appDataDir, cacheDir, chromiumUserDataDir, engineCommand, ffmpegExecutable, liveEngineCommand, obsHookDir, profileDir, sceneDir } from '../shared/paths'
 import { cacheFilePath, loadCacheDoc, resolveCacheFile } from './cache-io'
@@ -41,6 +42,8 @@ const e2e = currentE2EConfig()
 if (e2e?.appData) process.env.APPDATA = e2e.appData
 // Must be set before ready: the default userData Cache and analysis cache use the same directory (see chromiumUserDataDir).
 app.setPath('userData', chromiumUserDataDir())
+// Windows toasts and taskbar grouping need the installer's appId; set it before any notification or window exists.
+applyAppUserModelId(app)
 // Library videos, thumbnails and proxies reach the renderer only through this scheme (never file://); must be registered before ready.
 protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: MEDIA_SCHEME_PRIVILEGES }])
 
