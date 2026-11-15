@@ -1,6 +1,7 @@
 import { cacheFilePath } from './cache-io'
 import { isSafeLocalVideoPath } from './safe-path'
 import { tr } from '../shared/locale'
+import { MONTAGE_JOB_ID_RE } from '../shared/montage'
 import { MAX_FPS_CAP, MAX_OUTPUT_SIDE, MIN_OUTPUT_SIDE, validateExportFormat, type ExportFormat, type ExportFormatError } from '../shared/exportFormat'
 
 /** Throw unless the value is a safe local video path from the renderer. */
@@ -88,4 +89,10 @@ export function sanitizeExportFormat(raw: unknown): ExportFormat {
   if (v.ok) return v.value
   const r = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
   throw new Error(exportFormatError(v.error, r))
+}
+
+/** `montage:open` / `montage:retry` / `montage:cancel`: only a well-formed job id (`m_` + 16 hex) is accepted. */
+export function sanitizeMontageJobId(raw: unknown): string {
+  if (typeof raw !== 'string' || !MONTAGE_JOB_ID_RE.test(raw)) throw new Error(tr('無效的精華合輯工作 id'))
+  return raw
 }

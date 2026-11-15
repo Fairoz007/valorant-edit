@@ -4,6 +4,7 @@
  */
 
 import type { EngineEvent } from './types'
+import { DEFAULT_AUTO_MONTAGE, type AutoMontageSettings } from './montage'
 
 /** Built-in recorder or OBS Studio (WebSocket v5). */
 export type RecordingBackend = 'builtin' | 'obs'
@@ -76,6 +77,8 @@ export interface RecordingSettings {
   captureMethod: RecordingCaptureMethod
   /** Show the Valorant Editor window automatically when Apex exits. */
   openOnGameExit: boolean
+  /** Build and export a highlight montage after each analyzed match (`shared/montage.ts`; off by default). */
+  autoMontage: AutoMontageSettings
 }
 
 export type RecordingCaptureMethod = 'auto' | 'wgc' | 'dda' | 'hook'
@@ -122,7 +125,8 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   notifyMatch: false,
   captureCursor: true,
   captureMethod: 'auto',
-  openOnGameExit: true
+  openOnGameExit: true,
+  autoMontage: { ...DEFAULT_AUTO_MONTAGE, include: { ...DEFAULT_AUTO_MONTAGE.include } }
 }
 
 /** Recording service status (pushed from main to renderer on `recording:status`, also available via `recording:getStatus`). */
