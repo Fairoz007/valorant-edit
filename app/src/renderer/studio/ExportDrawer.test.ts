@@ -6,6 +6,10 @@ import { describe, expect, test } from 'vitest'
 import { ExportDrawer, ExportPlanBase } from './ExportDrawer'
 import { createExportController, ExportApi } from './exportController'
 import { Project } from '../editor/project'
+import { exportViewModel, formatBytes } from './exportViewModel'
+import { DEFAULT_EXPORT_FORMAT } from '../../shared/exportFormat'
+import { fillTemplate as fmt } from '../../shared/template'
+import { i18n } from '../i18n'
 
 const A = 'D:/v/a.mp4'
 const B = 'D:/v/b.mp4'
@@ -224,7 +228,7 @@ describe('export path hygiene', () => {
     expect(read('studio/StudioScreen.tsx')).not.toContain('ExportDialog')
   })
   test('no hex colour literals in the new TSX/CSS, no backdrop-filter', () => {
-    for (const f of ['studio/ExportDrawer.tsx', 'studio/OpenH264Dialog.tsx', 'styles/exportDrawer.css']) {
+    for (const f of ['studio/ExportDrawer.tsx', 'studio/ExportFormatControls.tsx', 'studio/ExportPreview.tsx', 'studio/OpenH264Dialog.tsx', 'styles/exportDrawer.css']) {
       const src = read(f)
       expect(src, f).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
       expect(src, f).not.toContain('backdrop-filter')
@@ -241,6 +245,167 @@ describe('export path hygiene', () => {
     expect(m).toContain('value="h264_amf"')
     expect(m).not.toContain('value="h264_qsv"')
     expect(m).not.toMatch(/<select[^>]*aria-label="編碼器"[^>]*disabled/)
+  })
+})
+
+describe('ExportDrawer reframing: presets, preview, codec, summary, length', () => {
+  const t = i18n.export
+  const fresh = (over: Record<string, unknown> = {}): Promise<{ c: ReturnType<typeof createExportController>; f: ReturnType<typeof fakeApi> }> =>
+    (async () => {
+      const f = fakeApi(over)
+      const c = createExportController(f.api, project.name, { persistDelayMs: 0 })
+      await c.init('D:/out')
+      return { c, f }
+    })()
+  /** The <input> of a radio group option (attribute order is React's, so match by name and value). */
+  const inputTag = (m: string, name: string, value: string): string =>
+    [...m.matchAll(/<input [^>]*>/g)].map((x) => x[0]).find((tag) => tag.includes(`name="${name}"`) && tag.includes(`value="${value}"`)) ?? ''
+  const selectedPresets = (m: string): string[] => [...m.matchAll(/data-preset="([a-z]+)" data-selected="true"/g)].map((x) => x[1])
+
+  test('preset cards render (Original + every preset) with frame shape, size and limit; the selected one is marked', async () => {
+    const { c } = await fresh()
+    let m = html(c)
+    for (const id of ['source', 'youtube', 'shorts', 'tiktok', 'reels', 'square']) expect(m).toContain(`data-preset="${id}"`)
+    expect(selectedPresets(m)).toEqual(['source'])
+    expect(m).toContain('class="xd-shape xd-shape-src"')
+    expect(m).toContain(t.presetReels)
+    expect(m).toContain(fmt(t.maxLength, { dur: fmt(t.durSec, { n: 90 }) }))
+    expect(m).toContain(fmt(t.maxLength, { dur: fmt(t.durMin, { n: 10 }) }))
+    c.choosePreset('shorts')
+    m = html(c)
+    expect(selectedPresets(m)).toEqual(['shorts'])
+    expect(m).toContain('<label class="xd-card on" data-preset="shorts" data-selected="true">')
+    expect(inputTag(m, 'xd-preset', 'shorts')).toContain('checked=""')
+    expect(inputTag(m, 'xd-preset', 'source')).not.toContain('checked')
+    expect(m).not.toContain('data-preset="custom"')
+  })
+
+  test('editing a preset output field shows the Custom card selected', async () => {
+    const { c } = await fresh()
+    c.choosePreset('square')
+    c.setFpsCap(30)
+    const m = html(c)
+    expect(selectedPresets(m)).toEqual(['custom'])
+    expect(m).toContain(t.presetCustom)
+    // Styling choices (fit, offset, codec) keep the preset.
+    c.choosePreset('tiktok')
+    c.setReframe('blur')
+    expect(selectedPresets(html(c))).toEqual(['tiktok'])
+  })
+
+  test('crop preview frame follows computeReframe for 1920×1080 → 9:16 as the offset moves (-1 / 0 / 1)', async () => {
+    const { c } = await fresh()
+    c.choosePreset('shorts')
+    const frames = [-1, 0, 1].map((o) => {
+      c.setOffset(o)
+      const m = html(c)
+      expect(m).toContain('data-kind="crop"')
+      return m.match(/class="xd-pv-frame"[^>]*>/)![0]
+    })
+    expect(frames[0]).toContain('data-crop-x="0" data-crop-y="0" data-crop-w="608" data-crop-h="1080"')
+    expect(frames[0]).toContain('left:0%;top:0%;width:31.67%;height:100%')
+    expect(frames[1]).toContain('data-crop-x="656"')
+    expect(frames[1]).toContain('left:34.17%')
+    expect(frames[2]).toContain('data-crop-x="1312"')
+    expect(frames[2]).toContain('left:68.33%')
+    // The slider is keyboard operable and labelled; it only exists while cropping.
+    const slider = html(c).match(/<input id="xd-offset"[^>]*>/)![0]
+    expect(slider).toContain('type="range" min="-1" max="1" step="0.05"')
+    expect(slider).toContain('value="1"')
+    expect(slider).toContain(`aria-valuetext="${fmt(t.offsetValue, { side: t.offsetRight, pct: 100 })}"`)
+    expect(html(c)).toContain(`<label for="xd-offset">${t.offset}</label>`)
+    c.setReframe('bars')
+    expect(html(c)).not.toContain('id="xd-offset"')
+  })
+
+  test('preview uses the player video size when given, and mocks bars/blur output from the same geometry', async () => {
+    const { c } = await fresh()
+    c.choosePreset('shorts')
+    c.setReframe('bars')
+    const m = renderToStaticMarkup(React.createElement(ExportDrawer, { controller: c, project, base, onClose: () => undefined, previewSource: { width: 1920, height: 1080, fps: 60 } }))
+    expect(m).toContain('data-kind="bars"')
+    // 1080 wide, 608 tall foreground centred in 1080×1920: y = 656.
+    expect(m).toContain('data-pos-x="0" data-pos-y="656" data-scaled-w="1080" data-scaled-h="608"')
+    expect(m).toContain('aspect-ratio:1080 / 1920')
+    c.setReframe('blur')
+    const b = html(c)
+    expect(b).toContain('data-kind="blur"')
+    expect(b).toContain('class="xd-pv-bg"')
+  })
+
+  test('copy is disabled with an inline reason when the format needs re-encoding', async () => {
+    const { c } = await fresh()
+    const sameSource: Project = { ...project, items: [project.items[0], { ...project.items[1], source: A }] }
+    expect(html(c, sameSource)).not.toMatch(/name="xd-quality" disabled=""/)
+    c.choosePreset('square')
+    const m = html(c, sameSource)
+    expect(m).toMatch(/name="xd-quality" disabled=""/)
+    expect(m).toContain(t.copyNeedsReencode)
+    expect(m).toContain(t.unavailable)
+  })
+
+  test('H.265 is disabled with an explanation when no HEVC encoder works, and enabled when one does', async () => {
+    const none = await fresh()
+    let m = html(none.c)
+    expect(inputTag(m, 'xd-codec', 'h265')).toContain('disabled=""')
+    expect(m).toContain(t.h265Unavailable)
+    const hevc = await fresh({ detectEncoders: async () => ['h264_nvenc', 'hevc_nvenc'] })
+    m = html(hevc.c)
+    expect(inputTag(m, 'xd-codec', 'h265')).not.toContain('disabled')
+    expect(m).not.toContain(t.h265Unavailable)
+    hevc.c.setCodec('h265')
+    m = html(hevc.c)
+    expect(m).toContain('value="hevc_nvenc"')
+    expect(m).not.toContain('value="h264_nvenc"')
+  })
+
+  test('a persisted H.265 without an HEVC encoder renders as H.264 with a notice', async () => {
+    const { c } = await fresh({ getSettings: async () => ({ exportFormat: { ...DEFAULT_EXPORT_FORMAT, codec: 'h265' } }) })
+    const m = html(c)
+    expect(inputTag(m, 'xd-codec', 'h264')).toContain('checked=""')
+    expect(inputTag(m, 'xd-codec', 'h265')).not.toContain('checked')
+    expect(m).toContain(t.h265FallbackNotice)
+    expect(m).toContain('· H.264 ·')
+  })
+
+  test('summary line above the Export button: size · fps · codec · size estimate · duration', async () => {
+    const { c } = await fresh()
+    c.choosePreset('shorts')
+    const s = c.getState()
+    const vm = exportViewModel(project, { ...base, mode: 'concat', quality: s.settings.quality }, { encoders: s.encoders, openh264: false }, { format: s.settings.format })
+    const m = html(c)
+    const line = `1080×1920 · 60 fps · H.264 · ${fmt(t.summarySize, { size: formatBytes(vm.estimatedBytes) })} · 1:00`
+    expect(m).toContain(`<div class="xd-summary" role="status" aria-label="${t.summaryLabel}" data-summary="">${line}</div>`)
+    expect(m.indexOf('xd-summary')).toBeLessThan(m.indexOf(t.startExport))
+  })
+
+  test('over the preset length: a warning with the trim option (start stays enabled); trimming shortens the summary', async () => {
+    const { c } = await fresh()
+    const long: Project = { ...project, items: [{ id: '1', source: A, start: 0, end: 50 }, { id: '2', source: B, start: 0, end: 40 }] }
+    c.choosePreset('shorts')
+    let m = html(c, long)
+    expect(m).toContain('data-length-warning=""')
+    expect(m).toContain(fmt(t.lengthOver, { platform: t.presetShorts, max: fmt(t.durSec, { n: 60 }), len: '1:30' }))
+    expect(m).toContain(fmt(t.trimToLimit, { max: fmt(t.durSec, { n: 60 }) }))
+    expect(m).toMatch(/<input type="checkbox"\/>/)
+    expect(m).not.toMatch(/<button type="button" class="btn-accent" disabled=""/)
+    expect(m).toMatch(/· 1:30<\/div>/)
+    c.setTrimToLimit(true)
+    m = html(c, long)
+    expect(m).toMatch(/<input type="checkbox" checked=""\/>/)
+    expect(m).toMatch(/· 1:00<\/div>/)
+    // No warning within the limit or for Original.
+    expect(html(c)).not.toContain('data-length-warning')
+    c.choosePreset('source')
+    expect(html(c, long)).not.toContain('data-length-warning')
+  })
+
+  test('sections: Format, Quality (codec + encoder), Output (mode), Advanced collapsed behind a button', async () => {
+    const { c } = await fresh()
+    const m = html(c)
+    for (const legend of [t.preset, t.format, t.frame, t.quality, t.codec, t.output, t.mode]) expect(m).toContain(`<legend>${legend}</legend>`)
+    expect(m).toMatch(/<button type="button" class="btn-ghost xd-adv-toggle" aria-expanded="false" aria-controls="xd-advanced">/)
+    expect(m).not.toContain('id="xd-fps"')
   })
 })
 

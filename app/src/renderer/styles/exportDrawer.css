@@ -12,6 +12,9 @@
   background: var(--bg-popover);
   border-left: 1px solid var(--line-strong);
   outline: none;
+  /* Local tokens (no global token exists): letterbox colour of the exported bars (always black in the output), preview height for tall frames. */
+  --xd-bars: black;
+  --xd-pv-h: 196px;
 }
 .xd:focus-visible { box-shadow: inset var(--focus-ring); }
 .xd-head {
@@ -199,3 +202,158 @@
 .xd-consent .xd-muted { margin: var(--sp-2) 0 0; }
 .xd-h264-prog { margin-top: var(--sp-3); }
 .xd-consent-foot { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-5); }
+
+/* ---------- Reframing: preset cards, preview, format controls, summary ---------- */
+
+/* Visually hidden but focusable (radio inputs inside cards and chips). */
+.xd-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.xd-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.xd-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.xd-card:hover { background: var(--bg-hover); }
+.xd-card.on { border-color: var(--accent-bright); background: var(--accent-soft); }
+.xd-card:has(input:focus-visible) { box-shadow: var(--focus-ring); }
+.xd-card b { font-size: var(--fs-small); line-height: var(--lh-tight); overflow-wrap: anywhere; }
+.xd-card small { color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-tight); }
+.xd-card[data-preset='custom'] { cursor: default; }
+.xd-shape {
+  display: block;
+  margin-bottom: 4px;
+  border: 1.5px solid var(--text-2);
+  border-radius: 2px;
+}
+.xd-shape-src { border-style: dashed; }
+.xd-card.on .xd-shape { border-color: var(--accent-bright); }
+
+.xd-group { border: 0; margin: var(--sp-3) 0 0; padding: 0; min-width: 0; }
+.xd-group:first-of-type { margin-top: 0; }
+.xd-group legend,
+.xd-range-head label,
+.xd-field-label {
+  display: block;
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: var(--fs-small);
+  color: var(--text-2);
+}
+.xd-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.xd-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--bg-raised);
+  font-size: var(--fs-small);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.xd-chip:hover { background: var(--bg-hover); }
+.xd-chip.on { border-color: var(--accent-bright); background: var(--accent-soft); }
+.xd-chip.disabled { opacity: 0.55; cursor: default; }
+.xd-chip.disabled:hover { background: var(--bg-raised); }
+.xd-chip:has(input:focus-visible) { box-shadow: var(--focus-ring); }
+.xd-reason { color: var(--text-2); }
+
+.xd-range-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.xd-range-head label { margin-bottom: 0; }
+.xd-mini { height: 24px; padding: 0 8px; font-size: var(--fs-caption); }
+.xd-range { width: 100%; margin: 6px 0 2px; accent-color: var(--accent); }
+.xd-range:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-xs); }
+.xd-range-ends { display: flex; justify-content: space-between; color: var(--text-3); font-size: var(--fs-caption); }
+
+.xd-check { display: flex; align-items: center; gap: var(--sp-2); margin-top: 6px; cursor: pointer; }
+.xd-check input { accent-color: var(--accent); }
+
+/* Preview: positions and sizes come from computeReframe() as percentages (inline styles). */
+.xd-pv-stage { display: flex; justify-content: center; }
+.xd-pv {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-input);
+}
+.xd-pv-img { display: block; width: 100%; height: 100%; }
+.xd-pv-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+  background: var(--bg-raised);
+}
+.xd-pv-source .xd-pv-img { opacity: 1; }
+.xd-pv-frame {
+  position: absolute;
+  border: 2px solid var(--on-accent);
+  border-radius: 2px;
+  /* Dims everything outside the exported region. */
+  box-shadow: 0 0 0 100vmax var(--bg-scrim);
+  transition: left var(--dur-fast) var(--ease), top var(--dur-fast) var(--ease), width var(--dur-fast) var(--ease), height var(--dur-fast) var(--ease);
+  pointer-events: none;
+}
+.xd-pv-out { background: var(--xd-bars); }
+.xd-pv-bg,
+.xd-pv-fg { position: absolute; display: block; overflow: hidden; }
+.xd-pv-bg .xd-pv-img { filter: blur(6px); transform: scale(1.04); }
+.xd-pv-out .xd-pv-empty { background: transparent; }
+.xd-pv-out:not(.has-frame) .xd-pv-fg { background: var(--bg-raised); }
+.xd-pv-blur:not(.has-frame) .xd-pv-bg { background: var(--bg-active); }
+
+.xd-adv-toggle { padding-left: 4px; }
+.xd-chev { transition: transform var(--dur-fast) var(--ease); }
+.xd-chev.open { transform: rotate(180deg); }
+.xd-adv { margin-top: var(--sp-2); }
+
+/* Summary line above the Export button. */
+.xd-summary {
+  flex: none;
+  padding: var(--sp-2) var(--sp-4) 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+.xd-summary + .xd-foot { border-top: 0; }
+
+html[data-lowperf] .xd-card,
+html[data-lowperf] .xd-chip,
+html[data-lowperf] .xd-pv-frame,
+html[data-lowperf] .xd-chev { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .xd-card,
+  .xd-chip,
+  .xd-pv-frame,
+  .xd-chev { transition: none; }
+}

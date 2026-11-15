@@ -1,14 +1,27 @@
-import React, { useEffect, useRef, useSyncExternalStore } from 'react'
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import '../styles/exportDrawer.css'
 import { i18n } from '../i18n'
 import { formatTime } from '../../shared/time'
 import { fillTemplate as fmt } from '../../shared/template'
 import { tr } from '../../shared/locale'
 import { exportSubDirName, joinForDisplay } from '../../shared/storage'
+import { encodersForCodec, type OutputFrame, type PresetId, type ReframeMode, type VideoCodec } from '../../shared/exportFormat'
+import { presetState } from '../../shared/exportPresets'
+import type { ReframeGeometry, Size } from '../../shared/reframe'
 import { totalDuration, Project } from '../editor/project'
-import { Check, Copy, Download, FolderOpen, AlertTriangle, X } from '../components/icons'
+import { Check, ChevronDown, Copy, Download, FolderOpen, AlertTriangle, X } from '../components/icons'
 import { ExportController, ExportItem, ExportState } from './exportController'
-import { diskIsLow, ExportPlan, exportViewModel, ExportViewModel, formatBytes } from './exportViewModel'
+import {
+  diskIsLow,
+  ExportPlan,
+  exportViewModel,
+  ExportViewModel,
+  formatBytes,
+  previewGeometry,
+  type PreviewSource
+} from './exportViewModel'
+import { ExportFormatFields, ExportPresetCards, formatLimit, frameLabel, presetName, reframeLabel, summaryText } from './ExportFormatControls'
+import { ExportPreview } from './ExportPreview'
 import { OpenH264Dialog } from './OpenH264Dialog'
 import { nextTrapIndex } from './focusTrap'
 
@@ -22,6 +35,8 @@ export interface ExportDrawerViewProps {
   project: Project
   items: ExportItem[]
   sourceCount: number
+  /** Live reframe preview (geometry from computeReframe for the preview source). */
+  preview: { src: Size; geometry: ReframeGeometry; videoRef?: React.RefObject<HTMLVideoElement> }
   on: {
     mode: (m: 'concat' | 'separate') => void
     quality: (q: 'copy' | 'precise') => void
@@ -38,12 +53,26 @@ export interface ExportDrawerViewProps {
     copyError: () => void
     declineConsent: () => void
     acceptConsent: () => void
+    preset: (id: PresetId | 'source') => void
+    frame: (f: OutputFrame) => void
+    reframe: (m: ReframeMode) => void
+    offset: (o: number) => void
+    codec: (c: VideoCodec) => void
+    fpsCap: (cap: number | null) => void
+    trim: (on: boolean) => void
   }
 }
 
 /** Encoder display name without suffixes such as "detected". */
 function encoderName(name: string): string {
-  const nice: Record<string, string> = { h264_nvenc: 'NVIDIA NVENC', h264_qsv: 'Intel Quick Sync', h264_amf: 'AMD AMF' }
+  const nice: Record<string, string> = {
+    h264_nvenc: 'NVIDIA NVENC',
+    h264_qsv: 'Intel Quick Sync',
+    h264_amf: 'AMD AMF',
+    hevc_nvenc: 'NVIDIA NVENC',
+    hevc_qsv: 'Intel Quick Sync',
+    hevc_amf: 'AMD AMF'
+  }
   return nice[name] ?? name
 }
 
@@ -53,18 +82,28 @@ function encoderLabel(name: string): string {
   return fmt(t.encoderDetected, { name: encoderName(name) })
 }
 
-function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewProps): JSX.Element {
+/** Frame-rate caps offered in Advanced (plus the current one when it is something else). */
+const FPS_CAPS = [60, 30]
+
+function SettingsBody({ state, vm, project, sourceCount, preview, on }: ExportDrawerViewProps): JSX.Element {
   const t = i18n.export
   const s = state.settings
+  const f = vm.format
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const total = totalDuration(project)
   const estimate = vm.estimatedBytes
   const low = state.disk ? diskIsLow(state.disk.freeBytes, estimate) : false
   const drive = s.outDir && /^[A-Za-z]:/.test(s.outDir) ? s.outDir.slice(0, 2) : (s.outDir ?? '')
-  const encoderOptions = state.encoders.length > 0 ? state.encoders : ['libopenh264']
-  const hasHw = state.encoders.some((e) => e !== 'libopenh264')
+  const codecEncoders = encodersForCodec(state.encoders, f.codec)
+  const encoderOptions = codecEncoders.length > 0 ? codecEncoders : f.codec === 'h264' ? ['libopenh264'] : []
+  const hasHw = codecEncoders.some((e) => e !== 'libopenh264')
   const copyHint = vm.copyAvailable
     ? [t.qualityCopyDesc, vm.extraSecondsHint !== null ? fmt(t.qualityCopyExtra, { sec: vm.extraSecondsHint.toFixed(1) }) : ''].filter(Boolean).join(' ')
-    : t.qualityCopyUnavailable
+    : (vm.copyReason ?? t.qualityCopyUnavailable)
+  const selected = presetState(f)
+  const warning = vm.lengthWarning
+  const fpsCaps = f.fpsCap !== null && !FPS_CAPS.includes(f.fpsCap) ? [...FPS_CAPS, f.fpsCap] : FPS_CAPS
+  const previewLabel = `${t.preview}: ${frameLabel(f.frame)}${f.frame === 'source' ? '' : ` · ${reframeLabel(f.reframe)}`} · ${preview.geometry.out.width}×${preview.geometry.out.height}`
   return (
     <>
       <div className="xd-stats">
@@ -89,6 +128,22 @@ function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewP
             <div>{n.text}</div>
           </div>
         ))}
+        {warning && selected !== 'source' && selected !== 'custom' && (
+          <div className="xd-notice xd-warn" data-length-warning="">
+            <AlertTriangle className="ic" aria-hidden="true" />
+            <div>
+              {fmt(s.mode === 'concat' ? t.lengthOver : t.lengthOverSeparate, {
+                platform: presetName(selected),
+                max: formatLimit(warning.maxSeconds),
+                len: formatTime(warning.seconds)
+              })}
+              <label className="xd-check">
+                <input type="checkbox" checked={s.trimToLimit} onChange={(e) => on.trim(e.target.checked)} />
+                {fmt(s.mode === 'concat' ? t.trimToLimit : t.trimToLimitSeparate, { max: formatLimit(warning.maxSeconds) })}
+              </label>
+            </div>
+          </div>
+        )}
         {(vm.blockers.length > 0 || state.outDirError) && (
           <div className="xd-notice xd-err" role="alert">
             <AlertTriangle className="ic" aria-hidden="true" />
@@ -111,23 +166,11 @@ function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewP
         )}
       </div>
 
-      <fieldset className="xd-sec">
-        <legend>{t.mode}</legend>
-        <label className={`xd-opt${s.mode === 'concat' ? ' on' : ''}`}>
-          <input type="radio" name="xd-mode" checked={s.mode === 'concat'} onChange={() => on.mode('concat')} />
-          <div>
-            <b>{t.modeConcat}</b>
-            <small>{t.modeConcatDesc}</small>
-          </div>
-        </label>
-        <label className={`xd-opt${s.mode === 'separate' ? ' on' : ''}`}>
-          <input type="radio" name="xd-mode" checked={s.mode === 'separate'} onChange={() => on.mode('separate')} />
-          <div>
-            <b>{t.modeSeparate}</b>
-            <small>{fmt(t.modeSeparateDesc, { n: project.items.length })}</small>
-          </div>
-        </label>
-      </fieldset>
+      <ExportPresetCards format={f} srcSpec={vm.srcSpec} onChoose={on.preset} />
+
+      <ExportPreview geometry={preview.geometry} src={preview.src} videoRef={preview.videoRef} label={previewLabel} />
+
+      <ExportFormatFields format={f} geometry={preview.geometry} src={preview.src} on={{ frame: on.frame, reframe: on.reframe, offset: on.offset }} />
 
       <fieldset className="xd-sec">
         <legend>{t.quality}</legend>
@@ -137,13 +180,14 @@ function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewP
             name="xd-quality"
             checked={vm.effectiveQuality === 'copy'}
             disabled={!vm.copyAvailable}
+            aria-describedby="xd-copy-hint"
             onChange={() => void on.quality('copy')}
           />
           <div>
             <b>
               {t.qualityCopy} {!vm.copyAvailable && <span className="xd-pill">{t.unavailable}</span>}
             </b>
-            <small>{copyHint}</small>
+            <small id="xd-copy-hint">{copyHint}</small>
           </div>
         </label>
         <label className={`xd-opt${vm.effectiveQuality === 'precise' ? ' on' : ''}`}>
@@ -153,6 +197,33 @@ function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewP
             <small>{t.qualityPreciseDesc}</small>
           </div>
         </label>
+
+        <fieldset className="xd-group">
+          <legend>{t.codec}</legend>
+          <div className="xd-seg">
+            <label className={`xd-chip${f.codec === 'h264' ? ' on' : ''}`}>
+              <input type="radio" className="xd-vh" name="xd-codec" value="h264" checked={f.codec === 'h264'} onChange={() => on.codec('h264')} />
+              {t.codecH264}
+            </label>
+            <label className={`xd-chip${f.codec === 'h265' ? ' on' : ''}${vm.h265Unavailable ? ' disabled' : ''}`}>
+              <input
+                type="radio"
+                className="xd-vh"
+                name="xd-codec"
+                value="h265"
+                checked={f.codec === 'h265'}
+                disabled={vm.h265Unavailable}
+                aria-describedby="xd-codec-hint"
+                onChange={() => on.codec('h265')}
+              />
+              {t.codecH265}
+            </label>
+          </div>
+          <div id="xd-codec-hint" className={`xd-muted xd-hint${vm.h265Unavailable ? ' xd-reason' : ''}`} data-h265-unavailable={vm.h265Unavailable ? '' : undefined}>
+            {vm.h265Unavailable ? t.h265Unavailable : f.codec === 'h265' ? t.codecH265Desc : t.codecH264Desc}
+          </div>
+        </fieldset>
+
         <select
           className="xd-select"
           aria-label={t.encoder}
@@ -166,12 +237,29 @@ function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewP
             </option>
           ))}
         </select>
-        {!hasHw && <div className="xd-muted xd-hint">{t.encoderHint}</div>}
+        {!hasHw && f.codec === 'h264' && <div className="xd-muted xd-hint">{t.encoderHint}</div>}
         {vm.effectiveQuality !== 'precise' && <div className="xd-muted xd-hint">{t.encoderCopyNote}</div>}
       </fieldset>
 
       <fieldset className="xd-sec">
         <legend>{t.output}</legend>
+        <fieldset className="xd-group">
+          <legend>{t.mode}</legend>
+          <label className={`xd-opt${s.mode === 'concat' ? ' on' : ''}`}>
+            <input type="radio" name="xd-mode" checked={s.mode === 'concat'} onChange={() => on.mode('concat')} />
+            <div>
+              <b>{t.modeConcat}</b>
+              <small>{t.modeConcatDesc}</small>
+            </div>
+          </label>
+          <label className={`xd-opt${s.mode === 'separate' ? ' on' : ''}`}>
+            <input type="radio" name="xd-mode" checked={s.mode === 'separate'} onChange={() => on.mode('separate')} />
+            <div>
+              <b>{t.modeSeparate}</b>
+              <small>{fmt(t.modeSeparateDesc, { n: project.items.length })}</small>
+            </div>
+          </label>
+        </fieldset>
         <div className="xd-row">
           <input className="xd-input" readOnly value={s.outDir ?? ''} placeholder={t.outputDirPlaceholder} aria-label={t.outputDir} />
           <button type="button" className="btn-ghost" onClick={on.browse}>
@@ -199,6 +287,38 @@ function SettingsBody({ state, vm, project, sourceCount, on }: ExportDrawerViewP
           </div>
         )}
       </fieldset>
+
+      <div className="xd-sec">
+        <button
+          type="button"
+          className="btn-ghost xd-adv-toggle"
+          aria-expanded={advancedOpen}
+          aria-controls="xd-advanced"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          <ChevronDown className={`ic sm xd-chev${advancedOpen ? ' open' : ''}`} aria-hidden="true" /> {t.advanced}
+        </button>
+        {advancedOpen && (
+          <div id="xd-advanced" className="xd-adv">
+            <label className="xd-field-label" htmlFor="xd-fps">{t.fpsCap}</label>
+            <select
+              id="xd-fps"
+              className="xd-select"
+              value={f.fpsCap === null ? 'source' : String(f.fpsCap)}
+              aria-describedby="xd-fps-hint"
+              onChange={(e) => on.fpsCap(e.target.value === 'source' ? null : Number(e.target.value))}
+            >
+              <option value="source">{t.fpsSource}</option>
+              {fpsCaps.map((n) => (
+                <option key={n} value={String(n)}>
+                  {fmt(t.fpsCapValue, { n })}
+                </option>
+              ))}
+            </select>
+            <div id="xd-fps-hint" className="xd-muted xd-hint">{t.fpsCapHint}</div>
+          </div>
+        )}
+      </div>
     </>
   )
 }
@@ -312,6 +432,11 @@ export function ExportDrawerView(props: ExportDrawerViewProps & { drawerRef?: Re
         {phase === 'done' && <DoneBody state={state} project={props.project} />}
         {phase === 'failed' && <FailedBody state={state} />}
       </div>
+      {phase === 'settings' && (
+        <div className="xd-summary" role="status" aria-label={t.summaryLabel} data-summary="">
+          {summaryText(vm.summary)}
+        </div>
+      )}
       <footer className="xd-foot">
         {phase === 'settings' && (
           <>
@@ -369,18 +494,29 @@ export interface ExportDrawerProps {
   base: ExportPlanBase | null
   /** Close drawer (settings/completed/failed: caller closes it; running: minimize to badge and continue exporting). */
   onClose: () => void
+  /** Player element: the preview shows its current frame. */
+  videoRef?: React.RefObject<HTMLVideoElement>
+  /** Size (and fps) of the video in the player, so the preview geometry matches its image. */
+  previewSource?: PreviewSource | null
 }
 
 /** Export drawer container: subscribe to controller, manage focus entry/restoration, trap Tab, and handle Esc (minimize while running; do not cancel). */
-export function ExportDrawer({ controller, project, base, onClose }: ExportDrawerProps): JSX.Element {
+export function ExportDrawer({ controller, project, base, onClose, videoRef, previewSource }: ExportDrawerProps): JSX.Element {
   const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState)
   const ref = useRef<HTMLElement>(null)
   const stateRef = useRef(state)
   stateRef.current = state
 
   const items: ExportItem[] = project.items.map((i) => ({ id: i.id, source: i.source, start: i.start, end: i.end }))
-  const plan: ExportPlan | null = base ? { ...base, mode: state.settings.mode, quality: state.settings.quality } : null
-  const vm = exportViewModel(project, plan, { encoders: state.encoders, openh264: state.openh264Installed, detected: state.detected })
+  const s = state.settings
+  const plan: ExportPlan | null = base ? { ...base, mode: s.mode, quality: s.quality } : null
+  const vm = exportViewModel(
+    project,
+    plan,
+    { encoders: state.encoders, openh264: state.openh264Installed, detected: state.detected },
+    { format: s.format, trimToLimit: s.trimToLimit, mode: s.mode }
+  )
+  const { src, geometry } = previewGeometry(project, plan, vm, previewSource)
   const sourceCount = new Set(project.items.map((i) => i.source)).size
 
   const closeNow = (): void => {
@@ -452,8 +588,26 @@ export function ExportDrawer({ controller, project, base, onClose }: ExportDrawe
     openFolder: () => void controller.openFolder(),
     copyError: () => void navigator.clipboard?.writeText(stateRef.current.result?.error ?? '').catch(() => undefined),
     declineConsent: () => controller.declineConsent(),
-    acceptConsent: () => void controller.acceptConsent()
+    acceptConsent: () => void controller.acceptConsent(),
+    preset: (id) => controller.choosePreset(id),
+    frame: (f) => controller.setFrame(f),
+    reframe: (m) => controller.setReframe(m),
+    offset: (o) => controller.setOffset(o),
+    codec: (c) => controller.setCodec(c),
+    fpsCap: (cap) => controller.setFpsCap(cap),
+    trim: (v) => controller.setTrimToLimit(v)
   }
 
-  return <ExportDrawerView drawerRef={ref} state={state} vm={vm} project={project} items={items} sourceCount={sourceCount} on={on} />
+  return (
+    <ExportDrawerView
+      drawerRef={ref}
+      state={state}
+      vm={vm}
+      project={project}
+      items={items}
+      sourceCount={sourceCount}
+      preview={{ src, geometry, videoRef }}
+      on={on}
+    />
+  )
 }

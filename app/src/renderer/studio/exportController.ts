@@ -1,6 +1,21 @@
 import { i18n } from '../i18n'
 import { tr } from '../../shared/locale'
 import { exportSubDirName, joinForDisplay } from '../../shared/storage'
+import {
+  coerceExportFormat,
+  DEFAULT_EXPORT_FORMAT,
+  encodersForCodec,
+  formatRequiresPrecise,
+  H264_ENCODERS,
+  HEVC_ENCODERS,
+  type ExportFormat,
+  type OutputFrame,
+  type PresetId,
+  type ReframeMode,
+  type VideoCodec
+} from '../../shared/exportFormat'
+import { applyPreset, maxSecondsFor, sourceFormat, trimItemsToSeconds } from '../../shared/exportPresets'
+import { clampOffset } from '../../shared/reframe'
 
 /**
  * Export drawer state machine (pure TS, no React/DOM dependency; window.api is injected for testing with a fake API).
@@ -27,6 +42,10 @@ export interface ExportApi {
   diskSpace(dir: string): Promise<{ freeBytes: number; totalBytes: number }>
   onProgress(cb: (data: unknown) => void): () => void
   onOpenH264Progress(cb: (ratio: number) => void): () => void
+  /** Read persisted settings (only `exportFormat` is used). Optional: without it the default format is kept. */
+  getSettings?(): Promise<unknown>
+  /** Persist a settings patch; the controller only writes `{ exportFormat }`. */
+  setSettings?(patch: { exportFormat: ExportFormat }): Promise<unknown>
 }
 
 type StartResult =
@@ -45,6 +64,10 @@ export interface ExportSettings {
   encoderChoice: string
   outDir: string | null
   baseName: string
+  /** Output format chosen by the user (loaded from and persisted to settings.exportFormat). See effectiveFormat for what is exported. */
+  format: ExportFormat
+  /** "Export only the first N seconds" (N = the selected preset's length limit). Not persisted. */
+  trimToLimit: boolean
 }
 
 export interface ExportProgress {
@@ -83,28 +106,58 @@ export interface ExportState {
   h264: OpenH264State
 }
 
-const ENCODER_PRIORITY = ['h264_nvenc', 'h264_qsv', 'h264_amf', 'libopenh264']
 export const ENCODER_AUTO = 'auto'
 
-function pickEncoder(encoders: string[]): string {
-  for (const e of ENCODER_PRIORITY) if (encoders.includes(e)) return e
-  return encoders[0] ?? ''
+/** True once detection has confirmed that no HEVC encoder works on this machine (before detection: unknown, false). */
+export function hevcUnavailable(encoders: readonly string[], detected: boolean): boolean {
+  return detected && encodersForCodec(encoders, 'h265').length === 0
 }
 
-/** For 'auto' or an unavailable choice, select by priority; otherwise use the encoder selected by the user. */
-function resolveEncoder(choice: string, encoders: string[]): { choice: string; encoder: string } {
-  if (choice !== ENCODER_AUTO && encoders.includes(choice)) return { choice, encoder: choice }
-  return { choice: ENCODER_AUTO, encoder: pickEncoder(encoders) }
+/**
+ * Format that is actually exported: a (persisted) H.265 choice falls back to H.264 when detection found no working HEVC encoder.
+ * The fallback is never written back to settings, so the choice comes back once an HEVC encoder works again.
+ */
+export function effectiveFormat(fmt: ExportFormat, encoders: readonly string[], detected: boolean): ExportFormat {
+  return fmt.codec === 'h265' && hevcUnavailable(encoders, detected) ? { ...fmt, codec: 'h264' } : fmt
+}
+
+/** Priority order per codec (H.265 never uses OpenH264). */
+function pickEncoder(list: readonly string[], codec: VideoCodec): string {
+  const priority: readonly string[] = codec === 'h265' ? HEVC_ENCODERS : H264_ENCODERS
+  for (const e of priority) if (list.includes(e)) return e
+  return list[0] ?? ''
+}
+
+/** For 'auto' or a choice that is unavailable for the codec, select by priority; otherwise use the encoder selected by the user. */
+export function resolveEncoder(choice: string, encoders: readonly string[], codec: VideoCodec): { choice: string; encoder: string } {
+  const list = encodersForCodec(encoders, codec)
+  if (choice !== ENCODER_AUTO && list.includes(choice)) return { choice, encoder: choice }
+  return { choice: ENCODER_AUTO, encoder: pickEncoder(list, codec) }
 }
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-export function createExportController(api: ExportApi, initialName = 'highlight') {
+export interface ExportControllerOptions {
+  /** Delay before a format change is written to settings (coalesces slider drags). 0 writes immediately. */
+  persistDelayMs?: number
+}
+
+export function createExportController(api: ExportApi, initialName = 'highlight', opts: ExportControllerOptions = {}) {
+  const persistDelayMs = opts.persistDelayMs ?? 300
   let state: ExportState = {
     phase: 'settings',
-    settings: { mode: 'concat', quality: 'copy', encoder: '', encoderChoice: ENCODER_AUTO, outDir: null, baseName: initialName },
+    settings: {
+      mode: 'concat',
+      quality: 'copy',
+      encoder: '',
+      encoderChoice: ENCODER_AUTO,
+      outDir: null,
+      baseName: initialName,
+      format: { ...DEFAULT_EXPORT_FORMAT },
+      trimToLimit: false
+    },
     encoders: [],
     openh264Installed: false,
     detected: false,
@@ -119,12 +172,62 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
   let offProgress: (() => void) | null = null
   let offH264: (() => void) | null = null
   let diskRequestId = 0
+  /** Bumped on every user format change, so a slower settings read never overwrites a choice made meanwhile. */
+  let formatEpoch = 0
+  let formatLoaded = false
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingFormat: ExportFormat | null = null
 
   function set(patch: Partial<ExportState>): void {
     state = { ...state, ...patch }
     for (const l of [...listeners]) l()
   }
-  const setSettings = (patch: Partial<ExportSettings>): void => set({ settings: { ...state.settings, ...patch } })
+  /** Re-resolve the encoder for the effective codec (after any change to the format, the choice or the detection result). */
+  function withEncoder(settings: ExportSettings, encoders: readonly string[], detected: boolean): ExportSettings {
+    const codec = effectiveFormat(settings.format, encoders, detected).codec
+    const r = resolveEncoder(settings.encoderChoice, encoders, codec)
+    return { ...settings, encoder: r.encoder, encoderChoice: r.choice }
+  }
+  const setSettings = (patch: Partial<ExportSettings>): void =>
+    set({ settings: withEncoder({ ...state.settings, ...patch }, state.encoders, state.detected) })
+
+  function flushPersist(): void {
+    if (persistTimer !== null) clearTimeout(persistTimer)
+    persistTimer = null
+    const exportFormat = pendingFormat
+    pendingFormat = null
+    if (!exportFormat || !api.setSettings) return
+    // Persist the user's choice (not the effective format): an unavailable H.265 is never silently rewritten to H.264.
+    void Promise.resolve()
+      .then(() => api.setSettings?.({ exportFormat }))
+      .catch(() => undefined)
+  }
+
+  function setFormat(next: ExportFormat): void {
+    formatEpoch++
+    setSettings({ format: next })
+    pendingFormat = next
+    if (persistDelayMs <= 0) {
+      flushPersist()
+      return
+    }
+    if (persistTimer !== null) clearTimeout(persistTimer)
+    persistTimer = setTimeout(flushPersist, persistDelayMs)
+  }
+
+  /** Load settings.exportFormat once (later opens keep the in-memory choice, which is also what was persisted). */
+  async function loadFormat(): Promise<void> {
+    if (formatLoaded || !api.getSettings) return
+    const epoch = formatEpoch
+    try {
+      const raw = (await api.getSettings()) as { exportFormat?: unknown } | null | undefined
+      formatLoaded = true
+      if (epoch !== formatEpoch) return
+      setSettings({ format: coerceExportFormat(raw?.exportFormat) })
+    } catch {
+      // Unreadable settings: keep the current (default) format.
+    }
+  }
 
   async function refreshDisk(dir: string | null): Promise<void> {
     const requestId = ++diskRequestId
@@ -168,24 +271,28 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     } catch {
       installed = false
     }
-    const r = resolveEncoder(state.settings.encoderChoice, encoders)
     set({
       encoders,
       openh264Installed: installed,
       detected: true,
-      settings: { ...state.settings, encoder: r.encoder, encoderChoice: r.choice }
+      settings: withEncoder(state.settings, encoders, true)
     })
   }
 
   async function init(defaultOutDir: string | null): Promise<void> {
     setSettings({ outDir: defaultOutDir })
-    await Promise.all([detect(), refreshDisk(defaultOutDir)])
+    await Promise.all([detect(), refreshDisk(defaultOutDir), loadFormat()])
     // Precise may have been picked while detection was still running; ask for consent now that the answer is known.
     if (state.settings.quality === 'precise' && needsConsent() && state.h264.step === 'idle') set({ h264: { step: 'consent', ratio: 0, error: null } })
   }
 
   // Before detection finishes the empty encoder list means "unknown", not "none".
-  const needsConsent = (): boolean => state.detected && state.encoders.length === 0 && !state.openh264Installed
+  // Only H.264 can fall back to OpenH264 (an unavailable H.265 already exports as H.264, see effectiveFormat).
+  const needsConsent = (): boolean =>
+    state.detected &&
+    effectiveFormat(state.settings.format, state.encoders, state.detected).codec === 'h264' &&
+    encodersForCodec(state.encoders, 'h264').length === 0 &&
+    !state.openh264Installed
 
   async function setQuality(q: 'copy' | 'precise'): Promise<void> {
     setSettings({ quality: q })
@@ -245,6 +352,13 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     }
     if (state.outDirError) return // Output-directory validation failed; use the same condition as the disabled button and do not send export:start.
     lastItems = items
+    flushPersist()
+    const format = effectiveFormat(s.format, state.encoders, state.detected)
+    // "Export only the first N seconds": N is the selected preset's limit (Original/Custom have none, so nothing is trimmed).
+    const limit = s.trimToLimit ? maxSecondsFor(format) : null
+    const sentItems = limit !== null ? trimItemsToSeconds(items, limit, s.mode) : items
+    // Stream copy cannot reframe, rescale, change fps or codec: ask for precise explicitly (main enforces the same rule).
+    const quality = formatRequiresPrecise(format) ? 'precise' : s.quality
     const startedAt = Date.now()
     set({ phase: 'running', progress: { percent: 0, jobIndex: 0, totalJobs: 1, outTimeSeconds: 0 }, result: null })
     offProgress = api.onProgress((d) => {
@@ -262,12 +376,13 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     let res: StartResult
     try {
       res = await api.start({
-        items,
+        items: sentItems,
         mode: s.mode,
-        quality: s.quality,
+        quality,
         encoder: s.encoder || undefined,
         outDir: s.outDir,
-        baseName: s.baseName
+        baseName: s.baseName,
+        format
       })
     } catch (e) {
       res = { ok: false, error: errMsg(e), outputs: [] }
@@ -325,6 +440,7 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
   }
 
   function dispose(opts: { cancelIfRunning?: boolean } = {}): void {
+    flushPersist()
     if (opts.cancelIfRunning && state.phase === 'running') void api.cancel().catch(() => undefined)
     offProgress?.()
     offProgress = null
@@ -346,10 +462,37 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     setQuality,
 /** 'auto' or a detected available encoder; ignore unavailable names. */
     setEncoder: (choice: string): void => {
-      if (choice !== ENCODER_AUTO && !state.encoders.includes(choice)) return
-      const r = resolveEncoder(choice, state.encoders)
-      setSettings({ encoder: r.encoder, encoderChoice: r.choice })
+      const codec = effectiveFormat(state.settings.format, state.encoders, state.detected).codec
+      if (choice !== ENCODER_AUTO && !encodersForCodec(state.encoders, codec).includes(choice)) return
+      setSettings({ encoderChoice: choice })
     },
+    /** Pick a platform preset, or 'source' for the original frame. */
+    choosePreset: (id: PresetId | 'source'): void => {
+      const f = state.settings.format
+      setFormat(id === 'source' ? sourceFormat(f) : applyPreset(f, id))
+    },
+    /** Change the frame shape; a preset's explicit size only fits its own frame and is dropped (the drawer then shows Custom). */
+    setFrame: (frame: OutputFrame): void => {
+      const f = state.settings.format
+      if (f.frame !== frame) setFormat({ ...f, frame, width: null, height: null })
+    },
+    setReframe: (reframe: ReframeMode): void => {
+      if (state.settings.format.reframe !== reframe) setFormat({ ...state.settings.format, reframe })
+    },
+    setOffset: (offset: number): void => {
+      const v = Math.round(clampOffset(offset) * 100) / 100
+      if (state.settings.format.offset !== v) setFormat({ ...state.settings.format, offset: v })
+    },
+    /** H.265 is ignored once detection has confirmed that no HEVC encoder works. */
+    setCodec: (codec: VideoCodec): void => {
+      if (codec === 'h265' && hevcUnavailable(state.encoders, state.detected)) return
+      if (state.settings.format.codec !== codec) setFormat({ ...state.settings.format, codec })
+    },
+    /** Frame-rate cap (null = source fps). */
+    setFpsCap: (fpsCap: number | null): void => {
+      if (state.settings.format.fpsCap !== fpsCap) setFormat({ ...state.settings.format, fpsCap })
+    },
+    setTrimToLimit: (trimToLimit: boolean): void => setSettings({ trimToLimit }),
     redetect: detect,
     setBaseName: (baseName: string): void => setSettings({ baseName }),
     chooseOutDir,

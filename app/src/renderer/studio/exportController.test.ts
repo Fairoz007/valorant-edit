@@ -1,5 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createExportController, ExportApi, ExportItem } from './exportController'
+import { createExportController, effectiveFormat, ExportApi, ExportItem } from './exportController'
+import { DEFAULT_EXPORT_FORMAT, encoderCodec } from '../../shared/exportFormat'
+import { presetState } from '../../shared/exportPresets'
 
 const ITEMS: ExportItem[] = [
   { id: '1', source: 'D:/v/a.mp4', start: 0, end: 10 },
@@ -474,5 +476,183 @@ describe('Output subfolders (merged → Merged, separate → Clips)', () => {
     await flush()
     const sent = f.calls.find((x) => x[0] === 'start')![1] as Record<string, unknown>
     expect(sent).toMatchObject({ mode: 'concat', outDir: '/data/out' })
+  })
+})
+
+describe('exportController format (reframing, presets, codec)', () => {
+  const SHORTS = { preset: 'shorts', frame: '9:16', reframe: 'crop', offset: 0, codec: 'h264', width: 1080, height: 1920, fpsCap: 60 }
+  const sentOf = (f: Fake): Record<string, unknown> => f.calls.filter((x) => x[0] === 'start').at(-1)![1] as Record<string, unknown>
+
+  test('loads settings.exportFormat on init; invalid, missing or unreadable values fall back to the default', async () => {
+    const f = fake({ getSettings: async () => ({ exportFormat: SHORTS }) })
+    const c = createExportController(f.api)
+    await c.init('D:/out')
+    expect(c.getState().settings.format).toEqual(SHORTS)
+
+    const bad = createExportController(fake({ getSettings: async () => ({ exportFormat: { ...SHORTS, offset: 5 } }) }).api)
+    await bad.init('D:/out')
+    expect(bad.getState().settings.format).toEqual(DEFAULT_EXPORT_FORMAT)
+    const old = createExportController(fake({ getSettings: async () => ({ defaultOutDir: 'D:/x' }) }).api)
+    await old.init('D:/out')
+    expect(old.getState().settings.format).toEqual(DEFAULT_EXPORT_FORMAT)
+    const none = createExportController(fake({ getSettings: async () => { throw new Error('x') } }).api)
+    await none.init('D:/out')
+    expect(none.getState().settings.format).toEqual(DEFAULT_EXPORT_FORMAT)
+  })
+
+  test('a change made while settings are still loading is not overwritten by the slower read', async () => {
+    let resolve: (v: unknown) => void = () => undefined
+    const f = fake({ getSettings: () => new Promise((r) => (resolve = r)) })
+    const c = createExportController(f.api, 'x', { persistDelayMs: 0 })
+    const done = c.init('D:/out')
+    c.choosePreset('square')
+    resolve({ exportFormat: SHORTS })
+    await done
+    expect(c.getState().settings.format.preset).toBe('square')
+  })
+
+  test('every format action persists { exportFormat } through the injected api; editing a preset field shows Custom', async () => {
+    const writes: unknown[] = []
+    const f = fake({ setSettings: async (p: unknown) => { writes.push(p) } })
+    const c = createExportController(f.api, 'x', { persistDelayMs: 0 })
+    await c.init('D:/out')
+    c.choosePreset('shorts')
+    await flush()
+    expect(writes.at(-1)).toEqual({ exportFormat: SHORTS })
+    c.setOffset(-1)
+    c.setReframe('blur')
+    await flush()
+    expect(writes.at(-1)).toEqual({ exportFormat: { ...SHORTS, offset: -1, reframe: 'blur' } })
+    expect(presetState(c.getState().settings.format)).toBe('shorts') // styling choices keep the preset
+    c.setFrame('1:1')
+    c.setFpsCap(30)
+    await flush()
+    const fmt = c.getState().settings.format
+    expect(fmt).toMatchObject({ frame: '1:1', width: null, height: null, fpsCap: 30 })
+    expect(presetState(fmt)).toBe('custom')
+    expect(writes.at(-1)).toEqual({ exportFormat: fmt })
+    c.choosePreset('source')
+    expect(c.getState().settings.format).toMatchObject({ preset: null, frame: 'source', width: null, height: null, fpsCap: null })
+    c.setOffset(7)
+    expect(c.getState().settings.format.offset).toBe(1) // clamped
+  })
+
+  test('slider drags are coalesced into one settings write (flushed on dispose)', async () => {
+    const writes: unknown[] = []
+    const f = fake({ setSettings: async (p: unknown) => { writes.push(p) } })
+    const c = createExportController(f.api, 'x', { persistDelayMs: 10_000 })
+    await c.init('D:/out')
+    c.setOffset(0.1)
+    c.setOffset(0.2)
+    c.setOffset(0.3)
+    expect(writes).toHaveLength(0)
+    c.dispose()
+    await flush()
+    expect(writes).toEqual([{ exportFormat: { ...DEFAULT_EXPORT_FORMAT, offset: 0.3 } }])
+  })
+
+  test('start sends the format, asks for precise when reframing and sends items trimmed to the preset limit when asked', async () => {
+    const f = fake()
+    const c = createExportController(f.api, 'x', { persistDelayMs: 0 })
+    await c.init('D:/out')
+    c.choosePreset('shorts') // 60 s limit
+    const items: ExportItem[] = [
+      { id: '1', source: 'D:/v/a.mp4', start: 0, end: 50 },
+      { id: '2', source: 'D:/v/a.mp4', start: 60, end: 100 }
+    ]
+    void c.start(items)
+    await flush()
+    expect(sentOf(f)).toMatchObject({ format: SHORTS, quality: 'precise', encoder: 'h264_nvenc', items })
+    f.resolveStart({ ok: true, outputs: [] })
+    await flush()
+    c.finish()
+
+    c.setTrimToLimit(true)
+    void c.start(items)
+    await flush()
+    expect(sentOf(f).items).toEqual([items[0], { ...items[1], end: 70 }])
+    f.resolveStart({ ok: true, outputs: [] })
+    await flush()
+    c.finish()
+
+    // Separate: each clip is cut to the limit.
+    c.setMode('separate')
+    void c.start([{ id: '1', source: 'D:/v/a.mp4', start: 10, end: 100 }])
+    await flush()
+    expect(sentOf(f).items).toEqual([{ id: '1', source: 'D:/v/a.mp4', start: 10, end: 70 }])
+  })
+
+  test('the trim option does nothing without a preset limit; the default format keeps stream copy', async () => {
+    const f = fake()
+    const c = createExportController(f.api)
+    await c.init('D:/out')
+    c.setTrimToLimit(true)
+    void c.start(ITEMS)
+    await flush()
+    expect(sentOf(f)).toMatchObject({ quality: 'copy', format: DEFAULT_EXPORT_FORMAT, items: ITEMS })
+  })
+
+  test('encoder resolution is per codec: auto = first working encoder of that codec in priority order', async () => {
+    const f = fake({ detectEncoders: async () => ['h264_amf', 'h264_nvenc', 'hevc_qsv', 'hevc_nvenc', 'libopenh264'] })
+    const c = createExportController(f.api, 'x', { persistDelayMs: 0 })
+    await c.init('D:/out')
+    expect(c.getState().settings.encoder).toBe('h264_nvenc')
+    c.setCodec('h265')
+    expect(c.getState().settings).toMatchObject({ encoder: 'hevc_nvenc', encoderChoice: 'auto' })
+    c.setEncoder('hevc_qsv')
+    expect(c.getState().settings).toMatchObject({ encoder: 'hevc_qsv', encoderChoice: 'hevc_qsv' })
+    c.setEncoder('h264_amf') // wrong codec: ignored
+    c.setEncoder('libopenh264') // H.265 never uses OpenH264
+    expect(c.getState().settings.encoder).toBe('hevc_qsv')
+    void c.start(ITEMS)
+    await flush()
+    const sent = sentOf(f) as { encoder: string; format: { codec: string } }
+    expect(sent.format.codec).toBe('h265')
+    expect(encoderCodec(sent.encoder)).toBe(sent.format.codec)
+    f.resolveStart({ ok: true, outputs: [] })
+    await flush()
+    c.finish()
+    c.setCodec('h264') // the HEVC choice does not apply to H.264: back to auto
+    expect(c.getState().settings).toMatchObject({ encoder: 'h264_nvenc', encoderChoice: 'auto' })
+  })
+
+  test('without an HEVC encoder H.265 cannot be picked, and a persisted H.265 exports as H.264 without rewriting settings', async () => {
+    const writes: unknown[] = []
+    const f = fake({
+      detectEncoders: async () => ['h264_qsv', 'libopenh264'],
+      getSettings: async () => ({ exportFormat: { ...SHORTS, codec: 'h265' } }),
+      setSettings: async (p: unknown) => { writes.push(p) }
+    })
+    const c = createExportController(f.api, 'x', { persistDelayMs: 0 })
+    await c.init('D:/out')
+    const s = c.getState()
+    expect(s.settings.format.codec).toBe('h265') // the user's choice stays in state and settings
+    expect(effectiveFormat(s.settings.format, s.encoders, s.detected).codec).toBe('h264')
+    expect(s.settings.encoder).toBe('h264_qsv')
+    void c.start(ITEMS)
+    await flush()
+    expect(sentOf(f)).toMatchObject({ encoder: 'h264_qsv', quality: 'precise', format: { ...SHORTS, codec: 'h264' } })
+    expect(writes).toEqual([])
+    f.resolveStart({ ok: true, outputs: [] })
+    await flush()
+    c.finish()
+    c.setCodec('h264')
+    c.setCodec('h265') // ignored while unavailable
+    await flush()
+    expect(c.getState().settings.format.codec).toBe('h264')
+    expect(writes).toEqual([{ exportFormat: SHORTS }])
+  })
+
+  test('H.264 keeps the OpenH264 consent flow when no H.264 encoder works (HEVC encoders do not count); H.265 needs no consent', async () => {
+    const f = fake({ detectEncoders: async () => ['hevc_nvenc'] })
+    const c = createExportController(f.api, 'x', { persistDelayMs: 0 })
+    await c.init('D:/out')
+    await c.setQuality('precise')
+    expect(c.getState().h264.step).toBe('consent')
+    c.declineConsent()
+    c.setCodec('h265')
+    await c.setQuality('precise')
+    expect(c.getState().h264.step).toBe('idle')
+    expect(c.getState().settings.encoder).toBe('hevc_nvenc')
   })
 })

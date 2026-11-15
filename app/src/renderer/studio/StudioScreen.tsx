@@ -648,7 +648,10 @@ export function StudioScreen({ videoPath, onBack, onRegisterLeaveGuard, onVideoR
       </div>
 
       {removeDialog}
-      {exportOpen && <ExportDrawer controller={exportCtl} project={project} base={exportBase} onClose={handleCloseExport} />}
+      {exportOpen && (
+        <ExportDrawer controller={exportCtl} project={project} base={exportBase} onClose={handleCloseExport}
+          videoRef={videoRef} previewSource={state.doc.video} />
+      )}
 
       {autoClipOpen && (
         <AutoClipPopover
