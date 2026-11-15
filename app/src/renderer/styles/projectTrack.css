@@ -73,9 +73,10 @@
   padding: 0 4px;
   font-weight: var(--fw-bold);
   color: var(--text-1);
+  transition: var(--t-ui);
 }
 .plane-head input.pname:hover,
-.plane-head input.pname:focus { border-color: var(--line-strong); background: var(--bg-input); }
+.plane-head input.pname:focus { border-color: var(--line-control); background: var(--bg-input); }
 
 .proj-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .proj-info b { color: var(--text-1); }
@@ -87,8 +88,9 @@
 
 /* ---- Selected segment viewer (0.5-second steps) ---- */
 .insp { display: flex; gap: 6px; align-items: center; }
-.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: var(--r-xs); overflow: hidden; }
-.stepper button { width: 24px; height: 24px; border: 0; background: var(--bg-hover); color: var(--text-2); padding: 0; line-height: 1; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-control); border-radius: var(--r-xs); overflow: hidden; }
+.stepper button { width: 24px; height: 24px; border: 0; background: var(--bg-hover); color: var(--text-2); padding: 0; line-height: 1; transition: var(--t-ui); }
+.stepper button:focus-visible { box-shadow: inset var(--focus-ring); }
 .stepper button:hover { background: var(--bg-active); color: var(--text-1); }
 .stepper span { padding: 0 6px; font-family: var(--font-mono); font-size: var(--fs-small); color: var(--text-1); }
 
@@ -121,7 +123,9 @@
   cursor: grab;
   user-select: none;
   touch-action: none;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
 }
+.pclip:hover { border-color: var(--line-strong); }
 .pclip .idx {
   position: absolute;
   left: 6px;
@@ -177,6 +181,8 @@
 .pclip.sel { border-color: var(--text-1); }
 .pclip:focus-visible { box-shadow: inset var(--focus-ring); }
 .pclip.cur { box-shadow: 0 0 0 1px var(--text-1) inset; }
+/* .pclip.cur outranks .pclip:focus-visible, so the current segment needs its own focus rule to keep the ring. */
+.pclip.cur:focus-visible { box-shadow: inset var(--focus-ring); }
 .pclip .prog { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--text-1); z-index: 4; }
 .pclip.missing { border-style: dashed; border-color: var(--danger); }
 .pclip.sel.missing { border-color: var(--text-1); }
@@ -207,8 +213,10 @@
   font-size: var(--fs-small);
   text-align: center;
   background: transparent;
+  transition: var(--t-ui);
 }
-.add-slot:hover { color: var(--text-1); background: var(--bg-hover); }
+.add-slot:hover { color: var(--text-1); background: var(--bg-hover); border-color: var(--text-3); }
+.add-slot:focus-visible { box-shadow: inset var(--focus-ring); }
 .track-list { display: contents; }
 .track-empty { align-self: center; font-size: var(--fs-small); padding: 0 8px; }
 
@@ -243,7 +251,8 @@
 .pm-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pm-name { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-meta { color: var(--text-2); font-size: var(--fs-small); }
-.pm-badge { align-self: flex-start; font-size: var(--fs-small); color: var(--accent, var(--text-1)); }
+/* --accent text is 3.42:1 on --bg-popover; --accent-bright is 5.15:1. */
+.pm-badge { align-self: flex-start; font-size: var(--fs-small); color: var(--accent-bright, var(--text-1)); }
 .pm-input { width: 100%; }
 .pm-actions { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
 .pm-confirm { max-width: 220px; color: var(--text-2); font-size: var(--fs-small); }

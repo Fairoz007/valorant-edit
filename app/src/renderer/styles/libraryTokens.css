@@ -5,6 +5,10 @@
   /* Game identity colors, used by the library game filter chips and card tags. */
   --lib-game-apex: #e5484d;
   --lib-game-valorant: #14b8a6;
+  /* Card game-tag text on its own 18% tint over --bg-surface (11px bold, needs 4.5:1).
+     Apex: raw #e5484d is 3.63:1, mixed 30% toward --text-1 it is 5.20:1. Valorant #14b8a6 is already 5.13:1. */
+  --lib-game-apex-text: color-mix(in srgb, var(--lib-game-apex) 70%, var(--text-1));
+  --lib-game-valorant-text: var(--lib-game-valorant);
 }
 :root[data-theme='light'] {
   /* Darker teal keeps the VALORANT tag readable on light surfaces. */

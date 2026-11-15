@@ -1,4 +1,24 @@
 /* Base styles: reset, global fonts, focus rings, and icon sizes. */
+
+/* Polish tokens derived from tokens.css. tokens.css must stay identical to docs/design/ui-mock/css/tokens.css (a11y/tokens.test.ts),
+   so app-only additions live here; base.css loads right after tokens.css and before every screen stylesheet. */
+:root {
+  /* Form-field boundary (WCAG 1.4.11 >= 3:1): 3.55 against --bg-input, 3.18 against --bg-surface, 3.04 against --bg-popover.
+     --line-strong (1.6:1) stays for decorative dividers and button outlines, where the label identifies the control. */
+  --line-control: rgba(255, 255, 255, 0.38);
+  /* Hover boundary for fields and outlined controls. */
+  --line-hover: rgba(255, 255, 255, 0.28);
+  /* Larger surfaces (empty-state box, drop overlay). */
+  --r-lg: 14px;
+  /* Icon sizes used by .ic and its modifiers. */
+  --ic-sm: 14px;
+  --ic-md: 18px;
+  --ic-lg: 24px;
+  /* Standard state transition for interactive controls; --dur-fast drops to 0 under reduced motion and low-performance mode. */
+  --t-ui: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
 body {
@@ -12,16 +32,25 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
-input, select { font: inherit; color: inherit; }
+input, select, textarea { font: inherit; color: inherit; }
 h1, h2, h3, h4, p { margin: 0; }
 h1, h2, h3, h4 { line-height: var(--lh-tight); letter-spacing: 0; }
-:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.ic { width: 18px; height: 18px; stroke-width: 2; flex: none; }
-.ic.sm { width: 14px; height: 14px; }
-.ic.lg { width: 24px; height: 24px; }
+/* The transparent outline keeps a visible indicator in Windows forced-colors (high contrast) mode, where box-shadow is dropped. */
+:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: var(--focus-ring); }
+.ic { width: var(--ic-md); height: var(--ic-md); stroke-width: 2; flex: none; vertical-align: middle; }
+.ic.sm { width: var(--ic-sm); height: var(--ic-sm); }
+.ic.lg { width: var(--ic-lg); height: var(--ic-lg); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--r-xs); color: var(--text-2); background: rgba(255,255,255,.04); }
 .hidden { display: none !important; }
+
+/* Secondary/tertiary text helpers used across screens (same as the design mock's app.css).
+   :where() keeps specificity at zero so any screen rule that sets a colour still wins. */
+:where(.muted) { color: var(--text-2); }
+:where(.dim) { color: var(--text-3); }
+
+/* Disabled native controls never show a pointer. */
+:where(button, select, input):disabled { cursor: default; }
 
 /* Scrollbars: thin, no arrows, and suited to the dark interface (the default light Windows scrollbar looks out of place). */
 :root { color-scheme: dark; }

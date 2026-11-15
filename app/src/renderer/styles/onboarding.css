@@ -37,11 +37,12 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
   cursor: pointer;
-  transition: background var(--dur-fast), border-color var(--dur-fast);
+  transition: var(--t-ui);
 }
-.ob-mode:hover { background: var(--bg-hover); }
+.ob-mode:hover { background: var(--bg-hover); border-color: var(--line-hover); }
 .ob-mode input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.ob-mode.is-selected { border-color: var(--accent-bright); background: var(--accent-soft); }
+.ob-mode.is-selected,
+.ob-mode.is-selected:hover { border-color: var(--accent-bright); background: var(--accent-soft); }
 .ob-mode:has(input:focus-visible) { box-shadow: var(--focus-ring); }
 .ob-mode-title { font-weight: var(--fw-bold); }
 .ob-mode-desc { color: var(--text-2); font-size: var(--fs-small); line-height: var(--lh-body); }
@@ -60,7 +61,8 @@
 
 .ob-foot { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-6) var(--sp-4); border-top: 1px solid var(--line); }
 .ob-dots { flex: 1; display: flex; justify-content: center; gap: var(--sp-2); }
-.ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+/* Upcoming steps use --text-disabled (3.1:1 on --bg-popover) instead of --line-strong (1.6:1) so every dot is visible. */
+.ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-disabled); transition: background-color var(--dur-fast) var(--ease); }
 .ob-dots i.is-past { background: var(--text-3); }
 .ob-dots i.is-current { background: var(--accent-bright); }
 .ob-primary { height: 32px; padding: 0 var(--sp-4); font-size: var(--fs-body); }

@@ -1,6 +1,12 @@
 /* Low-performance mode (spec §6): when the "Low performance mode" setting is enabled (<html data-lowperf>) or the system requests reduced motion.
    No color values belong here. Load this last to override transitions, animations, and hover transforms from other stylesheets.
    Canvas reduces the heatmap to 60 bins (HEAT_BINS_LOWPERF in perf/lowPerf.ts); thumbnails are static images. */
+
+/* Zero the motion tokens too, so anything timed from them (including inline styles) is instant. */
+html[data-lowperf] {
+  --dur-fast: 0ms;
+  --dur-base: 0ms;
+}
 html[data-lowperf] *,
 html[data-lowperf] *::before,
 html[data-lowperf] *::after {
@@ -12,6 +18,10 @@ html[data-lowperf] .vcard:hover { transform: none; }
 html[data-lowperf] .vcard-thumb img { transition: none; animation: none; }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
   *,
   *::before,
   *::after {
