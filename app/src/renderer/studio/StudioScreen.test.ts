@@ -76,7 +76,7 @@ describe('StudioScreen SSR smoke', () => {
     expect(out).toContain('class="studio"')
     expect(out).toContain('data-zone="src"') // Source timeline.
     expect(out).toContain('data-zone="proj"') // Project timeline.
-    expect(out).toContain('src="file://C:/v/a.mp4"')
+    expect(out).toContain('src="aditor-media://local/C:/v/a.mp4"')
     expect(out).toContain('來源 · a.mp4') // Mode pill.
     expect(out).not.toContain('role="alert"') // No blocked/error screen.
     expect(out).toContain('2 個事件') // Comes from the loaded document, not a fabricated default.

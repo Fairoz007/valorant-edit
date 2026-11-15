@@ -17,7 +17,7 @@ export interface RecorderCommand {
   env?: Record<string, string>
 }
 
-export type RecordingNoticeKind = 'matchStart' | 'matchEnd' | 'matchCancel' | 'finalized' | 'diskWarn' | 'warning' | 'error'
+export type RecordingNoticeKind = 'matchStart' | 'matchEnd' | 'matchCancel' | 'finalized' | 'diskWarn' | 'warning' | 'error' | 'montage'
 
 export interface RecordingDeps {
   onDiagnostic?: ChildDiagnosticHandler
@@ -79,6 +79,19 @@ export interface RecordingDeps {
   liveCachePath?: (videoPath: string) => string
   /** Notify after writing the live cache and before queuing full analysis, for example to mark the library item playable and set its kill count. */
   onLiveAnalysis?: (videoPath: string, summary: LiveAnalysisSummary) => void
+  /**
+   * Auto montage: a per-match recording file was finalized and added to the library (fired before analysis).
+   * Lets the montage service persist a `recorded` job so a crash between recording and analysis does not lose the match.
+   */
+  onMatchRecorded?: (videoPath: string, game: GameId) => void
+  /**
+   * Auto montage: analysis results for this match are on disk. Fired from finalization when the trusted live cache is final and no
+   * full analysis will be queued; the full-analysis path is reported by `AnalysisQueue`'s `'analyzed'` event instead.
+   * The montage service de-duplicates by persisted job, so a repeated call never builds a second montage.
+   */
+  onMatchAnalyzed?: (videoPath: string, game: GameId) => void
+  /** Fired on every running → closed change of the game, regardless of `openOnGameExit` (Auto montage `afterGameExit`). */
+  onGameClosed?: () => void
   /** Called once when Apex changes from running to closed while `openOnGameExit` is enabled. */
   onGameExit?: () => void
   /** Shared game presence, independent of recording settings and backend; failed queries retain the last state. */

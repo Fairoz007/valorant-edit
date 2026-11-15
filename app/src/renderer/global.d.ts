@@ -1,5 +1,6 @@
 import type { LiveState, LiveUpdate, RecordingStatus, RecorderCapabilities, ObsTestResult } from '../shared/recording'
 import type { PlaybackDesyncReport } from '../shared/telemetry'
+import type { MontageStatus } from '../shared/montage'
 
 /** Recording APIs are provided only by preload. Other legacy APIs remain for compatibility. */
 export interface RecordingApi {
@@ -17,8 +18,17 @@ export interface RecordingApi {
   onLive?(callback: (update: LiveUpdate) => void): () => void
 }
 
+/** Auto montage (preload `montage`; optional in test doubles). */
+export interface MontageApi {
+  getStatus(): Promise<MontageStatus>
+  open(jobId: string): Promise<{ projectId: string } | null>
+  retry(jobId: string): Promise<boolean>
+  cancel(jobId: string): Promise<boolean>
+  onStatus(callback: (status: MontageStatus) => void): () => void
+}
+
 declare global {
   interface Window {
-    api: { recording: RecordingApi; telemetry?: { enabled(): Promise<boolean>; report(message: string): Promise<boolean>; reportPlaybackDesync(report: PlaybackDesyncReport): Promise<boolean> } } & Record<'engine' | 'library' | 'queue' | 'cache' | 'proxy' | 'projects' | 'app' | 'settings' | 'export' | 'update', any>
+    api: { recording: RecordingApi; montage?: MontageApi; telemetry?: { enabled(): Promise<boolean>; report(message: string): Promise<boolean>; reportPlaybackDesync(report: PlaybackDesyncReport): Promise<boolean> } } & Record<'engine' | 'library' | 'queue' | 'cache' | 'proxy' | 'projects' | 'app' | 'settings' | 'export' | 'update', any>
   }
 }

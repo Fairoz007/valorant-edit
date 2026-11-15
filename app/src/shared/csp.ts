@@ -1,5 +1,6 @@
 /**
- * Content Security Policy (I2): allow only our own scripts; load images/video only from local files and data:; disallow eval, inline scripts, and external connections.
+ * Content Security Policy (I2): allow only our own scripts; load images/video only from the app's `aditor-media:` scheme
+ * (library media served by main, see main/media-protocol.ts; never arbitrary file:// URLs) and data:; disallow eval, inline scripts, and external connections.
  * sentry-ipc: is an in-process Electron protocol; only main can send diagnostics while reporting is enabled.
  * Also allow blob: for video (live viewing uses MediaSource, and `URL.createObjectURL(mediaSource)` returns a blob: URL).
  * Styles require 'unsafe-inline' (React style attributes). A Vite plugin injects the policy into index.html in **production builds**
@@ -9,8 +10,8 @@ export const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' file: data:",
-  "media-src 'self' file: blob:",
+  "img-src 'self' aditor-media: data:",
+  "media-src 'self' aditor-media: blob:",
   "font-src 'self' data:",
   "connect-src 'self' sentry-ipc:",
   "object-src 'none'",

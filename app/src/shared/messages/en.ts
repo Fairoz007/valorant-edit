@@ -43,6 +43,7 @@ const messages: MessageTable = {
   'OpenH264 檔案雜湊校驗失敗，已拒絕使用': 'OpenH264 file hash check failed, so the file was rejected.',
   '無法更新開機啟動設定：{error}': 'Could not update the startup setting: {error}',
   'Valorant Editor {version} 有新版本可用，可在設定中選擇「下載更新」。': 'Valorant Editor {version} is available. Choose "Download update" in Settings to download it.',
+  '無效的精華合輯工作 id': 'The montage job id is invalid.',
   '影片路徑不正確': 'The video path is invalid.',
   'OpenH264 正在下載中': 'OpenH264 is already downloading.',
   '無效的專案 id：{id}': 'Invalid project ID: {id}',

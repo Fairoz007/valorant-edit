@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type Dispatch, type MutableR
 import type { PlayabilityResult } from '../media/playability'
 import { i18n } from '../i18n'
 import type { useToast } from '../shell/ToastHost'
-import { NoticeAction, proxyBusyNotice, studioNotice, StudioNotice } from './notices'
+import { NoticeAction, proxyBusyNotice, studioNotice, StudioNotice, type VideoFault } from './notices'
 import { normPath } from './studioScreenModel'
 
 type ProxyState = 'none' | 'available' | 'generating'
@@ -55,17 +55,34 @@ export function useStudioNotices({
   const [proxyDismissed, setProxyDismissed] = useState(false)
 
   useEffect(() => setVideoMissing(false), [videoPath, reloadKey, setVideoMissing])
+  // A load failure alone cannot tell a missing file from an undecodable one; ask main whether the file is on disk.
+  const [videoFault, setVideoFault] = useState<{ path: string; fault: VideoFault } | null>(null)
+  useEffect(() => {
+    if (!videoMissing) {
+      setVideoFault(null)
+      return
+    }
+    let cancelled = false
+    const exists = window.api?.library?.fileExists
+    const check: Promise<boolean> = exists ? Promise.resolve().then(() => exists(videoPath)) : Promise.reject(new Error('fileExists unavailable'))
+    check.then(
+      (found) => { if (!cancelled) setVideoFault({ path: videoPath, fault: found ? 'undecodable' : 'missing' }) },
+      () => { if (!cancelled) setVideoFault({ path: videoPath, fault: 'unknown' }) }
+    )
+    return () => { cancelled = true }
+  }, [videoMissing, videoPath])
+  const fault = videoMissing && videoFault?.path === videoPath ? videoFault.fault : null
   const notice: StudioNotice | null = useMemo(() => {
     const base = studioNotice({
       analysis: 'done',
-      videoMissing,
+      videoFault: fault,
       playability,
       proxyState,
       proxySuggest
     })
     if (proxyDismissed && base?.id === 'proxy-suggest') return null
     return base
-  }, [playability, proxyState, proxyDismissed, proxySuggest, videoMissing])
+  }, [playability, proxyState, proxyDismissed, proxySuggest, fault])
 
   const busyNotice: StudioNotice | null = useMemo(
     () => (proxyState === 'generating' ? proxyBusyNotice(proxyPct) : null),
@@ -87,6 +104,7 @@ export function useStudioNotices({
     try {
       const p: string | null = await window.api?.proxy?.generate?.(videoPath, duration)
       if (p) {
+        setVideoMissing(false) // Retry playback with the proxy; a new failure raises the notice again.
         setProxyPath(p)
         setProxyState('available')
       } else {
@@ -96,7 +114,7 @@ export function useStudioNotices({
       console.error('Failed to generate proxy:', err)
       setProxyState('none')
     }
-  }, [setProxyState, videoPath, duration, setProxyPath])
+  }, [setProxyState, videoPath, duration, setProxyPath, setVideoMissing])
 
   /** Return to the library; while export is running, stay in the studio and show a Toast instead. */
   const requestBack = useCallback((): void => {
