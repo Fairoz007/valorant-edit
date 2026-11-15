@@ -26,6 +26,11 @@ Valorant Editor is a fork of [Aditor](https://github.com/ShiQu1218/Aditor) by Sh
 | Export                   | Fast lossless cut or precise re-encode in H.264 or H.265 (NVENC / QSV / AMF hardware encoders, OpenH264 CPU fallback for H.264)                                  |
 | Vertical / square export | 9:16 and 1:1 reframing (crop with offset, blurred background or black bars) with a live preview, and presets for YouTube, Shorts, TikTok, Reels and square posts |
 | Projects                 | Autosaved projects, cached analysis results, re-analysis that preserves manual edits                                                                             |
+| Auto montage             | Optional (off by default, VALORANT only): after each recorded match is analyzed, one highlight montage is exported in your preset and added to the library      |
+| Auto edit                | One-click styled montage from one or more videos: target length, Clean / Cinematic / Hype / Shorts styles, captions, slow-mo, zoom, music with ducking           |
+
+The bundled FFmpeg is a minimal LGPL build. Auto edit transitions are cuts or dips to black/white (no crossfades), slow-motion
+parts play without game audio, and music files must be `.m4a`, `.mp4`, `.mov`, `.mkv`, `.mka`, `.webm` or `.avi`.
 
 ## Language
 
@@ -37,7 +42,13 @@ English string is missing or contains untranslated text.
 ## Requirements
 
 - Windows 10 / 11, 64-bit (the recorder and capture paths are Windows-only)
-- For building: Node.js 22, Rust (stable, MSVC toolchain), PowerShell 7
+- For building: Node.js 22 or 24 (CI uses 22; the Windows dev machine runs 24.13.0), Rust (stable, MSVC toolchain),
+  Windows PowerShell 5.1 or PowerShell 7
+- MSVC: Visual Studio 2022 or later, or the Build Tools, with "Desktop development with C++". `scripts/build.ps1` and
+  `scripts/test.ps1` load `vcvars64.bat` themselves (through vswhere, or by searching the standard Visual Studio
+  folders when vswhere lists nothing) and print which one they used. Set `ADITOR_VCVARS` to choose another one.
+- Python tools (`tools\`): `py -3 -m pip install -r tools/requirements.txt`. `ccl_chromium_reader` needs `zstd`,
+  which has no wheel for Python 3.14, so on 3.14 run pip after `vcvars64.bat` with `DISTUTILS_USE_SDK=1`
 - FFmpeg is bundled by the build script (`scripts/fetch-ffmpeg.ps1`); GPU decode/encode is used when available, with CPU fallback
 
 ## Build and run

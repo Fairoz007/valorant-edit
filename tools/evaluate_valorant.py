@@ -8,9 +8,15 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 import time
 
-from engine_cli import ROOT, json_lines
+# `py -3 -I` drops the script folder from sys.path; put it back so the sibling module resolves.
+TOOLS = Path(__file__).resolve().parent
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+from engine_cli import ROOT, json_lines  # noqa: E402
 
 
 def match_events(truth: list[float], predicted: list[float], tolerance: float) -> dict:

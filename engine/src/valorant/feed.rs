@@ -118,6 +118,50 @@ impl FeedDetector {
             Some(if red > teal { "enemy" } else { "ally" })
         }
     }
+    /// Row `k` is a Sage resurrect of the player, not a death: teal on both sides, the player's chevron on the right
+    /// like a death, but the "killer" half is a teammate and the centre icon is the round resurrect emblem.
+    /// Measured on 960x720 Outplayed clips, in 1080p feed coordinates:
+    /// - the 160 px left of the victim half are 0.55-0.67 ally teal on resurrect rows and at most 0.08 on every
+    ///   confirmed death row (226 observations over 6 clips, plus the 720p reference fixtures);
+    /// - the emblem's white pieces are 34 px tall and 20-30 px wide, while weapon icons are wide (90-145 px) or at most
+    ///   24 px tall and name text at most 14 px tall.
+    ///
+    /// A teamkill (teal killer, weapon icon) and a row with no icon stay deaths.
+    fn resurrect(&self, hsv: &Image<u8>, k: usize) -> Result<bool> {
+        let (b0, b1) = self.band(k);
+        let r = crop(hsv, self.right - 310, b0 + 5, self.right - 150, b1 - 5);
+        let (mut teal, mut other) = (0usize, 0usize);
+        for p in r.data.as_chunks::<3>().0.iter() {
+            if p[1] >= 55 && p[2] >= 110 {
+                if (55..=100).contains(&p[0]) {
+                    teal += 1;
+                } else {
+                    other += 1;
+                }
+            }
+        }
+        if (teal as f64) < 0.30 * (r.width * r.height) as f64 || teal <= other {
+            return Ok(false);
+        }
+        let icon = crop(hsv, self.right - 330, (b0 - 2).max(0), self.right - 120, b1 + 2);
+        let white = Image::new(
+            icon.width,
+            icon.height,
+            1,
+            icon.data
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|p| u8::from(p[1] <= 60 && p[2] >= 200) * 255)
+                .collect(),
+        )?;
+        let comp = cv::connected_components(&white)?;
+        Ok(comp
+            .stats
+            .iter()
+            .skip(1)
+            .any(|&[_, _, w, h, area]| h >= 28 && w <= 34 && area >= 20))
+    }
     fn outline(&self, im: &Image<u8>, k: usize, x0: i32, x1: i32, death: bool) -> usize {
         let (b0, b1) = self.band(k);
         let (a, b) = if death {
@@ -359,7 +403,10 @@ impl FeedDetector {
         for k in 0..6 {
             let sides = marks.get(&k).cloned().unwrap_or_default();
             let team = self.team(&hsv, k);
-            let (kind, confirmed) = if team == Some("ally") && sides.contains(&true) {
+            let (kind, confirmed) = if team == Some("ally")
+                && sides.contains(&true)
+                && !self.resurrect(&hsv, k)?
+            {
                 ("death", true)
             } else if team == Some("enemy") && sides == BTreeSet::from([false]) {
                 ("kill", true)

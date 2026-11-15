@@ -15,6 +15,41 @@
 - **H.265 (HEVC) export** with NVENC, Quick Sync and AMF, detected with the same test encode as H.264; MP4 output is tagged
   `hvc1` for Apple devices and web players. No libx265 (the bundled FFmpeg stays LGPL-only).
 - Export format choices are remembered in settings; reframing, presets and H.265 automatically switch to precise export with a notice.
+- **Auto montage** (Settings → Recording → Auto montage, off by default, VALORANT only): after each recorded match is analyzed
+  (trusted live results or full analysis, built-in recorder or OBS), the app picks the best highlights and exports one montage
+  in the chosen preset (16:9, 9:16 or 1:1), with no user action.
+  - Ranking is ace > 4k > 3k > clutch > 2k > single. Overlaps are merged, multi-kills are never split and the total is capped
+    at the max length; clips you skipped stay out.
+  - Each export is checked with ffprobe (duration within ±0.5 s, video and audio present) before it is added to the library
+    as a "Montage" entry and you get a notification ("Montage ready — 6 clips, 0:48"). Opening the entry opens its project
+    in Studio.
+  - Jobs survive restarts and resume exactly once, with no duplicates. "After each match" runs at below-normal priority
+    while the game runs and idle priority while recording; "After VALORANT closes" waits.
+  - Low disk, too few highlights, a missing source, no hardware encoder (OpenH264 fallback), a failed analysis, cancel and
+    quit are all handled; the recording panel shows the status with Open / Retry / Cancel.
+  - Turning it on while post-recording analysis is "No analysis" switches analysis to "After each match" after asking.
+  - "Keep source recording" off deletes the per-match recording only after a verified export.
+- **Auto edit** (Studio and the Library selection bar): pick one or more analyzed videos, a target length (30 s, 1 min,
+  3 min, all or custom), a style, optional music, deaths on/off and an output preset, see a live estimate, and get an editable
+  project.
+  - Selection uses the same ranker as Auto montage (`shared/highlightScore.ts`, user-editable weights), fits the target
+    within ±1 s, and orders clips chronologically or as a build-up.
+  - Styles as data: **Clean** (cuts), **Cinematic** (dip to black, slow-mo, letterbox, intro/outro), **Hype** (dip to
+    white, zoom punch, flashes, beat-synced cuts with music) and **Shorts** (9:16, ≤60 s, big captions).
+  - Captions ("DOUBLE KILL", "TRIPLE KILL", "QUADRA KILL", "ACE", "CLUTCH") use the bundled Montserrat Black.
+  - Music is mixed in the app with fades and ducking under game audio.
+  - Project items show effect badges, and everything stays editable.
+  - Real renders matched the planned length exactly (Clean 21.0 s, Hype 22.5 s, Cinematic 25.7 s, Shorts 21.0 s).
+- Project schema v2 (per-clip speed, audio gain, effects, caption and transition; project style, music, intro/outro, letterbox
+  and preset). v1 project files are migrated on load and left untouched on disk.
+
+#### Known limitations
+
+- The pinned LGPL FFmpeg is a minimal build (no `xfade`, `fade`, `drawtext`, `amix`, `sidechaincompress`, `atempo`, `zoompan`).
+  Transitions are therefore cuts or dips, drawn with stepped `drawbox` alpha, not crossfades. Captions are rendered to PNG and
+  overlaid. Slow-motion parts play without game audio. Music must be `.m4a`, `.mp4`, `.mov`, `.mkv`, `.mka`, `.webm` or
+  `.avi`; MP3, WAV and FLAC cannot be read.
+- Beat sync snaps cut points to energy onsets only; it does not track tempo.
 
 #### Changed
 
@@ -35,6 +70,19 @@
 
 ### Fixed
 
+- **A Sage resurrect of the player is no longer counted as a death** (`valorant-feed@11`, so cached analyses are redone).
+  Measured on 6 newly labelled 960×720 30 fps clips (21 events, ±1 s):
+  - before: 17 correct / 2 false / 4 missed;
+  - after: 18 / 1 / 3. Deaths are 12/12 at precision 1.0.
+  The remaining misses are long kill rows wider than the kill-feed crop, so the killer-side chevron is cut off; a wider
+  capture area is not part of this change. The 720p reference clip's fixtures still pass; the clip itself was not re-run.
+- **Recorder test fixtures** (`init-*.mp4`) are committed with their generator, so the recorder tests run on a clean checkout.
+- **Windows build and tests:**
+  - `scripts\build.ps1` / `test.ps1` find `vcvars64.bat` when `vswhere` lists no Visual Studio, and print which one they use.
+  - Engine debug builds and tests find the pinned FFmpeg in `build\ffmpeg` without it being on PATH.
+  - `tools\evaluate_valorant.py` and `icon_accept.py` start under `py -3 -I`.
+- **No console windows**: `aditor.exe` and `ffmpeg -encoders` are spawned hidden. The AppUserModelId matches the installer, so
+  toasts carry the app identity.
 - **Own kills and deaths on compressed footage**: the kill-feed detector (`engine/src/valorant/feed.rs`) now finds the player's
   rows when the thin yellow row outline blurs away (e.g. 720p uploads), using the solid yellow chevron plus ally teal on the
   player's side. It accepts small death-side chevrons, death chevrons under the red death-screen tint, and faint kill-side

@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
-import { SETTING_ROWS } from './rows'
+import { AUTO_MONTAGE_FIELDS, SETTING_ROWS } from './rows'
 import { recordingI18n } from '../i18n'
 
 const src = (rel: string): string => resolve(__dirname, '../../', rel)
@@ -69,6 +69,13 @@ const ROW_TARGETS: Record<string, { fields?: string[]; consumers?: Array<[string
   trademark: { consumers: [['renderer/i18n/zh-TW.ts', /trademark/]] },
   ...Object.fromEntries(Object.keys(recordingI18n.rows).map((field) => [
     `recording-${field}`, { fields: ['recording'] }
+  ])),
+  // Auto montage rows write settings.recording.autoMontage (main coerces it; the montage service in main consumes it).
+  ...Object.fromEntries(AUTO_MONTAGE_FIELDS.map((field) => [
+    `autoMontage-${field}`, {
+      fields: ['recording'],
+      consumers: [['main/settings.ts', /coerceAutoMontage/], ['renderer/settings/AutoMontageControl.tsx', /controller\.setRecording\('autoMontage'/]]
+    }
   ]))
 }
 

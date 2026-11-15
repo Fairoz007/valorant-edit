@@ -202,6 +202,16 @@ describe('exportController wiring', () => {
     expect(f.progress.size).toBe(0)
   })
 
+  test('a styled (Auto edit) project is sent as precise with the encoder even when lossless copy is selected', async () => {
+    const f = fake()
+    const c = createExportController(f.api)
+    await c.init('D:/out')
+    await c.setQuality('copy')
+    void c.start([{ id: 'a', source: 'D:/v.mp4', start: 0, end: 5, effects: [{ kind: 'flash', at: 2, durationSec: 0.1 }] }], { style: 'hype' })
+    await flush()
+    expect(f.calls.find((x) => x[0] === 'start')![1]).toMatchObject({ quality: 'precise', encoder: 'h264_nvenc', style: 'hype' })
+  })
+
   test('precise quality sends the selected encoder', async () => {
     const f = fake()
     const c = createExportController(f.api)

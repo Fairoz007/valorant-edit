@@ -129,17 +129,18 @@ Legend: ✅ exists · 🟡 partial · ❌ missing
 | Area | Status | Notes |
 |---|---|---|
 | Highlight suggestions | ✅ | Multi-kill/ace highlights, dense-kill auto-compilation (`engine/src/autoclip.rs`) |
-| Customizable event priorities | ❌ | Score = kill count; no user weights |
+| Customizable event priorities | ✅ | `shared/highlightScore.ts`: ace > 4k > 3k > clutch > 2k > single with user-editable weights, quick-succession bonus, duplicate penalty; shared by Auto montage and Auto edit. Clutch is a heuristic (won round closed out without dying), not HUD-based |
 | Duplicate avoidance / overlap merge | ✅ | Auto-clip merges overlapping windows |
 | Pre/post padding, adjustable | ✅ | Clip defaults in Settings → Editing |
 | Preserve quality / fps / resolution | ✅ | Lossless copy mode; precise mode keeps source fps/size when compatible |
 | Timeline: markers, reorder, trim, split, undo/redo, manual correction | ✅ | Studio + project track + history |
-| Per-clip speed, per-clip audio level | ❌ | |
-| Effects (zoom, slow-mo, speed ramp, blur, shake, flash) | ❌ | No filter-graph effects stage in export |
-| Music, beat sync, SFX, intro/outro, text overlays (ACE!, CLUTCH!…) | ❌ | |
-| Audio stem control (game / voice / music / SFX) | ❌ | Recorder can capture mic separately; export mixes one track |
-| Presets (Clean / Cinematic / Shorts) | ❌ | |
-| One-click montage with target duration | 🟡 | Auto-compilation + concat export exist; no duration targeting or preset styling |
+| Per-clip speed, per-clip audio level | ✅ | Project schema v2 (`speed`, `gain`); changed-speed parts have silent game audio (no `atempo` in the pinned FFmpeg) |
+| Effects (zoom, slow-mo, speed ramp, blur, shake, flash) | 🟡 | Slow-mo (`setpts`), zoom punch (`crop`+`scale`), flash and letterbox (`drawbox`) in `main/export/montage-plan.ts`; no blur/shake/speed ramp |
+| Music, beat sync, SFX, intro/outro, text overlays (ACE!, CLUTCH!…) | 🟡 | Music with fades and ducking mixed in Node (`montage-audio.ts`), onset-based beat sync, intro/outro cards, PNG captions overlaid (no `drawtext`); no SFX |
+| Audio stem control (game / voice / music / SFX) | 🟡 | Game gain per clip + music bed; recorder mic track is still mixed into one game track |
+| Presets (Clean / Cinematic / Shorts) | ✅ | Clean, Cinematic, Hype, Shorts as data (`shared/autoEdit.ts`); transitions are cuts or dips (no `xfade`) |
+| One-click montage with target duration | ✅ | Auto edit dialog in Studio and the Library selection bar; target fit ±1 s; multi-video in recording order |
+| Auto montage after each match | ✅ | `main/montage/**`: job store with resume, live-trusted and full-analysis paths, built-in and OBS backends, verified export, library entry, notification; Recording settings section and panel status |
 
 ### 3.3 UI, processing, export, projects
 

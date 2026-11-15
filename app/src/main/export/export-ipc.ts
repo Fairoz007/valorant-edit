@@ -15,6 +15,11 @@ import { estimateOutputBytes } from '../../shared/exportEstimate'
 import { normalizePath } from '../library'
 import { tr } from '../../shared/locale'
 import { exportSubDirName } from '../../shared/storage'
+import { projectHasStyling, validProjectItemStyle, validProjectStyle } from '../../shared/autoEditProject'
+import type { ProjectItem } from '../../renderer/editor/project'
+import type { MontageItem, MontageProjectStyle } from './montage-plan'
+import { runMontage, type MontageErrorCode, type MontageRunDeps } from './montage-run'
+import { defaultTextRenderer } from './montage-text'
 
 export interface ExportSender {
   isDestroyed(): boolean
@@ -39,10 +44,17 @@ export interface ExportServiceDeps {
   copyCut?: CutLookup
   /** For concatenation: measure the actual playback end of an intermediate file; defaults to reading packets with ffprobe. */
   mediaEnd?: MediaEndProbe
+  /** Montage render stage (styled v2 projects): caption/card PNG renderer; defaults to an offscreen Electron window. */
+  renderTextPng?: MontageRunDeps['renderTextPng']
+  /** Montage beat sync: source duration probe; defaults to ffprobe. */
+  probeDuration?: MontageRunDeps['probeDuration']
 }
 
 export interface ValidatedRequest {
-  items: Array<{ id: string; source: string; start: number; end: number }>
+  /** v1 fields plus the optional v2 styling fields (speed, gain, effects, overlay, transition). */
+  items: MontageItem[]
+  /** v2 project-level styling (style, music, intro, outro, letterbox); absent when the request has none. */
+  style?: MontageProjectStyle
   mode: 'separate' | 'concat'
   quality: 'copy' | 'precise'
   encoder?: string
@@ -104,8 +116,11 @@ export async function validateExportRequest(raw: unknown): Promise<ValidatedRequ
     if (start < 0 || end <= start) throw new RequestError(tr('片段時間範圍不正確'))
     if (!isSafeLocalVideoPath(source)) throw new RequestError(tr('來源影片路徑不正確'))
     if (!(await fileExistsSafe(source))) throw new RequestError(tr('找不到來源影片：{source}', { source }))
-    items.push({ id: typeof id === 'string' ? id : '', source, start, end })
+    const styled = it as Record<string, unknown>
+    if (!validProjectItemStyle(styled)) throw new RequestError(tr('片段格式不正確'))
+    items.push({ id: typeof id === 'string' ? id : '', source, start, end, ...copyItemStyle(styled as Partial<ProjectItem>) })
   }
+  const style = await validateProjectStyle(r)
   if (r.mode !== 'separate' && r.mode !== 'concat') throw new RequestError(tr('匯出模式不正確'))
   if (r.quality !== 'copy' && r.quality !== 'precise') throw new RequestError(tr('匯出品質不正確'))
   let encoder: string | undefined
@@ -135,7 +150,56 @@ export async function validateExportRequest(raw: unknown): Promise<ValidatedRequ
     throw new RequestError(tr('無法建立輸出子資料夾'))
   }
   await assertWritableDir(outputDir)
-  return { items, mode: r.mode, quality: r.quality, encoder, outDir, outputDir, baseName: sanitizeBaseName(r.baseName), format }
+  return { items, mode: r.mode, quality: r.quality, encoder, outDir, outputDir, baseName: sanitizeBaseName(r.baseName), format, ...(style ? { style } : {}) }
+}
+
+/** Copy only the known v2 item fields (already validated), so nothing else from the renderer reaches the render stage. */
+function copyItemStyle(x: Partial<ProjectItem>): Partial<MontageItem> {
+  return {
+    ...(x.speed !== undefined ? { speed: x.speed } : {}),
+    ...(x.gain !== undefined ? { gain: x.gain } : {}),
+    ...(x.effects !== undefined ? { effects: x.effects.map((e) => ({ ...e })) } : {}),
+    ...(x.overlay !== undefined ? { overlay: { text: x.overlay.text, at: x.overlay.at, durationSec: x.overlay.durationSec } } : {}),
+    ...(x.transitionIn !== undefined ? { transitionIn: x.transitionIn } : {}),
+    ...(x.transitionSec !== undefined ? { transitionSec: x.transitionSec } : {})
+  }
+}
+
+/**
+ * Music containers the pinned FFmpeg can demux (mov/mp4/m4a, matroska/webm, avi); video files with an audio track also
+ * work. MP3, WAV, FLAC and Ogg files cannot be opened by that build (no such demuxers).
+ */
+export const MUSIC_EXTS: ReadonlySet<string> = new Set(['.m4a', '.mp4', '.mov', '.mkv', '.mka', '.webm', '.avi'])
+
+/** v2 project-level fields: shape via `validProjectStyle`, plus a safe, existing local music file. */
+async function validateProjectStyle(r: Record<string, unknown>): Promise<MontageProjectStyle | undefined> {
+  if (!validProjectStyle(r)) throw new RequestError(tr('匯出請求格式不正確'))
+  const s = r as MontageProjectStyle
+  const style: MontageProjectStyle = {
+    ...(s.style !== undefined ? { style: s.style } : {}),
+    ...(s.music !== undefined ? { music: { path: s.music.path, gain: s.music.gain, duck: s.music.duck, fadeInSec: s.music.fadeInSec, fadeOutSec: s.music.fadeOutSec } } : {}),
+    ...(s.intro !== undefined ? { intro: { text: s.intro.text, durationSec: s.intro.durationSec, background: s.intro.background } } : {}),
+    ...(s.outro !== undefined ? { outro: { text: s.outro.text, durationSec: s.outro.durationSec, background: s.outro.background } } : {}),
+    ...(s.letterbox !== undefined ? { letterbox: s.letterbox } : {}),
+    ...(s.presetId !== undefined ? { presetId: s.presetId } : {})
+  }
+  if (style.music) {
+    const p = style.music.path
+    if (!isSafeLocalDirPath(p) || !MUSIC_EXTS.has(path.extname(p).toLowerCase())) throw new RequestError(MUSIC_PATH_INVALID())
+    const st = await fs.promises.stat(p).catch(() => null)
+    if (!st || !st.isFile()) throw new RequestError(MUSIC_NOT_FOUND())
+  }
+  return Object.keys(style).length > 0 ? style : undefined
+}
+
+/** User-facing messages without translations yet (listed for the lead; English source text). */
+export const MUSIC_PATH_INVALID = (): string => tr('音樂檔案路徑無效（支援 .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi）')
+export const MUSIC_NOT_FOUND = (): string => tr('找不到音樂檔案')
+export const MONTAGE_NEEDS_ENCODER = (): string => tr('套用風格的精華影片需要影片編碼器（精確匯出）')
+
+/** A concatenated v2 project with styling goes through the montage render stage; everything else uses buildJobs. */
+export function isMontageRequest(req: Pick<ValidatedRequest, 'mode' | 'items' | 'style'>): boolean {
+  return req.mode === 'concat' && projectHasStyling({ items: req.items as ProjectItem[], ...req.style })
 }
 
 
@@ -145,7 +209,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 export type ExportStartResult =
   | { ok: true; outputs: string[]; notices: string[] }
   | { ok: false; cancelled: true; outputs: string[]; notices: string[] }
-  | { ok: false; cancelled?: false; code?: 'busy'; error: string; outputs: string[]; notices?: string[] }
+  | { ok: false; cancelled?: false; code?: 'busy' | 'noEncoder' | MontageErrorCode; error: string; outputs: string[]; notices?: string[] }
 
 async function removeStaleSegments(dir: string, sources: string[]): Promise<void> {
   const sourcePaths = new Set(sources.map(normalizePath))
@@ -213,6 +277,8 @@ export function createExportService(deps: ExportServiceDeps = {}) {
       }
       if (ac.signal.aborted) return { ok: false, cancelled: true, outputs: [], notices: [] }
 
+      if (isMontageRequest(req)) return await startMontage(req, probes, ac.signal, sender)
+
       // Do not overwrite existing files: append " (2)" to a duplicate name (I6).
       const free = resolveFreeBaseName(req.outputDir, req.baseName, req.mode, req.items.length, (p) => fs.existsSync(p))
       // Fast stream copy: find the keyframe before each segment start and a clean end, then align cuts to them (see keyframe.ts).
@@ -276,6 +342,53 @@ export function createExportService(deps: ExportServiceDeps = {}) {
       current = null
       resolveDone()
     }
+  }
+
+  /** Styled v2 project: montage render stage (always re-encoded, one output file). */
+  async function startMontage(req: ValidatedRequest, probes: Map<string, StreamProbe>, signal: AbortSignal, sender: ExportSender): Promise<ExportStartResult> {
+    if (!req.encoder) return { ok: false, code: 'noEncoder', error: MONTAGE_NEEDS_ENCODER(), outputs: [], notices: [] }
+    const notices: string[] = []
+    const silentSources = new Set<string>()
+    const hasAudio = deps.hasAudio ?? createAudioProbe()
+    for (const source of probes.keys()) {
+      if ((await hasAudio(source, signal)) === false) silentSources.add(source)
+      if (signal.aborted) return { ok: false, cancelled: true, outputs: [], notices }
+    }
+    const free = resolveFreeBaseName(req.outputDir, req.baseName, 'concat', 1, (p) => fs.existsSync(p))
+    if (free.renamed) notices.push(tr('輸出資料夾已有同名檔案，已改用「{baseName}」，不會覆蓋原有檔案', { baseName: free.baseName }))
+    const result = await runMontage(
+      {
+        items: req.items,
+        style: req.style ?? {},
+        format: req.format,
+        encoder: req.encoder,
+        probes,
+        silentSources,
+        outputDir: req.outputDir,
+        baseName: free.baseName,
+        estimatedBytes: estimateOutputBytes({ items: req.items }, 'precise', probes, 'concat', req.format)
+      },
+      {
+        ffmpeg: deps.ffmpeg,
+        tempDir: deps.tempDir,
+        renderTextPng: deps.renderTextPng ?? defaultTextRenderer(),
+        probeDuration: deps.probeDuration
+      },
+      {
+        signal,
+        onProgress: (progress) => {
+          if (sender.isDestroyed()) return
+          try {
+            sender.send('export:progress', progress)
+          } catch {
+            // The window was destroyed while sending.
+          }
+        }
+      }
+    )
+    if (result.ok) return { ok: true, outputs: result.outputs, notices }
+    if (result.cancelled) return { ok: false, cancelled: true, outputs: result.outputs, notices }
+    return { ok: false, code: result.code, error: result.error, outputs: result.outputs, notices }
   }
 
   /** Cancel an active export; no-op when none is active or cancellation is already underway (returns cancelled:false). */

@@ -1,0 +1,20 @@
+{
+ "clip": "Valorant_10-31-2026_15-52-41-466.mp4",
+ "source": "960x720 30 fps Outplayed highlight clip (H.264 ~6 Mbps)",
+ "method": "Labelled by eye. The minimal FFmpeg build has no PNG encoder (and no tile/drawtext), so frames were decoded read-only with OpenCV (venv cv2.VideoCapture, sequential grab; t = frame_index / container fps). Kill-feed crop x=600,y=55,w=360,h=180 (source px), scaled 1.75x, sampled every 0.5 s into 3x5 contact sheets with timestamp + frame index drawn on each tile; every sheet was viewed. Each candidate row was then pinned with per-frame (1/30 s) sheets of the top rows (x=600,y=55,w=360,h=80 at 1.2x). t = first frame on which the row (including its solid-colour slide-in bar) is visible. Own rows identified by the yellow chevron/edge on the player's side of the row (player name in-game is 'Me'), cross-checked against the on-screen combat report (KILLED YOU / KILLED). Detector output was not consulted.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "crop": {
+  "x": 600,
+  "y": 55,
+  "w": 360,
+  "h": 180
+ },
+ "events": [],
+ "notes": [
+  "The player is dead for the entire clip ('KILLED BY OMEN' banner from 0.0 s; spectating teammate '<player>'; round ends LOST / spike detonated). The player's own death row happened before the clip start and is not on screen.",
+  "Only rows seen: <player> -> <player> (teammate kill, from 6.0 s) and <player> -> <player> (enemy kills teammate, from 6.5 s); zoomed, neither has the yellow chevron/outline. Not labelled.",
+  "Kill feed region was visible (unobstructed) throughout."
+ ],
+ "anonymized": "Player gamertags replaced: the recording player is 'Me', everyone else '<player>'."
+}

@@ -153,6 +153,7 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
       describedBy={describedBy(ids)} unit="GB" onCommit={(v) => controller.setRecording(field, v)} />
   }
   const caps = state.recordingCapabilities
+  const montageOn = settings.autoMontage?.enabled === true
   // DDA and Hook use the capture adapter, so the saved GPU choice does not apply.
   const captureAdapter = settings.captureMethod === 'hook' || settings.captureMethod === 'dda' || (settings.captureMethod === 'auto' && caps.value?.autoCaptureMethod === 'dda')
   let options: Array<{ value: string; label: string; disabled?: boolean }>
@@ -195,7 +196,8 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
       options = [{ value: 'auto', label: t.captureAuto }, { value: 'wgc', label: t.captureWgc }, { value: 'dda', label: t.captureDda }]
       break
     case 'postAnalysis':
-      options = [{ value: 'none', label: t.analysisNone }, { value: 'afterExit', label: t.analysisAfterExit }, { value: 'perMatch', label: t.analysisPerMatch }]
+      // Auto montage needs analysis results, so "none" cannot be picked while it is on (main enforces the same rule).
+      options = [{ value: 'none', label: t.analysisNone, disabled: montageOn }, { value: 'afterExit', label: t.analysisAfterExit }, { value: 'perMatch', label: t.analysisPerMatch }]
       break
     default:
       return null
@@ -208,9 +210,11 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
   const missing = !options.some((o) => o.value === current)
   if (missing) options.push({ value: current, label: fillTemplate(t.currentUnavailable, { value: current }), disabled: true })
   const hint = (field === 'encoder' || field === 'gpu') && !caps.value ? caps.loading ? t.capabilitiesLoading : t.capabilitiesUnavailable : undefined
+  const montageHint = field === 'postAnalysis' && montageOn
+  const reason = [hint ? `${ids.ctl}-capabilities` : ids.reason, montageHint ? `${ids.ctl}-montage` : undefined].filter(Boolean).join(' ') || undefined
   return (
     <div className="set-inline set-recording-select">
-      <SelectControl ids={{ ...ids, reason: hint ? `${ids.ctl}-capabilities` : ids.reason }} value={current} options={options}
+      <SelectControl ids={{ ...ids, reason }} value={current} options={options}
         disabled={field === 'gpu' && captureAdapter ? true
           : field === 'renderDevice' ? !settings.systemAudioEnabled || settings.gameAudioOnly
             : field === 'captureDevice' && !settings.micEnabled}
@@ -228,6 +232,7 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
           } else set(field, v as RecordingSettings[typeof field])
         }} />
       {hint && <small id={`${ids.ctl}-capabilities`} className="set-desc" role="status">{hint}</small>}
+      {montageHint && <small id={`${ids.ctl}-montage`} className="set-desc">{t.autoMontage.analysisNoneDisabled}</small>}
       {field === 'backend' && settings.backend === 'obs' && <small className="set-desc">{t.obsHint}</small>}
       {field === 'captureMethod' && hookWarnOpen && (
         <CaptureHookWarningDialog

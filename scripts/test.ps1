@@ -29,6 +29,7 @@ function Invoke-Step {
 }
 
 $app = Join-Path $root "app"
+. "$PSScriptRoot/msvc-env.ps1"
 
 # Every suite must exercise the same bundled FFmpeg. Use PATH rather than
 # ADITOR_FFMPEG: subprocess lookup tests control their own overrides.
@@ -48,6 +49,8 @@ try {
     $env:ADITOR_FFPROBE = $null
     $env:ADITORREC_FFMPEG_DIR = $ffmpegRoot
     $env:CARGO_BUILD_JOBS = '4'
+    # Inside the PATH save/restore so the vcvars PATH does not leak out of this script.
+    Enter-MsvcEnvironment
 
     Invoke-Step "FFmpeg components" $root {
         & "$PSScriptRoot/verify-ffmpeg-components.ps1" -FfmpegPath (Join-Path $ffmpegRoot 'bin/ffmpeg.exe')

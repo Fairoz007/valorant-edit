@@ -1,0 +1,15 @@
+{
+ "clip": "Valorant_10-14-2026_20-22-49-700.mp4",
+ "source": "960x720 30 fps Outplayed highlight clip (H.264 ~6 Mbps)",
+ "method": "Labelled by eye. Frames decoded read-only with OpenCV (the bundled FFmpeg build has no PNG encoder, tile or drawtext); timestamps are packet PTS from ffprobe minus the first frame's PTS. Kill-feed crop sampled every 0.5 s into 3x6 contact sheets (1.4x upscale, timestamp drawn on each tile) and every sheet was viewed; each own row was then pinned with a per-frame (1/30 s) strip of a tighter crop (x=640,y=55,w=320,h=60, 1.5x). t = first frame on which the row is visible, which is the solid-colour slide-in bar that precedes the full row by ~2 frames. Own rows = rows with the yellow outline/chevron on the player's side. Detector output was not consulted and no detector was run. A full-frame overview sheet every 2 s was also checked. No kill-feed rows of any kind appear in this clip. From 11.5 s to 20.0 s a settings/communications menu covers the screen and hides the kill feed; the enemy alive count (1) and score (0-2) are the same before and after the menu, so no kill appears to have been missed. The round ends 'WON - SPIKE DETONATED' at ~45 s with one enemy still alive and the player at 100 HP.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "crop": {
+  "x": 600,
+  "y": 55,
+  "w": 360,
+  "h": 180
+ },
+ "events": [],
+ "anonymized": "Player gamertags replaced: the recording player is 'Me', everyone else '<player>'."
+}

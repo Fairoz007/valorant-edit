@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { LibraryEntry } from '../../main/library'
-import { entryGame, filterEntries } from './libraryFilter'
+import { entryGame, filterEntries, isAppMade } from './libraryFilter'
 
 const entry = (path: string, over: Partial<LibraryEntry> = {}): LibraryEntry => ({
   path,
@@ -113,5 +113,24 @@ describe('filterEntries', () => {
       filterEntries(games, { query: '', favoriteOnly: true, kind: 'hl', game: 'valorant' }).map((e) => e.path)
     ).toEqual([games[1].path])
     expect(filterEntries(games, { query: 'valo', favoriteOnly: false, kind: 'all', game: 'apex' })).toHaveLength(0)
+  })
+})
+
+describe('auto montage entries', () => {
+  const montage = entry('D:/rec/Valorant_2026-11-14_20-00_montage.mp4', {
+    source: 'montage',
+    montage: { sourcePath: 'D:/rec/Valorant_2026-11-14_20-00.mp4', projectId: 'p_m', jobId: 'j1' }
+  })
+  const all = [...list, montage]
+  const base = { query: '', favoriteOnly: false, game: 'all' as const }
+
+  test('are grouped with recordings (made by the app), never with imports', () => {
+    expect(isAppMade(montage)).toBe(true)
+    expect(isAppMade({ source: 'external' })).toBe(false)
+    expect(isAppMade({})).toBe(false)
+    expect(filterEntries(all, { ...base, kind: 'recording' }).map((e) => e.path)).toContain(montage.path)
+    expect(filterEntries(all, { ...base, kind: 'external' }).map((e) => e.path)).not.toContain(montage.path)
+    // Legacy entries without a source still count as imported.
+    expect(filterEntries(all, { ...base, kind: 'external' }).map((e) => e.path)).toContain('D:/rec/other_game_10-14.mp4')
   })
 })

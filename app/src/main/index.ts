@@ -14,9 +14,10 @@ import { registerIpcHandlers } from './ipc-handlers'
 import { createCloseGate } from './project-ipc'
 import { currentE2EConfig } from './e2e'
 import { applyWindowSecurity } from './window-security'
+import { applyAppUserModelId } from './app-identity'
 import { sanitizeAnalyzeArgs, sanitizeAutoclipArgs, sanitizeProbeArgs } from './ipc-guards'
 import { aditorrecCommand, appDataDir, cacheDir, chromiumUserDataDir, engineCommand, ffmpegExecutable, liveEngineCommand, obsHookDir, profileDir, sceneDir } from '../shared/paths'
-import { cacheFilePath } from './cache-io'
+import { cacheFilePath, loadCacheDoc, resolveCacheFile } from './cache-io'
 import { generateThumbnail, cancelAllThumbnails } from './thumbnail'
 import { createRecordingService } from './recording'
 import { registerRecordingIpc } from './recording-ipc'
@@ -28,12 +29,21 @@ import { obsPassword } from './settings-ipc'
 import { createDiagnosticLog } from './recording/diagnostic-log'
 import { canAutoUpdate, createAppUpdater, loadAutoUpdater, type AppUpdaterService } from './updater'
 import { broadcastUpdateStatus, registerUpdateIpc } from './update-ipc'
+import fs from 'fs'
+import { createMontageService, type MontageService } from './montage/montage-service'
+import { MontageJobStore } from './montage/montage-job'
+import { cleanupMontageOutput, createMontageRenderer, createOutputProbe } from './montage/montage-export'
+import { broadcastMontageStatus, registerMontageIpc } from './montage/montage-ipc'
+import { diskFreeBytes } from './recording/disk'
+import type { CacheDoc, Clip } from '../shared/types'
 
 // E2E hooks (ADITOR_E2E=1 only): use temporary appData/userData so tests do not touch user data; null in production.
 const e2e = currentE2EConfig()
 if (e2e?.appData) process.env.APPDATA = e2e.appData
 // Must be set before ready: the default userData Cache and analysis cache use the same directory (see chromiumUserDataDir).
 app.setPath('userData', chromiumUserDataDir())
+// Windows toasts and taskbar grouping need the installer's appId; set it before any notification or window exists.
+applyAppUserModelId(app)
 // Library videos, thumbnails and proxies reach the renderer only through this scheme (never file://); must be registered before ready.
 protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: MEDIA_SCHEME_PRIVILEGES }])
 
@@ -55,6 +65,7 @@ let tray: ReturnType<typeof createRecordingTray> | null = null
 let unregisterRecordingIpc: (() => void) | null = null
 let unsubscribeSettings: (() => void) | null = null
 let appUpdater: AppUpdaterService | null = null
+let montageService: MontageService | null = null
 let quitting = false
 /** Currently active interface language (from the `language` setting; English by default, `auto` follows the Windows display language). */
 let locale: Locale = 'en'
@@ -223,9 +234,80 @@ async function initEngineAndServices(): Promise<void> {
       }
     }
   }
+  // Auto montage: one montage per analyzed VALORANT match, exported in the background independently of the UI export slot.
+  // Game presence comes from the shared poll; unknown (before the first poll) counts as running.
+  let gameRunning: boolean | null = null
+  const recordingLog = createDiagnosticLog(join(appDataDir(), 'recording.log'))
+  const montage = createMontageService({
+    store: new MontageJobStore(join(appDataDir(), 'montage', 'jobs.json')),
+    getSettings: () => {
+      const s = settingsStore!.get()
+      return {
+        montage: s.recording.autoMontage,
+        autoclip: s.autoclip,
+        diskWarnGb: s.recording.diskWarnGb,
+        diskStopGb: s.recording.diskStopGb,
+        storageRoot: s.storageRoot ?? join(app.getPath('videos'), 'Valorant Editor')
+      }
+    },
+    library: {
+      get: (videoPath) => library!.get(videoPath),
+      hasMontage: (jobId) => library!.hasMontage(jobId),
+      addMontage: (outputPath, info, extra) => {
+        library!.addMontage(outputPath, info, extra)
+        pushLibrary()
+        void generateThumbnail(outputPath, extra.durationSec).then((thumb) => {
+          if (thumb && library!.update(outputPath, { thumb })) pushLibrary()
+        }, (error) => console.error('Failed to generate montage thumbnail:', error))
+      }
+    },
+    saveProject: (project) => projectStore.save(project),
+    loadProject: (id) => projectStore.load(id),
+    readCache: (videoPath) => loadCacheDoc(resolveCacheFile(videoPath, cacheDir(), settingsStore!.get().cacheLocation === 'besideVideo')) as CacheDoc | null,
+    autoclip: async (events, params, duration) => {
+      const res = (await engineClient!.request('autoclip', { events, params, duration }).promise) as { clips?: Clip[] } | null
+      return Array.isArray(res?.clips) ? res.clips : []
+    },
+    render: createMontageRenderer(),
+    probeOutput: createOutputProbe(),
+    diskFree: (dir) => diskFreeBytes(dir),
+    fileExists: (file) => {
+      try {
+        return fs.statSync(file).isFile()
+      } catch {
+        return false
+      }
+    },
+    ensureDir: (dir) => {
+      fs.mkdirSync(dir, { recursive: true })
+    },
+    cleanupOutput: cleanupMontageOutput,
+    // Same path as deleting from the library: stop analysis of the file, then remove the entry and its recording.
+    removeSource: async (videoPath) => {
+      const entry = library!.get(videoPath)
+      if (!entry || entry.source !== 'recording') return
+      await queue!.withStoppedAnalysis([videoPath], () => library!.remove(videoPath))
+      pushLibrary()
+    },
+    notify: (kind, message) => notify(kind, message),
+    now: () => Date.now(),
+    isGameRunning: () => gameRunning !== false,
+    isRecording: () => {
+      const status = recordingService?.status()
+      return status?.phase === 'starting' || status?.phase === 'recording' || status?.obsRecording === true
+    },
+    onStatus: (status) => broadcastMontageStatus(BrowserWindow.getAllWindows(), status),
+    log: (message) => recordingLog(message)
+  })
+  montageService = montage
+  queue.on('analyzed', (videoPath: string, game) => montage.onMatchAnalyzed(videoPath, game))
+  queue.on('analysisFailed', (videoPath: string, _game: unknown, error: string) => montage.onAnalysisFailed(videoPath, error))
+  const unregisterMontageIpc = registerMontageIpc(ipcMain, montage)
+  const unsubscribeMontage = settingsStore.onChange(() => montage.onSettingsChanged())
+
   recordingService = createRecordingService({
     onDiagnostic: reportChildDiagnostic,
-    log: createDiagnosticLog(join(appDataDir(), 'recording.log')),
+    log: recordingLog,
     getSettings: () => settingsStore!.get().recording,
     getObsPassword: () => obsPassword(settingsStore!.get().recording, safeStorage),
     probeVideo: async (file) => engineClient!.request('probe', sanitizeProbeArgs(file)).promise as Promise<import('../shared/types').VideoInfo>,
@@ -243,7 +325,14 @@ async function initEngineAndServices(): Promise<void> {
     enqueueAnalysis: (videoPath) => queue!.enqueue(videoPath),
     notify,
     onGameExit: () => showMainWindow(),
-    onGameRunning: (running) => queue!.setGameRunning(running),
+    onGameRunning: (running) => {
+      gameRunning = running
+      queue!.setGameRunning(running)
+      montage.setGameRunning(running)
+    },
+    onMatchRecorded: (videoPath, game) => montage.onMatchRecorded(videoPath, game),
+    onMatchAnalyzed: (videoPath, game) => montage.onMatchAnalyzed(videoPath, game),
+    onGameClosed: () => montage.onGameClosed(),
     liveEngineCommand: liveEngineCommand(app.isPackaged),
     sceneDir: sceneDir(app.isPackaged),
     liveCachePath: (videoPath) => cacheFilePath(videoPath, cacheDir(), settingsStore!.get().cacheLocation === 'besideVideo'),
@@ -298,11 +387,15 @@ async function initEngineAndServices(): Promise<void> {
   unsubscribeSettings = () => {
     unsubscribeLogin()
     unsubscribeLanguage()
+    unsubscribeMontage()
+    unregisterMontageIpc()
     updater.stop()
     unregisterUpdateIpc()
   }
   // E2E does not detect real Apex to avoid interacting with a game running during tests.
   if (!e2e) recordingService.start()
+  // Resume interrupted montage jobs (leftover partial files are removed) and run queued ones.
+  montage.start()
 
   ipcMain.handle('engine:probe', async (_, videoPath: unknown) => {
     return engineClient?.request('probe', sanitizeProbeArgs(videoPath)).promise
@@ -336,6 +429,7 @@ const quitGuard = createAppQuitGuard({
   stopEngine: () => engineClient?.stop(),
   cancelExport: () => cancelExport?.(),
   cancelProxies: async () => (await import('./proxy')).cancelAllProxies(),
+  cancelMontage: () => montageService?.shutdown(),
   cancelThumbnails: () => cancelAllThumbnails(),
   stopWatcher: () => watchManager?.stop(),
   installUpdate: () => appUpdater?.installIfRequested() ?? false,

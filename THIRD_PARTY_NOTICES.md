@@ -81,7 +81,7 @@ This project, Aditor, incorporates or interacts with several third-party open-so
 ## 8. Lato and Montserrat (Bundled Fonts)
 
 - **License**: SIL Open Font License, Version 1.1 (OFL-1.1) — full text below.
-- **Files**: Latin-subset woff2 files (Lato Regular/Bold, Montserrat Bold/Black), copied unmodified from the npm packages `@fontsource/lato` 5.3.0 and `@fontsource/montserrat` 5.3.0, under `app/src/renderer/assets/fonts/`. CJK text uses system fonts; nothing is downloaded at runtime.
+- **Files**: Latin-subset woff2 files (Lato Regular/Bold, Montserrat Bold/Black), copied unmodified from the npm packages `@fontsource/lato` 5.3.0 and `@fontsource/montserrat` 5.3.0, under `app/src/renderer/assets/fonts/`; an identical copy of Montserrat Black is under `templates/montage/` (montage captions and title cards, rendered offline). CJK text uses system fonts; nothing is downloaded at runtime.
 - **Lato**: Copyright (c) 2010-2011 by tyPoland Lukasz Dziedzic (team@latofonts.com) with Reserved Font Name "Lato". Licensed under the SIL Open Font License, Version 1.1.
 - **Montserrat**: Copyright 2011 The Montserrat Project Authors (https://github.com/JulietaUla/Montserrat).
 

@@ -47,7 +47,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Option<Command>> 
             &[],
             &["--shm", "--profile-dir"],
         ),
-        "debug-valorant-feed" => (&["--profile-dir"], &[], &["--profile-dir"]),
+        "debug-valorant-feed" => (&["--profile-dir", "--dump-dir"], &[], &["--profile-dir"]),
         "debug-benchmark" => (
             &["--profile-dir", "--start", "--seconds"],
             &["--no-hwaccel", "--decode-only"],

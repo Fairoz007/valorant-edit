@@ -1,4 +1,16 @@
 import { tr } from '../../shared/locale'
+import type { ClipEffect, ClipOverlay, MontageStyle, MusicBed, TitleCard, TransitionKind } from '../../shared/autoEdit'
+import type { PresetId } from '../../shared/exportFormat'
+import { validProjectItemStyle, validProjectStyle } from '../../shared/autoEditProject'
+
+/**
+ * Project schema version. v2 (Auto edit) adds optional per-item speed, gain, effects, overlay and transition, and an
+ * optional project-level style, music bed, intro/outro and letterbox. v1 files are migrated on load (`migrateProject`);
+ * they have none of the optional fields, so the migration only changes the version number.
+ */
+export const PROJECT_VERSION = 2
+export type ProjectVersion = 1 | 2
+
 export interface ProjectItem {
   id: string
   source: string
@@ -6,17 +18,46 @@ export interface ProjectItem {
   end: number
   /** Highlight this item was added from; while no other item claims it, the highlight mirrors this item's range. */
   clipId?: string
+  /** v2: playback speed 0.25..2 (default 1). */
+  speed?: number
+  /** v2: linear game-audio gain 0..2 (default 1). */
+  gain?: number
+  /** v2: slow-mo / zoom punch / flash, in source seconds. */
+  effects?: ClipEffect[]
+  /** v2: caption burned in over the item. */
+  overlay?: ClipOverlay
+  /** v2: transition from the previous item (default cut). */
+  transitionIn?: TransitionKind
+  transitionSec?: number
 }
 
-export interface Project {
-  version: 1
+/** v2 project-level montage styling (all optional; absent = plain concat as in v1). */
+export interface ProjectStyle {
+  style?: MontageStyle
+  music?: MusicBed
+  intro?: TitleCard
+  outro?: TitleCard
+  letterbox?: boolean
+  /** Output preset chosen in the Auto edit dialog ('source' keeps the source frame); the export drawer starts from it. */
+  presetId?: PresetId | 'source'
+}
+
+export interface Project extends ProjectStyle {
+  /** Files on disk may be v1; everything created or migrated in memory is `PROJECT_VERSION`. */
+  version: ProjectVersion
   name: string
   items: ProjectItem[]
 }
 
+/** v1 → v2 (idempotent). Unknown/newer versions are returned unchanged (`projectShapeError` reports them). */
+export function migrateProject<T extends { version?: unknown }>(data: T): T {
+  if (data && typeof data === 'object' && data.version === 1) return { ...data, version: PROJECT_VERSION }
+  return data
+}
+
 export function createProject(name = 'New Project', items: ProjectItem[] = []): Project {
   return {
-    version: 1,
+    version: PROJECT_VERSION,
     name,
     items
   }
@@ -158,10 +199,11 @@ export type ProjectShapeError = { kind: 'unsupported' | 'format'; message: strin
 export function projectShapeError(data: unknown): ProjectShapeError | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { kind: 'format', message: tr('不是專案物件') }
   const d = data as Record<string, unknown>
-  if (typeof d.version === 'number' && d.version > 1) {
+  if (typeof d.version === 'number' && d.version > PROJECT_VERSION) {
     return { kind: 'unsupported', message: tr('不支援的專案版本 {version}（unsupported version）', { version: d.version }) }
   }
-  if (d.version !== 1) return { kind: 'format', message: tr('版本欄位無效') }
+  if (d.version !== 1 && d.version !== 2) return { kind: 'format', message: tr('版本欄位無效') }
+  if (!validProjectStyle(d)) return { kind: 'format', message: tr('版本欄位無效') }
   if (typeof d.name !== 'string') return { kind: 'format', message: tr('name 必須是字串') }
   if (!Array.isArray(d.items)) return { kind: 'format', message: tr('items 必須是陣列') }
   for (const [i, it] of d.items.entries()) {
@@ -177,7 +219,8 @@ export function projectShapeError(data: unknown): ProjectShapeError | null {
       Number.isFinite(x.start) &&
       typeof x.end === 'number' &&
       Number.isFinite(x.end) &&
-      (x.clipId === undefined || typeof x.clipId === 'string')
+      (x.clipId === undefined || typeof x.clipId === 'string') &&
+      validProjectItemStyle(x)
     if (!ok) return { kind: 'format', message: tr('items[{i}] 格式不符', { i }) }
   }
   return null

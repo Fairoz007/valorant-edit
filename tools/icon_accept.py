@@ -17,7 +17,10 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-from engine_cli import analyze
+# `py -3 -I` drops the script folder from sys.path; put it back so the sibling module resolves.
+if str(ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools"))
+from engine_cli import analyze  # noqa: E402
 
 PM = {"knock": "K", "assist_knock": "A", "assist_elim": "A"}
 SC1 = [(312.25, "K"), (315.0, "K"), (334.0, "K"), (354.5, "K"), (577.75, "K"), (672.75, "K"), (685.25, "K"),

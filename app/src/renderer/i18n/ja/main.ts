@@ -18,7 +18,9 @@ export const i18n: Messages['i18n'] = {
     videoFilter: '動画ファイル',
     selectFolderTitle: '録画が入っているフォルダーを選択',
     addWatchFolderTitle: '監視するフォルダーを選択（新しい動画は自動で取り込み）',
-    selectOutDirTitle: '書き出し先のフォルダーを選択'
+    selectOutDirTitle: '書き出し先のフォルダーを選択',
+    selectMusicTitle: 'BGM を選択',
+    audioFilesFilter: 'オーディオファイル'
   },
   library: {
     title: 'ライブラリ',
@@ -103,7 +105,10 @@ export const i18n: Messages['i18n'] = {
       deleteSource: '元ファイルを削除',
       removeFromLibrary: 'ライブラリから削除',
       cancel: 'キャンセル',
-      removeFailed: '元の動画ファイルを削除できませんでした。アクセス権限や使用中でないかを確認してください。'
+      removeFailed: '元の動画ファイルを削除できませんでした。アクセス権限や使用中でないかを確認してください。',
+      montageTag: 'モンタージュ',
+      montageRemoveConfirm: 'モンタージュ「{name}」をライブラリから削除しますか？ファイルはディスクに残り、元の録画とプロジェクトには影響しません。',
+      montageOpenFailed: 'このモンタージュのプロジェクトを開けませんでした。'
     },
     selection: {
       select: '{name} を選択',
@@ -120,7 +125,11 @@ export const i18n: Messages['i18n'] = {
       deleteChoiceRecordingNote: '録画した動画の元ファイルは常に削除されます。',
       deleteSources: '元ファイルを削除',
       removeFromLibraryOnly: 'ライブラリからのみ削除',
-      deleteFailed: '{n} 本の動画を削除できませんでした。ファイルのアクセス権限や使用中でないかを確認してください。'
+      deleteFailed: '{n} 本の動画を削除できませんでした。ファイルのアクセス権限や使用中でないかを確認してください。',
+      autoEdit: '自動編集',
+      autoEditHint: '分析済みの動画を 1 本以上選択してください',
+      montageRemoveManyConfirm: '{n} 本のモンタージュをライブラリから削除しますか？ファイルはディスクに残ります。',
+      montageNote: 'モンタージュはライブラリから削除されるだけで、ファイルはディスクに残ります。'
     }
   },
   queue: {
@@ -564,5 +573,82 @@ export const i18n: Messages['i18n'] = {
     preview: 'プレビュー',
     previewCurrent: '現在のフレーム',
     previewNone: 'プレビュー画像なし'
+  },
+  autoEdit: {
+    open: '自動編集',
+    title: '自動編集',
+    intro: '検出したキルから編集可能なハイライトプロジェクトを作成します。',
+    sources: '元の動画',
+    sourcesHint: '録画順',
+    sourceLoading: '分析結果を読み込み中…',
+    sourceFailed: '分析結果を読み込めませんでした',
+    sourceKills: 'キル {n}',
+    addOthers: 'ほかの分析済み動画を追加',
+    noOthers: 'ほかに分析済みの動画はありません',
+    addSameDay: 'この日の動画をすべて追加',
+    target: '目標の長さ',
+    targetAll: 'すべて',
+    targetCustom: 'カスタム',
+    targetCustomLabel: 'カスタムの長さ（秒、または 分:秒）',
+    targetCustomHint: '{min} 秒～{max} 分',
+    targetInvalid: '{min} 秒～{max} 分の長さを入力してください',
+    style: 'スタイル',
+    styles: {
+      clean: 'クリーン',
+      cinematic: 'シネマティック',
+      hype: 'ハイプ',
+      shorts: 'ショート'
+    },
+    styleDesc: {
+      clean: 'そのままカット、エフェクトなし。',
+      cinematic: '黒へのディップ、最後のキルをスローモーション、レターボックス、タイトルとエンドカード。',
+      hype: '白へのディップ、キル時のズームとフラッシュ、音楽があればビートに合わせてカット。',
+      shorts: '縦型 9:16、大きな字幕、最長 60 秒。'
+    },
+    slowMoSilent: 'スローモーション部分はゲーム音声なしで再生されます。',
+    styleCap: '{style}は最長 {sec} 秒のため、目標の長さが短くなります。',
+    music: '音楽',
+    musicLabel: '音楽ファイルのパス（任意）',
+    musicPlaceholder: '音楽ファイルのフルパスを貼り付け',
+    musicBrowse: '参照…',
+    musicClear: '音楽をクリア',
+    musicHint: '対応形式: .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi（同梱の FFmpeg は MP3・WAV・FLAC を読み込めません）。',
+    deaths: '自分のデスで終わるクリップも残す',
+    output: '出力形式',
+    presets: {
+      source: 'オリジナル',
+      youtube: 'YouTube',
+      shorts: 'Shorts',
+      tiktok: 'TikTok',
+      reels: 'Reels',
+      square: 'スクエア'
+    },
+    presetForced: '{style}は常に縦型 9:16 で出力するため、ほかの形式は選べません。',
+    estimate: '{n} クリップ · {len} · 約 {size}',
+    estimating: '計算中…',
+    emptyNoKills: '選択した動画にキルが見つかりません',
+    emptyNoSelection: '動画を 1 本以上選択してください',
+    warnings: '注意',
+    create: '作成',
+    creating: '作成中…',
+    cancel: 'キャンセル',
+    createFailed: 'プロジェクトを作成できませんでした。もう一度お試しください。',
+    defaultName: '自動編集 · {style} · {date}',
+    badges: 'エフェクト',
+    badge: {
+      slowmo: 'スロー',
+      zoomPunch: 'ズーム',
+      flash: 'フラッシュ',
+      transition: 'ディップ'
+    },
+    badgeAria: {
+      slowmo: 'スローモーション ×{speed}',
+      zoomPunch: 'ズームパンチ',
+      flash: 'フラッシュ',
+      caption: '字幕：{text}',
+      speed: '速度 ×{speed}',
+      dipBlack: '黒へのディップ',
+      dipWhite: '白へのディップ'
+    }
   }
 }

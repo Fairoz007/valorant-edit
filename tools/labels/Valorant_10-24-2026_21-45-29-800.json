@@ -1,0 +1,24 @@
+{
+ "clip": "Valorant_10-24-2026_21-45-29-800.mp4",
+ "source": "960x720 30 fps Outplayed highlight clip (H.264 ~6 Mbps)",
+ "method": "Labelled by eye. Frames decoded read-only with OpenCV (the bundled FFmpeg build has no PNG encoder, tile or drawtext); timestamps are packet PTS from ffprobe minus the first frame's PTS. Kill-feed crop sampled every 0.5 s into 3x6 contact sheets (1.4x upscale, timestamp drawn on each tile) and every sheet was viewed; each own row was then pinned with a per-frame (1/30 s) strip of a tighter crop (x=640,y=55,w=320,h=60, 1.5x). t = first frame on which the row is visible, which is the solid-colour slide-in bar that precedes the full row by ~2 frames. Own rows = rows with the yellow outline/chevron on the player's side. Detector output was not consulted and no detector was run. A wider crop (x=500,w=460,h=130) every 1.5 s from 9.5 s to 46 s was also checked, because long names push rows left. After dying at ~7.3 s the player spectates teammate <player> for the rest of the clip. The later rows (<player>-><player>, <player>-><player>, <player>-><player>, <player>->Jett, <player>-><player>, <player>-><player>, <player>-><player>, <player>-><player>) do not involve 'Me' and have no yellow outline, so they are not labelled. Some of them have small assist portraits on the left; assists are not events.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "crop": {
+  "x": 600,
+  "y": 55,
+  "w": 360,
+  "h": 180
+ },
+ "events": [
+  {
+   "t": 7.27,
+   "type": "death",
+   "killer": "<player> (Cypher)",
+   "victim": "Me (Me, Neon)",
+   "confidence": "high",
+   "note": "Rifle, headshot icon; 'KILLED BY CYPHER' banner. Slide-in 7.267, full row 7.333."
+  }
+ ],
+ "anonymized": "Player gamertags replaced: the recording player is 'Me', everyone else '<player>'."
+}

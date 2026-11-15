@@ -190,6 +190,10 @@ const api = {
       }
     }
   },
+  autoEdit: {
+    /** Native open dialog for the Auto edit music bed; resolves to the chosen path or null. */
+    selectMusic: (): Promise<string | null> => ipcRenderer.invoke('autoEdit:selectMusic')
+  },
   export: {
     detectEncoders: () => ipcRenderer.invoke('export:detectEncoders'),
     selectOutDir: () => ipcRenderer.invoke('export:selectOutDir'),

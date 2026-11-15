@@ -2,6 +2,35 @@ mod common;
 use aditor::ffbin;
 use common::TempDir;
 #[test]
+fn debug_builds_search_the_pinned_build_folder_before_path() {
+    let dirs = ffbin::bundled_dirs();
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    assert_eq!(dirs[0], manifest.join("ffmpeg"));
+    // Tests run a debug build, so the pinned FFmpeg from scripts/fetch-ffmpeg.ps1 is found without PATH.
+    assert_eq!(dirs[1], manifest.join("..").join("build").join("ffmpeg"));
+}
+#[test]
+fn find_in_tries_bundled_folders_in_order() {
+    // No PATH or environment changes here, so this runs in-process; the override variable is one nobody sets.
+    let d = TempDir::new();
+    let exe = if cfg!(windows) { "tool.exe" } else { "tool" };
+    let (first, second) = (d.0.join("first"), d.0.join("second"));
+    std::fs::create_dir_all(first.join("bin")).unwrap();
+    std::fs::create_dir_all(second.join("bin")).unwrap();
+    let dirs = [first.clone(), second.clone()];
+    let var = "ADITOR_FFBIN_TEST_UNSET_OVERRIDE";
+    std::fs::write(second.join("bin").join(exe), []).unwrap();
+    assert_eq!(
+        ffbin::find_in(var, "tool", &dirs).unwrap(),
+        second.join("bin").join(exe)
+    );
+    std::fs::write(first.join("bin").join(exe), []).unwrap();
+    assert_eq!(
+        ffbin::find_in(var, "tool", &dirs).unwrap(),
+        first.join("bin").join(exe)
+    );
+}
+#[test]
 fn explicit_missing_override_and_lookup_order() {
     // Run environment-sensitive checks in a child so parallel ffmpeg tests keep their environment.
     if std::env::var_os("ADITOR_FFBIN_TEST_CHILD").is_some() {

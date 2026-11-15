@@ -16,6 +16,8 @@ import {
 } from '../../shared/exportFormat'
 import { applyPreset, maxSecondsFor, sourceFormat, trimItemsToSeconds } from '../../shared/exportPresets'
 import { clampOffset } from '../../shared/reframe'
+import type { ProjectItem, ProjectStyle } from '../editor/project'
+import { projectHasStyling } from '../../shared/autoEditProject'
 
 /**
  * Export drawer state machine (pure TS, no React/DOM dependency; window.api is injected for testing with a fake API).
@@ -27,6 +29,40 @@ export interface ExportItem {
   source: string
   start: number
   end: number
+  /** v2 styling (Auto edit); sent only when present. */
+  speed?: ProjectItem['speed']
+  gain?: ProjectItem['gain']
+  effects?: ProjectItem['effects']
+  overlay?: ProjectItem['overlay']
+  transitionIn?: ProjectItem['transitionIn']
+  transitionSec?: ProjectItem['transitionSec']
+}
+
+/** Export items for a project: range plus the v2 styling fields that are set (unstyled projects send exactly what v1 sent). */
+export function exportItemsFrom(project: { items: ProjectItem[] }): ExportItem[] {
+  return project.items.map((i) => {
+    const out: ExportItem = { id: i.id, source: i.source, start: i.start, end: i.end }
+    if (i.speed !== undefined) out.speed = i.speed
+    if (i.gain !== undefined) out.gain = i.gain
+    if (i.effects !== undefined) out.effects = i.effects
+    if (i.overlay !== undefined) out.overlay = i.overlay
+    if (i.transitionIn !== undefined) out.transitionIn = i.transitionIn
+    if (i.transitionSec !== undefined) out.transitionSec = i.transitionSec
+    return out
+  })
+}
+
+/** v2 project-level styling sent with `export:start` (only the fields that are set). */
+function styleFields(style: ProjectStyle | undefined): ProjectStyle {
+  if (!style) return {}
+  const out: ProjectStyle = {}
+  if (style.style !== undefined) out.style = style.style
+  if (style.music !== undefined) out.music = style.music
+  if (style.intro !== undefined) out.intro = style.intro
+  if (style.outro !== undefined) out.outro = style.outro
+  if (style.letterbox !== undefined) out.letterbox = style.letterbox
+  if (style.presetId !== undefined) out.presetId = style.presetId
+  return out
 }
 
 export interface ExportApi {
@@ -169,6 +205,7 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
   }
   const listeners = new Set<() => void>()
   let lastItems: ExportItem[] | null = null
+  let lastStyle: ProjectStyle | undefined
   let offProgress: (() => void) | null = null
   let offH264: (() => void) | null = null
   let diskRequestId = 0
@@ -343,7 +380,8 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     await refreshDisk(dir)
   }
 
-  async function start(items: ExportItem[]): Promise<void> {
+  /** `style`: the project's v2 styling (Auto edit); a styled concat export renders through main's montage stage. */
+  async function start(items: ExportItem[], style?: ProjectStyle): Promise<void> {
     if (state.phase === 'running') return
     const s = state.settings
     if (!s.outDir) {
@@ -352,13 +390,16 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
     }
     if (state.outDirError) return // Output-directory validation failed; use the same condition as the disabled button and do not send export:start.
     lastItems = items
+    lastStyle = style
     flushPersist()
     const format = effectiveFormat(s.format, state.encoders, state.detected)
     // "Export only the first N seconds": N is the selected preset's limit (Original/Custom have none, so nothing is trimmed).
     const limit = s.trimToLimit ? maxSecondsFor(format) : null
     const sentItems = limit !== null ? trimItemsToSeconds(items, limit, s.mode) : items
     // Stream copy cannot reframe, rescale, change fps or codec: ask for precise explicitly (main enforces the same rule).
-    const quality = formatRequiresPrecise(format) ? 'precise' : s.quality
+    // Styled projects (Auto edit) always go through the montage stage, which re-encodes.
+    const styled = projectHasStyling({ items: items as ProjectItem[], ...styleFields(style) })
+    const quality = formatRequiresPrecise(format) || styled ? 'precise' : s.quality
     const startedAt = Date.now()
     set({ phase: 'running', progress: { percent: 0, jobIndex: 0, totalJobs: 1, outTimeSeconds: 0 }, result: null })
     offProgress = api.onProgress((d) => {
@@ -382,7 +423,8 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
         encoder: s.encoder || undefined,
         outDir: s.outDir,
         baseName: s.baseName,
-        format
+        format,
+        ...styleFields(style)
       })
     } catch (e) {
       res = { ok: false, error: errMsg(e), outputs: [] }
@@ -413,7 +455,7 @@ export function createExportController(api: ExportApi, initialName = 'highlight'
   function retry(): Promise<void> {
     if (!lastItems) return Promise.resolve()
     set({ phase: 'settings' })
-    return start(lastItems)
+    return start(lastItems, lastStyle)
   }
 
   /** Actual output directory: mode-specific subfolder (Merged/Clips) under the user's outDir; null when outDir is empty. */

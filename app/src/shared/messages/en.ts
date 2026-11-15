@@ -266,7 +266,27 @@ const messages: MessageTable = {
   '無法建立輸出子資料夾': 'Could not create the export subfolder.',
   '無法選擇資料夾，請再試一次。': 'Could not choose a folder. Please try again.',
   '無法儲存設定，請再試一次。': 'Could not save the setting. Please try again.',
-  '實際會存到：{path}': 'Will be saved to: {path}'
+  '實際會存到：{path}': 'Will be saved to: {path}',
+
+  // Auto montage (main process)
+  '找不到可用的影片編碼器，無法製作精華合輯': 'No working video encoder was found, so the montage could not be made.',
+  '匯出沒有產生輸出檔': 'The export did not produce an output file.',
+  '無法讀取精華合輯檔案': 'Could not read the montage file.',
+  '精華合輯檔案缺少影像或聲音': 'The montage file is missing its video or audio.',
+  '精華合輯長度不符（{actual} 秒，預期 {expected} 秒）': 'The montage length does not match ({actual} s, expected {expected} s).',
+  '精華合輯製作失敗：{error}': 'The montage could not be made: {error}',
+  '音樂檔案路徑無效（支援 .m4a、.mp4、.mov、.mkv、.mka、.webm、.avi）': 'The music file path is not valid (supported: .m4a, .mp4, .mov, .mkv, .mka, .webm, .avi)',
+  '找不到音樂檔案': 'The music file was not found',
+  '套用風格的精華影片需要影片編碼器（精確匯出）': 'Styled montages need a video encoder (precise export)',
+  '磁碟空間不足，已略過這場對局的精華合輯': 'Low disk space: the montage for this match was skipped',
+  '找不到這場對局的分析結果': 'The analysis results for this match could not be found.',
+  '無法挑選精華片段：{error}': 'Could not pick the highlights: {error}',
+  '無法建立精華合輯資料夾：{error}': 'Could not create the montage folder: {error}',
+  '精華合輯 – {name}': 'Montage – {name}',
+  '無法儲存精華合輯專案：{error}': 'Could not save the montage project: {error}',
+  '精華合輯檢查未通過：{reason}': 'The montage failed its final check: {reason}',
+  '無法把精華合輯加入媒體庫：{error}': 'Could not add the montage to the library: {error}',
+  '精華合輯完成：{count} 個片段，{duration}': 'Montage ready — {count} clips, {duration}'
 }
 
 export default messages

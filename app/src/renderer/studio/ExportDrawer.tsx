@@ -10,7 +10,7 @@ import { presetState } from '../../shared/exportPresets'
 import type { ReframeGeometry, Size } from '../../shared/reframe'
 import { totalDuration, Project } from '../editor/project'
 import { Check, ChevronDown, Copy, Download, FolderOpen, AlertTriangle, X } from '../components/icons'
-import { ExportController, ExportItem, ExportState } from './exportController'
+import { ExportController, ExportItem, ExportState, exportItemsFrom } from './exportController'
 import {
   diskIsLow,
   ExportPlan,
@@ -507,7 +507,7 @@ export function ExportDrawer({ controller, project, base, onClose, videoRef, pre
   const stateRef = useRef(state)
   stateRef.current = state
 
-  const items: ExportItem[] = project.items.map((i) => ({ id: i.id, source: i.source, start: i.start, end: i.end }))
+  const items: ExportItem[] = exportItemsFrom(project)
   const s = state.settings
   const plan: ExportPlan | null = base ? { ...base, mode: s.mode, quality: s.quality } : null
   const vm = exportViewModel(
@@ -578,7 +578,7 @@ export function ExportDrawer({ controller, project, base, onClose, videoRef, pre
     browse: () => void controller.chooseOutDir(),
     start: () => {
       if (vm.openh264Required) void controller.setQuality('precise')
-      else if (vm.canStart) void controller.start(items)
+      else if (vm.canStart) void controller.start(items, project)
     },
     cancelExport: () => void controller.cancel(),
     close: closeNow,

@@ -75,7 +75,7 @@ export function testEncoder(
 
 function listEncoders(ffmpegBin: string): Promise<string[]> {
   return new Promise((resolve) => {
-    const proc = spawn(ffmpegBin, ['-encoders'])
+    const proc = spawn(ffmpegBin, ['-encoders'], { windowsHide: true })
     let stdout = ''
     proc.stdout?.on('data', (d) => {
       stdout += d.toString()

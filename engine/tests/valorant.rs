@@ -145,6 +145,12 @@ fn own_rows_on_compressed_footage_are_confirmed() {
         confirmed("valorant_feed/own_kill_lone_chevron.png"),
         [(1, "kill".into())]
     );
+    // 960x720 Outplayed clip, 19.5 s: "wham007 -> player" death below a "Sage resurrects player" row and a teammate's
+    // death; only the real death counts.
+    assert_eq!(
+        confirmed("valorant_feed/own_death_below_resurrect.png"),
+        [(2, "death".into())]
+    );
 }
 
 #[test]
@@ -154,6 +160,9 @@ fn rows_that_are_not_the_players_are_rejected() {
         "valorant_feed/teammate_kill.png",
         "valorant_feed/enemy_kills_ally.png",
         "valorant_feed/clove_resurrect.png",
+        // 960x720 Outplayed clip, 16.5 s: Sage resurrects the player. Teal on both sides and the player's chevron on the
+        // right, like a death, but the "killer" is a teammate.
+        "valorant_feed/own_resurrect_by_sage.png",
         // Teammate kills with a yellow-bordered assist portrait left of the row.
         "valorant_feed/teammate_kill_assist_badge.png",
         "valorant_feed/teammate_kill_assist_badge_2.png",

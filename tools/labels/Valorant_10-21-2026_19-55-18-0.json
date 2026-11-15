@@ -1,0 +1,88 @@
+{
+ "clip": "Valorant_10-21-2026_19-55-18-0.mp4",
+ "source": "960x720 30 fps Outplayed highlight clip (H.264 ~6 Mbps)",
+ "method": "Labelled by eye. Frames decoded read-only with OpenCV (the bundled FFmpeg build has no PNG encoder, tile or drawtext); timestamps are packet PTS from ffprobe minus the first frame's PTS. Kill-feed crop sampled every 0.5 s into 3x6 contact sheets (1.4x upscale, timestamp drawn on each tile) and every sheet was viewed; each own row was then pinned with a per-frame (1/30 s) strip of a tighter crop (x=640,y=55,w=320,h=60, 1.5x). t = first frame on which the row is visible, which is the solid-colour slide-in bar that precedes the full row by ~2 frames. Own rows = rows with the yellow outline/chevron on the player's side. Detector output was not consulted and no detector was run. Game mode looks like a 1v1 deathmatch-style mode ('FINAL STAGE' header): every row in the clip is between the player 'Me' and the opponent '<player>', and every one is an own row. Each row stays ~5 s and only one row is ever on screen. Both portraits look like Chamber; the death banners read 'KILLED BY CHAMBER'.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "crop": {
+  "x": 600,
+  "y": 55,
+  "w": 360,
+  "h": 180
+ },
+ "events": [
+  {
+   "t": 0.0,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Chamber)",
+   "confidence": "low",
+   "note": "Row (shotgun icon) is already on screen at the first frame and gone by 0.6 s, so it is the tail of a row that appeared ~4.5 s before the clip starts; the kill itself is not in the clip. Kept so a detector that reports it at 0 is not penalised; drop it if pre-roll rows should not count."
+  },
+  {
+   "t": 7.6,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Chamber)",
+   "confidence": "high",
+   "note": "Rifle, headshot icon. Slide-in bar at 7.600, full row 7.667."
+  },
+  {
+   "t": 15.06,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Chamber)",
+   "confidence": "high",
+   "note": "Rifle, headshot icon, 'III' streak pill. Slide-in 15.059, full row 15.125."
+  },
+  {
+   "t": 24.4,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Chamber)",
+   "confidence": "high",
+   "note": "Pistol icon, 'IV' streak pill. Slide-in 24.402, full row 24.469."
+  },
+  {
+   "t": 31.08,
+   "type": "death",
+   "killer": "<player> (Chamber)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Pistol icon; 'KILLED BY CHAMBER' banner follows. Slide-in 31.084, full row 31.151."
+  },
+  {
+   "t": 41.23,
+   "type": "death",
+   "killer": "<player> (Chamber)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Operator (sniper) icon. Slide-in 41.227, full row 41.294."
+  },
+  {
+   "t": 50.94,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Chamber)",
+   "confidence": "high",
+   "note": "Shotgun, headshot icon. Slide-in 50.944, full row 51.011."
+  },
+  {
+   "t": 60.41,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Chamber)",
+   "confidence": "high",
+   "note": "Rifle, headshot icon. Slide-in 60.411, full row 60.478."
+  },
+  {
+   "t": 67.43,
+   "type": "death",
+   "killer": "<player> (Chamber)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Rifle, headshot icon; 'KILLED BY CHAMBER' banner. Slide-in 67.425, full row 67.459."
+  }
+ ],
+ "anonymized": "Player gamertags replaced: the recording player is 'Me', everyone else '<player>'."
+}

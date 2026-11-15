@@ -8,7 +8,8 @@ import {
   sanitizeProbeArgs,
   sanitizeAutoclipArgs,
   sanitizeRemoveOptions,
-  planCacheSave
+  planCacheSave,
+  sanitizeMontageJobId
 } from './ipc-guards'
 import { cacheFilePath } from './cache-io'
 
@@ -70,5 +71,15 @@ describe('cache:save target (I1)', () => {
     expect(planCacheSave({ cache_path: 'x', video: { path: 'D:\\v\\b.mp4' } }, lib([]), dir, false)).toBeNull()
     expect(planCacheSave({ video: { path: 'http://x/a.mp4' } }, lib(['http://x/a.mp4']), dir, false)).toBeNull()
     expect(planCacheSave(null, lib([]), dir, false)).toBeNull()
+  })
+})
+
+describe('montage job id (montage:open / retry / cancel)', () => {
+  it('accepts only m_ + 16 lowercase hex chars', () => {
+    expect(sanitizeMontageJobId('m_0123456789abcdef')).toBe('m_0123456789abcdef')
+    for (const bad of ['', 'm_0123456789ABCDEF', 'm_0123', 'm_0123456789abcdef0', 'x_0123456789abcdef', ' m_0123456789abcdef',
+      'm_0123456789abcdef\n', '../m_0123456789abcdef', 42, null, undefined, {}, ['m_0123456789abcdef']]) {
+      expect(() => sanitizeMontageJobId(bad)).toThrow()
+    }
   })
 })

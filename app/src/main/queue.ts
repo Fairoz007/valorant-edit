@@ -253,6 +253,12 @@ export class AnalysisQueue extends EventEmitter {
         // Reanalysis completed: invalidate the old N highlights count and let lazy computation recalculate it.
         hl: undefined
       })
+      // Auto montage: results for this video are on disk (never emitted for cancelled or failed runs). Listener errors stay out of the queue.
+      try {
+        this.emit('analyzed', videoPath, gameOf(doc.game))
+      } catch (err) {
+        console.error('[Queue] analyzed listener failed:', err)
+      }
     } catch (err) {
       if (run.cancelled || (err instanceof EngineError && err.code === 'engine_stopped')) {
         // Interrupted runs remain pending, including jobs deferred until the game exits and runs cut off by quitting.
@@ -264,6 +270,12 @@ export class AnalysisQueue extends EventEmitter {
         } else {
           const msg = err instanceof Error ? err.message : String(err)
           this.library.update(videoPath, { status: 'error', error: msg, analyzingSince: undefined })
+        }
+        // Auto montage: a job waiting for this analysis must not stay in 'analyzing'. Listener errors stay out of the queue.
+        try {
+          this.emit('analysisFailed', videoPath, PRODUCT_GAME, this.library.get(videoPath)?.error ?? String(err))
+        } catch (listenerErr) {
+          console.error('[Queue] analysisFailed listener failed:', listenerErr)
         }
       }
     } finally {

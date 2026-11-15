@@ -3,6 +3,7 @@ import { concatCompatible, extraSecondsForCopy, StreamProbe, UNKNOWN_PROBE } fro
 import { estimateOutputBytes } from '../../shared/exportEstimate'
 import { concatRenderSpec, sourceSpec, type VideoSpec } from '../../shared/encodeQuality'
 import { DEFAULT_EXPORT_FORMAT, encodersForCodec, formatRequiresPrecise, type ExportFormat, type VideoCodec } from '../../shared/exportFormat'
+import { projectHasStyling } from '../../shared/autoEditProject'
 import { lengthWarning, maxSecondsFor, resolveOutputSpec, trimItemsToSeconds } from '../../shared/exportPresets'
 import { computeReframe, type ReframeGeometry, type Size } from '../../shared/reframe'
 import { effectiveFormat, hevcUnavailable } from './exportController'
@@ -146,7 +147,8 @@ export function exportViewModel(project: Project, plan: ExportPlan | null, enc: 
       compatReason = check.reason ?? ''
     }
   }
-  const formatNeedsPrecise = formatRequiresPrecise(format)
+  // Styled (Auto edit) projects are rendered by the montage stage, which always re-encodes, like a reframed format.
+  const formatNeedsPrecise = formatRequiresPrecise(format) || projectHasStyling(project)
   const copyAvailable = compatible && !formatNeedsPrecise
   // The format reason wins: it is the one the user just chose and can undo here.
   const copyReason = formatNeedsPrecise ? t.copyNeedsReencode : compatible ? null : t.qualityCopyUnavailable

@@ -22,6 +22,10 @@ import { i18n, settingsI18n } from '../i18n'
 import { AddEventDialog } from './AddEventDialog'
 import { Aside } from './Aside'
 import { AutoClipPopover } from './AutoClipPopover'
+import { AutoEditDialog } from './AutoEditDialog'
+import { DEFAULT_TUNING } from './autoEditModel'
+import { sourceFromDoc } from './useAutoEditSources'
+import type { ProjectWithId } from '../editor/projectIo'
 import { clipTitle, linkedClip, linkedItem, mirrorLinkedClips, nextSuggestion, withProjectStatus } from './highlights'
 import { HighlightsTab } from './HighlightsTab'
 import { NoticeBar } from './NoticeBar'
@@ -325,6 +329,30 @@ export function StudioScreen({ videoPath, onBack, onRegisterLeaveGuard, onVideoR
 
   const handleCloseExport = useCallback(() => setExportOpen(false), [])
 
+  /* ---------------- Auto edit (phase 2B.3): dialog hosted by OverlayHost; Create saves the project and opens it here. ---------------- */
+  const [autoEditOpen, setAutoEditOpen] = useState(false)
+  useEffect(() => {
+    if (!overlay.isOpen) setAutoEditOpen(false)
+  }, [overlay.isOpen])
+  const createAutoEdit = useCallback(async (next: ProjectWithId): Promise<boolean> => {
+    if ((await window.api?.projects?.save?.(next)) !== true) return false
+    return openProject(next.id)
+  }, [openProject])
+  const handleOpenAutoEdit = useCallback(() => {
+    if (exporting) return
+    setAutoEditOpen(true)
+    overlay.open(
+      <AutoEditDialog
+        origin="studio"
+        initialPaths={[videoPath]}
+        preloaded={[sourceFromDoc(videoPath, state.doc, undefined)]}
+        tuning={{ ...DEFAULT_TUNING, before: cfg.autoclip.before, after: cfg.autoclip.after }}
+        onClose={overlay.close}
+        onCreate={createAutoEdit}
+      />
+    )
+  }, [exporting, overlay, videoPath, state.doc, cfg.autoclip.before, cfg.autoclip.after, createAutoEdit])
+
   useStudioExport({
     exportCtl, exportState, exportOpen, exportOpenRef, setExportOpen, setExportBase, handleOpenExport, project, projectRef,
     missingItemIds, doc: state.doc, videoPath, loaded, toast
@@ -550,6 +578,8 @@ export function StudioScreen({ videoPath, onBack, onRegisterLeaveGuard, onVideoR
             bladeMode={bladeActive}
             onAutoClip={() => setAutoClipOpen((v) => !v)}
             autoClipOpen={autoClipOpen}
+            onAutoEdit={handleOpenAutoEdit}
+            autoEditOpen={autoEditOpen}
             onToggleFilter={(t) => dispatch({ type: 'setFilter', filter: toggleFilter(state.filter, t) })}
           />
 

@@ -87,7 +87,9 @@ export class EngineClient extends EventEmitter {
         checkExecutable(this.opts.command)
         const p = spawn(this.opts.command, this.opts.args, {
           env: { ...process.env, ...this.opts.env },
-          stdio: ['pipe', 'pipe', 'pipe']
+          stdio: ['pipe', 'pipe', 'pipe'],
+          // aditor.exe is a console-subsystem binary: without this a GUI parent opens a console window for it on Windows.
+          windowsHide: true
         })
         this.proc = p
         this.stdoutBuf = ''
