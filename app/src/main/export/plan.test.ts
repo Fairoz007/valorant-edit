@@ -256,8 +256,8 @@ describe('export plan: unknown stream info and mixed sources (I9)', () => {
       ['C:/b.mp4', { ...k, width: 1920, height: 1080, fps: 60 }]
     ]))
     for (const s of res.jobs.filter((j) => j.intermediate)) {
-      expect(s.args.join(' ')).toContain('scale=1920:1080:force_original_aspect_ratio=decrease:flags=lanczos')
-      expect(s.args.join(' ')).toContain('fps=60')
+      // Same aspect: a plain Lanczos scale onto the timeline (bars mode degrades to scale), then the common fps/pixel format.
+      expect(s.args[s.args.indexOf('-vf') + 1]).toBe('scale=1920:1080:flags=lanczos,fps=60,format=yuv420p')
       expect(s.args[s.args.indexOf('-b:v') + 1]).toBe('24900k')
     }
   })

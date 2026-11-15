@@ -4,6 +4,9 @@ import { concatCompatible, StreamProbe } from '../../shared/exportCompat'
 import type { CopyCut } from './keyframe'
 import { sourceSpec, concatRenderSpec, videoEncodeArgs, type VideoSpec } from './encodeQuality'
 import { tr } from '../../shared/locale'
+import { DEFAULT_EXPORT_FORMAT, encoderCodec, formatRequiresPrecise, type ExportFormat, type VideoCodec } from '../../shared/exportFormat'
+import { resolveOutputSpec } from '../../shared/exportPresets'
+import { computeReframe, reframeFilter, type Size } from '../../shared/reframe'
 
 // Compatibility checks live in shared (the renderer's export drawer also uses them); re-export here to preserve the existing import path.
 export { concatCompatible, extraSecondsForCopy } from '../../shared/exportCompat'
@@ -26,6 +29,13 @@ export class NoEncoderError extends Error {
   }
 }
 
+const CODEC_LABEL: Record<VideoCodec, string> = { h264: 'H.264', h265: 'H.265' }
+
+/** Shared by the IPC request validation and buildJobs. */
+export function encoderMismatchMessage(encoder: string, codec: VideoCodec): string {
+  return tr('所選的編碼器（{encoder}）無法輸出 {codec}，請選擇對應的編碼器', { encoder, codec: CODEC_LABEL[codec] })
+}
+
 export function escapeConcatPath(filePath: string): string {
   // Concat demuxer expects single quotes around path and single quotes escaped as '\'\''
   const normalized = filePath.replace(/\\/g, '/')
@@ -46,6 +56,8 @@ export interface BuildJobsOptions {
   copyCuts?: ReadonlyArray<CopyCut | null | undefined>
   /** Precise concatenation: add equal-length silence to sources known to have no audio track, keeping streams consistent. */
   silentSources?: ReadonlySet<string>
+  /** Output frame, reframe mode, size, fps cap and codec; missing = DEFAULT_EXPORT_FORMAT (source size, H.264: the behaviour before reframing). */
+  format?: ExportFormat
 }
 
 /**
@@ -138,12 +150,21 @@ export function copyCutArgs(item: ProjectItem, cut: CopyCut | null | undefined, 
   ]
 }
 
-/** Actual quality used: for concatenation with fast stream copy, automatically switch to precise when source specs are incompatible (with a notice). */
+/**
+ * Actual quality used: stream copy switches to precise (with a notice) when the output format needs re-encoding
+ * (reframing, resizing, a frame-rate cap or H.265), or, for concatenation, when source specs are incompatible.
+ */
 export function resolveQuality(
   items: ProjectItem[],
-  opts: Pick<BuildJobsOptions, 'mode' | 'quality'>,
+  opts: Pick<BuildJobsOptions, 'mode' | 'quality' | 'format'>,
   probes: Map<string, StreamProbe>
 ): { quality: 'copy' | 'precise'; notices: string[] } {
+  if (opts.quality === 'copy' && formatRequiresPrecise(opts.format ?? DEFAULT_EXPORT_FORMAT)) {
+    return {
+      quality: 'precise',
+      notices: [tr('這個輸出格式需要重新編碼（調整畫面比例、尺寸、影格率上限或 H.265 都無法直接複製串流），已自動切換為精準轉碼模式')]
+    }
+  }
   if (opts.mode === 'concat' && opts.quality === 'copy') {
     // Compare each source only once.
     const probeList = [...new Set(items.map((it) => it.source))].map((src) => probes.get(src)).filter((p): p is StreamProbe => !!p)
@@ -165,21 +186,52 @@ export function buildJobs(
   if (quality === 'precise' && !opts.encoder) {
     throw new NoEncoderError()
   }
+  const codec = (opts.format ?? DEFAULT_EXPORT_FORMAT).codec
+  if (quality === 'precise' && encoderCodec(opts.encoder!) !== codec) {
+    // Never write H.264 into a file the user asked to be H.265 (or the reverse).
+    throw new Error(encoderMismatchMessage(opts.encoder!, codec))
+  }
 
   if (opts.mode === 'concat') {
     return quality === 'copy' ? buildCopyConcat(items, opts, notices) : buildPreciseConcat(items, opts, probes, notices)
   }
 
+  const format = opts.format ?? DEFAULT_EXPORT_FORMAT
   const jobs: FfmpegJob[] = items.map((item, idx) => {
     const output = path.join(opts.outDir, `${opts.baseName}_${idx + 1}.mp4`)
     const durationSec = clipSeconds(item)
     if (quality === 'copy') return { args: copyCutArgs(item, opts.copyCuts?.[idx], output), output, durationSec }
+    const probe = probes.get(item.source)
+    const src = sourceSpec(probe)
+    const out = resolveOutputSpec(src, format)
+    const vf = needsReframe(format, src, out) ? ['-vf', itemFilter(probe, src, out, format)] : []
+    // Bitrate follows the output spec (a 1080×1920@60 Short is encoded for 1080×1920@60, not for the source).
+    const video = [...videoEncodeArgs(opts.encoder!, out), ...codecTag(format)]
     // Put -ss before -i: precise seeking when transcoding, without decoding from the start of the file to the cut (I8).
-    const video = videoEncodeArgs(opts.encoder!, sourceSpec(probes.get(item.source)))
-    const args = ['-ss', secs(item.start), '-i', item.source, '-t', durationOf(item), ...STREAM_SELECT, ...video, ...AUDIO_AAC, ...STRIP_METADATA, ...VIDEO_TIMESCALE, '-y', output]
+    const args = ['-ss', secs(item.start), '-i', item.source, '-t', durationOf(item), ...STREAM_SELECT, ...vf, ...video, ...AUDIO_AAC, ...STRIP_METADATA, ...VIDEO_TIMESCALE, '-y', output]
     return { args, output, durationSec }
   })
   return { jobs, notices }
+}
+
+/** H.265 in MP4/MOV: tag the track `hvc1` so Apple players, browsers and editors recognise it (FFmpeg's default `hev1` is often rejected). */
+const codecTag = (format: ExportFormat): string[] => (format.codec === 'h265' ? ['-tag:v', 'hvc1'] : [])
+
+/** A filter is needed to change the frame shape, apply an explicit size, or lower the frame rate. */
+function needsReframe(format: ExportFormat, src: VideoSpec, out: VideoSpec): boolean {
+  return format.frame !== 'source' || format.width !== null || format.height !== null || out.fps < src.fps
+}
+
+/** Real source size for the geometry (odd sizes stay odd so the filter can drop the last row/column); unknown → the fallback spec. */
+function sourceSize(probe: StreamProbe | undefined, fallback: VideoSpec): Size {
+  return probe && probe.width > 0 && probe.height > 0 ? { width: probe.width, height: probe.height } : { width: fallback.width, height: fallback.height }
+}
+
+/** `-vf` for one source into the output spec. The source frame (only resized/normalized) always letterboxes; other frames use the chosen reframe mode. */
+function itemFilter(probe: StreamProbe | undefined, fallback: VideoSpec, out: VideoSpec, format: ExportFormat): string {
+  const size = sourceSize(probe, fallback)
+  const mode = format.frame === 'source' ? 'bars' : format.reframe
+  return reframeFilter(computeReframe(size, out, mode, format.offset), size)
 }
 
 const segmentTag = (): string => Math.random().toString(36).slice(2, 8)
@@ -231,18 +283,14 @@ function buildCopyConcat(
   return { jobs: [...segments, final], notices, concatListContent: listOf(segments) }
 }
 
-/** Fit each segment into the timeline spec with Lanczos scaling (sharper than the default bicubic), letterboxing any aspect mismatch. */
-function normalizeFilter({ width: w, height: h, fps }: VideoSpec): string {
-  return [`scale=${w}:${h}:force_original_aspect_ratio=decrease:flags=lanczos`, `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`, `fps=${fps}`, 'format=yuv420p'].join(',')
-}
-
 /**
  * Precise concatenation: transcode each segment to an intermediate file using input-side `-ss` (precise seek), then join with concat demuxer, copying video and encoding the full audio stream to AAC once.
  * - Do not transcode sources directly with inpoint: audio packets before the inpoint are decoded too, adding up to one GOP of sound at each boundary and increasing A/V desynchronization.
  * - Use PCM audio in intermediate .mov files: each AAC segment has 1024 samples of priming, which makes audio timestamps go backward at joins and adds a blank edit to the first video track
  *   (editing software displays a black first frame). PCM has no priming, so encode AAC only once at the end.
- * - Add scale/pad/fps/format normalization only when sources may have different specs (concat requires matching specs for every segment);
- *   clips from the same source already match, so do not change frame rate or resolution.
+ * - Add scale/pad/fps/format normalization only when sources may have different specs (concat requires matching specs for every segment)
+ *   or the output format reframes/resizes/caps the frame rate; clips from the same source already match, so otherwise do not change frame rate or resolution.
+ *   Every segment's filter is computed from its own source size into the one output spec (mixed sources letterbox into the timeline spec).
  */
 function buildPreciseConcat(
   items: ProjectItem[],
@@ -250,12 +298,15 @@ function buildPreciseConcat(
   probes: Map<string, StreamProbe>,
   notices: string[]
 ): { jobs: FfmpegJob[]; notices: string[]; concatListContent: string } {
+  const format = opts.format ?? DEFAULT_EXPORT_FORMAT
   const { spec, normalize } = concatRenderSpec([...new Set(items.map((it) => it.source))].map((src) => probes.get(src)))
-  const vf = normalize ? ['-vf', normalizeFilter(spec)] : []
-  const video = videoEncodeArgs(opts.encoder!, spec)
+  const out = resolveOutputSpec(spec, format)
+  const filtered = normalize || needsReframe(format, spec, out)
+  const video = [...videoEncodeArgs(opts.encoder!, out), ...codecTag(format)]
   const tag = segmentTag()
   const segments: FfmpegJob[] = items.map((item, idx) => {
     const output = segmentPath(opts.outDir, tag, idx, '.mov')
+    const vf = filtered ? ['-vf', itemFilter(probes.get(item.source), spec, out, format)] : []
     const silent = opts.silentSources?.has(item.source) === true
     const audioInput = silent ? ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'] : []
     const streams = silent ? ['-map', '0:v:0', '-map', '1:a:0'] : STREAM_SELECT
@@ -271,7 +322,7 @@ function buildPreciseConcat(
     output,
     durationSec: totalSeconds(items),
     // Fill small gaps in audio timestamps; sources without audio already have silence in their intermediate files.
-    args: [...CONCAT_INPUT, ...STREAM_SELECT, '-c:v', 'copy', '-af', 'aresample=async=1:first_pts=0', ...AUDIO_AAC, ...VIDEO_TIMESCALE, '-y', output]
+    args: [...CONCAT_INPUT, ...STREAM_SELECT, '-c:v', 'copy', ...codecTag(format), '-af', 'aresample=async=1:first_pts=0', ...AUDIO_AAC, ...VIDEO_TIMESCALE, '-y', output]
   }
   const allNotices = normalize ? [...notices, tr('來源規格不同，已先將每段轉成相同規格再合併')] : notices
   return { jobs: [...segments, final], notices: allNotices, concatListContent: listOf(segments) }

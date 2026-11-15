@@ -28,6 +28,11 @@ describe('Proxy generator', () => {
     expect(pickEncoder([])).toBeNull()
   })
 
+  it('proxies stay H.264: HEVC encoders in the detected list are never picked', () => {
+    expect(pickEncoder(['hevc_nvenc', 'hevc_qsv', 'hevc_amf'])).toBeNull()
+    expect(pickEncoder(['hevc_nvenc', 'h264_amf'])).toBe('h264_amf')
+  })
+
   it('parseFfmpegProgress reads time= from stderr and clamps to 0..1', () => {
     expect(parseFfmpegProgress('frame= 100 fps=50 time=00:01:30.50 bitrate=1k', 180)).toBeCloseTo(0.5028, 3)
     expect(parseFfmpegProgress('time=00:10:00.00', 60)).toBe(1)

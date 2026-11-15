@@ -6,6 +6,7 @@ import { isSafeLocalDirPath } from './safe-path'
 import type { SettingsStore } from './settings'
 import { prepareStorageRoot, suggestStorageRoot } from './storage-root'
 import { RECORDINGS_DIRNAME } from '../shared/storage'
+import { validateExportFormat } from '../shared/exportFormat'
 
 /** IPC channel for retrieving the suggested storage root (used by first-run setup and Settings). */
 export const STORAGE_SUGGEST_CHANNEL = 'settings:suggestStorageRoot'
@@ -114,6 +115,7 @@ function applyStorageRoot(partial: Partial<Settings>, errors: NonNullable<Settin
  * `settings:get`／`settings:set`／`settings:changed`。
  * - `settings:set` returns `{ settings, persisted, errors? }` (reports write failures as `persisted:false` instead of throwing).
  * - Validate `defaultOutDir` here (absolute path/existing/directory); on failure, do not apply the field and add `errors.defaultOutDir`.
+ * - `exportFormat` must be a complete, valid ExportFormat (validateExportFormat); an invalid value is not applied (the saved format stays).
  * - Modify `watchFolders` only through `library:*WatchFolder` (validated by WatchManager); always ignore it here.
  */
 export function registerSettingsHandlers(
@@ -173,6 +175,12 @@ export function registerSettingsHandlers(
         errors.defaultOutDir = (err as Error).message
         delete partial.defaultOutDir
       }
+    }
+    if ('exportFormat' in partial) {
+      // Strict: a complete, valid format replaces the saved one; anything else keeps the saved format (never a partial mix).
+      const v = validateExportFormat(partial.exportFormat)
+      if (v.ok) partial.exportFormat = v.value
+      else delete partial.exportFormat
     }
     applyStorageRoot(partial, errors, settings.get().recording.outputDir)
     const saved = settings.set(partial)

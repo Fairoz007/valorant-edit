@@ -4,7 +4,9 @@
  */
 import fs from 'fs'
 import path from 'path'
-import { buildJobs, concatList, resolveFreeBaseName, resolveQuality, StreamProbe } from './plan'
+import { buildJobs, concatList, encoderMismatchMessage, resolveFreeBaseName, resolveQuality, StreamProbe } from './plan'
+import { DEFAULT_EXPORT_FORMAT, encoderCodec, type ExportFormat } from '../../shared/exportFormat'
+import { sanitizeExportFormat } from '../ipc-guards'
 import { UNKNOWN_PROBE } from '../../shared/exportCompat'
 import { AudioProbe, createAudioProbe, createCutLookup, createMediaEndProbe, CutLookup, lookupCopyCuts, MediaEndProbe, measureMediaEnds } from './keyframe'
 import { runExport, RunExportOptions, RunProgress } from './run'
@@ -49,6 +51,8 @@ export interface ValidatedRequest {
   /** Actual output directory: the mode-specific subdirectory under `outDir` (Merged or Clips), created and writable. */
   outputDir: string
   baseName: string
+  /** Output format (frame, reframe, size, fps cap, codec); DEFAULT_EXPORT_FORMAT when the request has none. */
+  format: ExportFormat
 }
 
 class RequestError extends Error {}
@@ -109,6 +113,16 @@ export async function validateExportRequest(raw: unknown): Promise<ValidatedRequ
     if (typeof r.encoder !== 'string' || !/^[A-Za-z0-9_]{1,40}$/.test(r.encoder)) throw new RequestError(tr('編碼器名稱不正確'))
     encoder = r.encoder
   }
+  let format: ExportFormat = { ...DEFAULT_EXPORT_FORMAT }
+  if (r.format !== undefined) {
+    try {
+      format = sanitizeExportFormat(r.format)
+    } catch (err) {
+      throw new RequestError((err as Error).message)
+    }
+  }
+  if (encoder !== undefined && encoderCodec(encoder) !== format.codec) throw new RequestError(encoderMismatchMessage(encoder, format.codec))
+  if (encoder === undefined && format.codec === 'h265') throw new RequestError(tr('H.265 需要支援 HEVC 的硬體編碼器（NVIDIA、Intel 或 AMD），請選擇 HEVC 編碼器或改用 H.264'))
   if (!isSafeLocalDirPath(r.outDir)) throw new RequestError(tr('輸出資料夾路徑不正確'))
   const outDir = path.resolve(r.outDir)
   await assertWritableDir(outDir)
@@ -121,7 +135,7 @@ export async function validateExportRequest(raw: unknown): Promise<ValidatedRequ
     throw new RequestError(tr('無法建立輸出子資料夾'))
   }
   await assertWritableDir(outputDir)
-  return { items, mode: r.mode, quality: r.quality, encoder, outDir, outputDir, baseName: sanitizeBaseName(r.baseName) }
+  return { items, mode: r.mode, quality: r.quality, encoder, outDir, outputDir, baseName: sanitizeBaseName(r.baseName), format }
 }
 
 
@@ -204,7 +218,9 @@ export function createExportService(deps: ExportServiceDeps = {}) {
       // Fast stream copy: find the keyframe before each segment start and a clean end, then align cuts to them (see keyframe.ts).
       let copyCuts: Awaited<ReturnType<typeof lookupCopyCuts>> | undefined
       const silentSources = new Set<string>()
-      if (resolveQuality(req.items, req, probes).quality === 'copy') {
+      // One resolved quality for the copy-cut lookup, the jobs and the disk-space estimate (a reframing format forces precise).
+      const quality = resolveQuality(req.items, req, probes).quality
+      if (quality === 'copy') {
         copyCuts = await lookupCopyCuts(req.items, deps.copyCut ?? createCutLookup(), ac.signal)
         if (ac.signal.aborted) return { ok: false, cancelled: true, outputs: [], notices: [] }
       } else if (req.mode === 'concat') {
@@ -235,7 +251,7 @@ export function createExportService(deps: ExportServiceDeps = {}) {
           jobs,
           totalEstimatedSeconds: totalDur,
           outDir: req.outputDir,
-          estimatedBytes: estimateOutputBytes({ items: req.items }, resolveQuality(req.items, req, probes).quality, probes, req.mode),
+          estimatedBytes: estimateOutputBytes({ items: req.items }, quality, probes, req.mode, req.format),
           concatListContent,
           ffmpeg: deps.ffmpeg,
           tempDir: deps.tempDir

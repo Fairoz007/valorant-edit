@@ -1,6 +1,7 @@
 import { cacheFilePath } from './cache-io'
 import { isSafeLocalVideoPath } from './safe-path'
 import { tr } from '../shared/locale'
+import { MAX_FPS_CAP, MAX_OUTPUT_SIDE, MIN_OUTPUT_SIDE, validateExportFormat, type ExportFormat, type ExportFormatError } from '../shared/exportFormat'
 
 /** Throw unless the value is a safe local video path from the renderer. */
 export function requireVideoPath(p: unknown): string {
@@ -49,4 +50,42 @@ export function planCacheSave<D extends { cache_path?: string; video?: { path?: 
   if (!doc || !isSafeLocalVideoPath(videoPath) || !library.get(videoPath)) return null
   const dest = cacheFilePath(videoPath, cacheDir, beside)
   return { dest, doc: { ...doc, cache_path: dest } }
+}
+
+/** Short, printable rendering of a rejected value for an error message. */
+function shown(v: unknown): string {
+  const text = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v)
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text
+}
+
+function exportFormatError(code: ExportFormatError, r: Record<string, unknown>): string {
+  switch (code) {
+    case 'shape':
+      return tr('匯出格式設定不正確')
+    case 'preset':
+      return tr('不支援的匯出預設：{preset}', { preset: shown(r.preset) })
+    case 'frame':
+      return tr('不支援的畫面比例：{frame}', { frame: shown(r.frame) })
+    case 'reframe':
+      return tr('不支援的重新構圖方式：{reframe}', { reframe: shown(r.reframe) })
+    case 'offset':
+      return tr('裁切位置必須是 -1 到 1 之間的數字')
+    case 'codec':
+      return tr('不支援的影片編碼格式：{codec}', { codec: shown(r.codec) })
+    case 'size':
+      return tr('輸出尺寸不正確：寬與高必須同時設定，為 {min}–{max} 之間的偶數，並符合所選的畫面比例（原始比例不可指定尺寸）', {
+        min: MIN_OUTPUT_SIDE,
+        max: MAX_OUTPUT_SIDE
+      })
+    case 'fps':
+      return tr('影格率上限必須是 1–{max} 之間的整數', { max: MAX_FPS_CAP })
+  }
+}
+
+/** `export:start` `format`: strict validation (every field present and valid); throws a specific, translated error otherwise. */
+export function sanitizeExportFormat(raw: unknown): ExportFormat {
+  const v = validateExportFormat(raw)
+  if (v.ok) return v.value
+  const r = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+  throw new Error(exportFormatError(v.error, r))
 }

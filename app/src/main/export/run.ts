@@ -39,6 +39,39 @@ export type RunExportResult =
 
 const STDERR_TAIL_BYTES = 4096
 
+/**
+ * ffmpeg stderr written when a (hardware) encoder refuses to open: unsupported size, codec/profile, driver or device.
+ * Matched case-insensitively against the stderr tail. "Error initializing output stream" alone is not enough (OpenH264 version mismatches use it too).
+ */
+const ENCODER_REJECTED = [
+  /Error while opening encoder/i,
+  /InitializeEncoder failed/i,
+  /OpenEncodeSessionEx failed/i,
+  /No capable devices found/i,
+  /Frame Dimension/i,
+  /Provided device doesn't support required NVENC features/i,
+  /Driver does not support the required nvenc API version/i,
+  /\[(?:h264|hevc)_nvenc @[^\]]*\][^\n]*(?:not supported|unsupported|failed|error)/i,
+  /\[(?:h264|hevc)_amf @[^\]]*\][^\n]*(?:failed|error|not supported|unsupported)/i,
+  /\[(?:h264|hevc)_qsv @[^\]]*\][^\n]*(?:failed|error|not supported|unsupported|invalid)/i,
+  /Error (?:initializing|creating) (?:a )?(?:MFX|QSV|AMF)/i
+]
+
+/** Translated explanation when the stderr shows the encoder rejected the output size or codec; null otherwise. */
+export function encoderFailureHint(stderr: string): string | null {
+  if (!ENCODER_REJECTED.some((re) => re.test(stderr))) return null
+  return tr('影片編碼器無法以這個輸出尺寸或編碼格式啟動。請換一個編碼器、選擇較小的輸出尺寸，或改用 H.264 後再試一次。')
+}
+
+/** Failure message: keeps the `exit code N` prefix and the stderr tail (renderer and telemetry rely on both); adds the encoder hint when it applies. */
+export function exportFailureMessage(code: number | null, stderr: string): string {
+  const tail = stderr.slice(-STDERR_TAIL_BYTES)
+  const hint = encoderFailureHint(tail)
+  return hint
+    ? tr('匯出失敗 (exit code {code}): {hint}\n{stderr}', { code, hint, stderr: tail })
+    : tr('匯出失敗 (exit code {code}):\n{stderr}', { code, stderr: tail })
+}
+
 class InsufficientDiskSpaceError extends Error {}
 
 export async function checkDiskSpace(outDir: string, estimatedBytes: number): Promise<void> {
@@ -241,7 +274,7 @@ export async function runExport(opts: RunExportOptions, control: RunExportContro
           } else if (code === 0) {
             resolve('ok')
           } else {
-            reject(new JobFailure(tr('匯出失敗 (exit code {code}):\n{stderr}', { code, stderr: stderrBuffer.slice(-STDERR_TAIL_BYTES) })))
+            reject(new JobFailure(exportFailureMessage(code, stderrBuffer)))
           }
         })
       }).catch(async (err: Error) => {

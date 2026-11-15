@@ -55,3 +55,67 @@ describe('hardware encoder probing (I10)', () => {
     expect(Date.now() - t0).toBeLessThan(5000)
   })
 })
+
+import { detectEncoders } from './encoders'
+import { encodersForCodec } from '../../shared/exportFormat'
+
+describe('H.265 encoder detection and selection', () => {
+  const ALL = ['h264_nvenc', 'h264_qsv', 'h264_amf', 'libopenh264', 'hevc_nvenc', 'hevc_qsv', 'hevc_amf', 'libx265', 'h264_mf']
+
+  /** Fake `ffmpeg -encoders` plus a test encode that passes only for `working`; records every tested encoder. */
+  function fakeDeps(compiled: string[], working: string[]) {
+    const tested: string[] = []
+    return {
+      tested,
+      deps: {
+        list: async () => compiled,
+        test: async (_bin: string, enc: string) => {
+          tested.push(enc)
+          return working.includes(enc)
+        }
+      }
+    }
+  }
+
+  it('tests and returns HEVC encoders after the H.264 ones, in priority order; never libx265 or other encoders', async () => {
+    const { deps, tested } = fakeDeps(ALL, ALL)
+    const found = await detectEncoders('ffmpeg', deps)
+    expect(found).toEqual(['h264_nvenc', 'h264_qsv', 'h264_amf', 'libopenh264', 'hevc_nvenc', 'hevc_qsv', 'hevc_amf'])
+    expect(tested).not.toContain('libx265')
+    expect(tested).not.toContain('h264_mf')
+  })
+
+  it('an HEVC encoder that is compiled in but fails its test encode is not offered', async () => {
+    const { deps, tested } = fakeDeps(['h264_nvenc', 'hevc_nvenc', 'hevc_amf'], ['h264_nvenc', 'hevc_amf'])
+    expect(await detectEncoders('ffmpeg', deps)).toEqual(['h264_nvenc', 'hevc_amf'])
+    expect(tested).toEqual(['h264_nvenc', 'hevc_nvenc', 'hevc_amf'])
+  })
+
+  it('without HEVC encoders the list is H.264 only (unchanged behaviour)', async () => {
+    const { deps, tested } = fakeDeps(['h264_qsv', 'h264_amf', 'aac'], ['h264_qsv', 'h264_amf'])
+    expect(await detectEncoders('ffmpeg', deps)).toEqual(['h264_qsv', 'h264_amf'])
+    expect(tested).toEqual(['h264_qsv', 'h264_amf'])
+  })
+
+  it('pickEncoder picks per codec and never crosses codecs', () => {
+    const list = ['h264_amf', 'hevc_qsv', 'libopenh264', 'hevc_amf']
+    expect(pickEncoder(list)).toBe('h264_amf')
+    expect(pickEncoder(list, 'h264')).toBe('h264_amf')
+    expect(pickEncoder(list, 'h265')).toBe('hevc_qsv')
+    expect(pickEncoder(['hevc_amf', 'hevc_nvenc'], 'h265')).toBe('hevc_nvenc')
+    expect(pickEncoder(['hevc_nvenc'], 'h264')).toBeNull()
+    expect(pickEncoder(['h264_nvenc', 'libopenh264'], 'h265')).toBeNull()
+    expect(encodersForCodec(list, 'h265')).toEqual(['hevc_qsv', 'hevc_amf'])
+  })
+
+  it('HEVC test encodes use the real export rate control and Main profile at 256×256', () => {
+    for (const enc of ['hevc_nvenc', 'hevc_qsv', 'hevc_amf']) {
+      const args = encoderTestArgs(enc)
+      expect(args[args.indexOf('-c:v') + 1]).toBe(enc)
+      expect(args[args.indexOf('-profile:v') + 1]).toBe('main')
+      expect(args).toContain('-b:v')
+      expect(args).toContain('-maxrate')
+      expect(args[args.indexOf('-i') + 1]).toContain('s=256x256')
+    }
+  })
+})

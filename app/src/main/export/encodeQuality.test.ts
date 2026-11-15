@@ -69,3 +69,17 @@ describe('videoEncodeArgs', () => {
     expect(valueAfter(videoEncodeArgs('foo_enc', spec), '-b:v')).toBe('24900k')
   })
 })
+
+describe('videoEncodeArgs for HEVC', () => {
+  const spec = { width: 1080, height: 1920, fps: 60 }
+  it('hevc_nvenc mirrors the H.264 NVENC setup with Main profile and a CQ suited to HEVC', () => {
+    expect(videoEncodeArgs('hevc_nvenc', spec)).toEqual([
+      '-c:v', 'hevc_nvenc', '-preset', 'p6', '-tune', 'hq', '-rc', 'vbr', '-cq', '21',
+      '-b:v', '24900k', '-maxrate', '37350k', '-bufsize', '49800k', '-spatial-aq', '1', '-profile:v', 'main'
+    ])
+  })
+  it('hevc_qsv and hevc_amf use Main profile and the output-spec bitrate', () => {
+    expect(videoEncodeArgs('hevc_qsv', spec)).toEqual(['-c:v', 'hevc_qsv', '-preset', 'slow', '-b:v', '24900k', '-maxrate', '37350k', '-bufsize', '49800k', '-profile:v', 'main'])
+    expect(videoEncodeArgs('hevc_amf', spec)).toEqual(['-c:v', 'hevc_amf', '-quality', 'quality', '-rc', 'vbr_peak', '-b:v', '24900k', '-maxrate', '37350k', '-bufsize', '49800k', '-profile:v', 'main'])
+  })
+})
