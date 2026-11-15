@@ -132,6 +132,9 @@ export function createElectronTextRenderer(fontPath: string): RenderTextPng {
     const h = Math.max(8, Math.round(opts.heightPx))
     const win = new BrowserWindow({
       show: false,
+      // Never focusable: this can run while the game is in front (Auto montage after each match).
+      focusable: false,
+      skipTaskbar: true,
       width: Math.min(8000, Math.max(64, Math.round(h * (text.length + 2) * 0.9))),
       height: h + 4,
       frame: false,

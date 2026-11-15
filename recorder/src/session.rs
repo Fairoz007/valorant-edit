@@ -40,7 +40,10 @@ use windows::{
         Foundation::{FILETIME, SYSTEMTIME},
         Storage::FileSystem::GetDiskFreeSpaceExW,
         System::{
-            Threading::{GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_HIGHEST},
+            Threading::{
+                GetCurrentProcess, GetCurrentThread, GetPriorityClass, SetThreadPriority,
+                BELOW_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_HIGHEST,
+            },
             Time::FileTimeToSystemTime,
         },
     },
@@ -443,8 +446,11 @@ impl FrameConsumer for Consumer {
         CALLBACK_PRIORITY.with(|set| {
             if !set.replace(true) {
                 // SAFETY: Adjust only the current WGC callback thread; below-normal base 6 plus 2 restores normal base 8.
+                // Only when the process really is below normal: in a normal-class process HIGHEST would be base 10, above the game.
                 unsafe {
-                    let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+                    if GetPriorityClass(GetCurrentProcess()) == BELOW_NORMAL_PRIORITY_CLASS.0 {
+                        let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+                    }
                 }
             }
         });

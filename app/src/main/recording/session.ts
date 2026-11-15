@@ -170,6 +170,7 @@ export class RecordingSessionService implements RecordingService {
         this.pollWarning = false
         this.pollFailures = 0
         this.deps.onGameRunning?.(found !== null)
+        try { this.deps.onGamePid?.(found?.pid ?? null) } catch (error) { console.error('[recording] onGamePid failed:', error) }
         const pid = found?.pid ?? null
         const exited = this.gamePid !== null && pid === null
         if (!sameProcess(found, this.current())) {
@@ -259,6 +260,7 @@ export class RecordingSessionService implements RecordingService {
       if (!found || !this.running) return false
       this.deps.onGameRunning?.(true)
       const { pid } = found
+      try { this.deps.onGamePid?.(pid) } catch (error) { console.error('[recording] onGamePid failed:', error) }
       if (!sameProcess(found, this.current())) {
         this.builtinFallbackPid = null
         this.hookFallbackPid = null

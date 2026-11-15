@@ -70,6 +70,15 @@
 
 ### Fixed
 
+- **Mouse stops working after a recording starts** (details in `docs/recording-mouse-input-fix.md`):
+  - The game watcher no longer opens the game process. It used `process.kill(pid, 0)` every 3 s, which on Windows is
+    `OpenProcess(PROCESS_TERMINATE | …)` on the Vanguard-protected VALORANT process; it now only asks `tasklist` by image name.
+  - Nothing may show, focus or raise an app window, or open a dialog, while the game is the foreground window; such calls wait
+    until the game loses focus or exits (`main/focus-guard.ts`, foreground read with `aditorrec --foreground`, no process handle).
+  - `ready-to-show` is handled once, so reloading a tray-hidden window can no longer pop it over the game.
+  - The recorder only lifts its frame thread back to normal priority when its process is below normal.
+  - Measured: recording with WGC and with DDA, cursor capture on, never changed the foreground window, cursor clip or
+    cursor visibility (new ignored e2e tests). Not yet checked in a real VALORANT match.
 - **A Sage resurrect of the player is no longer counted as a death** (`valorant-feed@11`, so cached analyses are redone).
   Measured on 6 newly labelled 960×720 30 fps clips (21 events, ±1 s):
   - before: 17 correct / 2 false / 4 missed;

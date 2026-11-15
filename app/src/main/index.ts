@@ -36,6 +36,8 @@ import { cleanupMontageOutput, createMontageRenderer, createOutputProbe } from '
 import { broadcastMontageStatus, registerMontageIpc } from './montage/montage-ipc'
 import { diskFreeBytes } from './recording/disk'
 import type { CacheDoc, Clip } from '../shared/types'
+import { createFocusGuard } from './focus-guard'
+import { createForegroundQuery } from './foreground'
 
 // E2E hooks (ADITOR_E2E=1 only): use temporary appData/userData so tests do not touch user data; null in production.
 const e2e = currentE2EConfig()
@@ -73,6 +75,23 @@ let servicesReady = false
 let openRequested = !process.argv.includes('--hidden')
 /** Maximum time to wait before closing the window when the renderer does not respond to flush. */
 const CLOSE_FLUSH_TIMEOUT_MS = 1500
+/** PID of the detected game (null when none); set by the recording service's process poll. */
+let gamePid: number | null = null
+/** Diagnostic log for focus decisions; replaced by recording.log once services start. */
+let focusLog: (message: string) => void = () => {}
+const queryForeground = createForegroundQuery(aditorrecCommand(app.isPackaged))
+/**
+ * While the game is the foreground window nothing may show, focus or raise a window of ours (docs/recording-mouse-input-fix.md):
+ * a fullscreen game that loses the foreground releases its mouse capture. Such calls wait until the game loses focus or exits.
+ */
+const focusGuard = createFocusGuard({
+  isGameForeground: async () => {
+    if (gamePid === null) return false
+    const info = await queryForeground(gamePid)
+    return info ? info.gameForeground : null
+  },
+  log: (message) => focusLog(message)
+})
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -134,10 +153,18 @@ function createWindow(): void {
     void cancelExport?.()
   })
 
-  win.on('ready-to-show', () => {
-    win.show()
-    win.focus()
+  // Electron emits ready-to-show on every first paint of a new document, including a reload of a window hidden in the tray
+  // (language change); showing only once keeps a reload from popping the window over the game.
+  win.once('ready-to-show', () => {
+    void focusGuard.run('main-window', () => {
+      if (win.isDestroyed()) return
+      win.show()
+      win.focus()
+    }, { userInitiated: true })
   })
+  // Diagnostic: every focus change of our window with the game state, so a report of lost input can be checked against recording.log.
+  win.on('focus', () => focusLog(`main window focus (game pid ${gamePid ?? 'none'})`))
+  win.on('blur', () => focusLog('main window blur'))
 
   loadRenderer(mainWindow)
 }
@@ -162,15 +189,19 @@ function syncLocale(): boolean {
   return true
 }
 
-function showMainWindow(): void {
+/** `userInitiated`: the user asked (tray, second launch, app start); an unknown foreground then does not block it, a game in front still does. */
+function showMainWindow(userInitiated = true): void {
   openRequested = true
   if (!servicesReady || quitting) return
-  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
-  else {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  }
+  void focusGuard.run('main-window', () => {
+    if (quitting) return
+    if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+    else {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }, { userInitiated })
 }
 
 async function initEngineAndServices(): Promise<void> {
@@ -238,6 +269,7 @@ async function initEngineAndServices(): Promise<void> {
   // Game presence comes from the shared poll; unknown (before the first poll) counts as running.
   let gameRunning: boolean | null = null
   const recordingLog = createDiagnosticLog(join(appDataDir(), 'recording.log'))
+  focusLog = recordingLog
   const montage = createMontageService({
     store: new MontageJobStore(join(appDataDir(), 'montage', 'jobs.json')),
     getSettings: () => {
@@ -324,7 +356,12 @@ async function initEngineAndServices(): Promise<void> {
     },
     enqueueAnalysis: (videoPath) => queue!.enqueue(videoPath),
     notify,
-    onGameExit: () => showMainWindow(),
+    onGameExit: () => showMainWindow(false),
+    onGamePid: (pid) => {
+      gamePid = pid
+      // The game exited: anything deferred while it was in front can run now.
+      if (pid === null) void focusGuard.flush()
+    },
     onGameRunning: (running) => {
       gameRunning = running
       queue!.setGameRunning(running)
@@ -349,7 +386,7 @@ async function initEngineAndServices(): Promise<void> {
   tray = createRecordingTray({
     service: recordingService,
     iconDir: join(app.isPackaged ? process.resourcesPath : resolve(__dirname, '../..'), 'resources'),
-    openWindow: showMainWindow,
+    openWindow: () => showMainWindow(true),
     quit: () => app.quit(),
     notifyError: (message) => notify('error', message)
   })
@@ -423,8 +460,9 @@ const quitGuard = createAppQuitGuard({
     quitting = false
     watchManager?.start()
     if (!e2e) recordingService?.start()
-    showMainWindow()
-    dialog.showErrorBox('Valorant Editor', tr('無法儲存媒體庫，變更尚未寫入磁碟。請確認磁碟空間與檔案權限後重試。'))
+    showMainWindow(false)
+    // A modal error box takes the foreground too; it waits for the game to leave the front like the window.
+    void focusGuard.run('library-error', () => dialog.showErrorBox('Valorant Editor', tr('無法儲存媒體庫，變更尚未寫入磁碟。請確認磁碟空間與檔案權限後重試。')))
   },
   stopEngine: () => engineClient?.stop(),
   cancelExport: () => cancelExport?.(),
@@ -452,7 +490,7 @@ if (!app.requestSingleInstanceLock()) {
     app.quit() // Goes through the quit guard (project flush, recording finalization).
   })
   initializeTelemetry(startupSettings.telemetryEnabled)
-  app.on('second-instance', showMainWindow)
+  app.on('second-instance', () => showMainWindow(true))
   app.whenReady().then(async () => {
     protocol.handle(MEDIA_SCHEME, (request) => handleMediaRequest(request, mediaAccess))
     await initEngineAndServices()
@@ -463,13 +501,14 @@ if (!app.requestSingleInstanceLock()) {
       const { writeFileSync } = await import('fs')
       writeFileSync(join(appDataDir(), 'sentry-verification.json'), JSON.stringify(await verifyTelemetry()))
     }
-    app.on('activate', showMainWindow)
+    app.on('activate', () => showMainWindow(true))
   })
   app.on('before-quit', (e) => {
     quitting = true
     quitGuard.onBeforeQuit(e)
   })
   app.on('will-quit', () => {
+    focusGuard.dispose()
     unsubscribeSettings?.()
     unregisterRecordingIpc?.()
     tray?.destroy()

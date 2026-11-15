@@ -96,6 +96,8 @@ export interface RecordingDeps {
   onGameExit?: () => void
   /** Shared game presence, independent of recording settings and backend; failed queries retain the last state. */
   onGameRunning?: (running: boolean) => void
+  /** PID of the detected game (null when none), for the focus guard and overlay placement; failed queries retain the last value. */
+  onGamePid?: (pid: number | null) => void
 }
 
 export interface LiveAnalysisSummary {

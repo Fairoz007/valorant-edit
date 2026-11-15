@@ -633,6 +633,122 @@ fn ipc_records_six_seconds_via_desktop_duplication() {
     record(6, false, "dda");
 }
 
+/// Mouse/keyboard state a game depends on: which window is in front, the cursor clip rectangle the game set, and the cursor.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct InputState {
+    foreground: usize,
+    clip: (i32, i32, i32, i32),
+    cursor_flags: u32,
+    cursor_pos: (i32, i32),
+}
+
+fn input_state() -> InputState {
+    // SAFETY: Read-only queries of global window-manager state into stack values.
+    unsafe {
+        let mut clip = RECT::default();
+        GetClipCursor(&mut clip).unwrap();
+        let mut info = CURSORINFO {
+            cbSize: std::mem::size_of::<CURSORINFO>() as u32,
+            ..Default::default()
+        };
+        GetCursorInfo(&mut info).unwrap();
+        InputState {
+            foreground: GetForegroundWindow().0 as usize,
+            clip: (clip.left, clip.top, clip.right, clip.bottom),
+            cursor_flags: info.flags.0,
+            cursor_pos: (info.ptScreenPos.x, info.ptScreenPos.y),
+        }
+    }
+}
+
+/// Restores the user's cursor clip even when an assertion fails.
+struct ClipGuard;
+impl Drop for ClipGuard {
+    fn drop(&mut self) {
+        // SAFETY: None removes any clip rectangle; it only affects the cursor this test clipped.
+        unsafe {
+            let _ = ClipCursor(None);
+        }
+    }
+}
+
+/// Emulates a game that owns the mouse (foreground + ClipCursor to its window, as VALORANT does) and records it,
+/// sampling the input state every 20 ms before, during and after: the recorder must never move focus, change the clip
+/// or touch the cursor. Measures the recorder's CPU over the recording too.
+fn record_keeps_input(capture: &str) {
+    let _guard = HARDWARE.lock().unwrap_or_else(|e| e.into_inner());
+    let window = if capture == "dda" {
+        Window::open(i32::MAX, i32::MAX)
+    } else {
+        Window::open(1280, 720)
+    };
+    let hwnd = HWND(window.hwnd as *mut _);
+    let _clip = ClipGuard;
+    // SAFETY: Activate and clip to our own test window only.
+    unsafe {
+        // The foreground lock usually refuses a background test process; then whichever window is in front
+        // (the user's terminal) plays the game's part, which is what matters: the recorder must not take focus from it.
+        let _ = SetForegroundWindow(hwnd);
+        let mut rect = RECT::default();
+        GetWindowRect(hwnd, &mut rect).unwrap();
+        ClipCursor(Some(&rect)).unwrap();
+    }
+    thread::sleep(Duration::from_millis(500));
+    let before = input_state();
+    assert_ne!(before.foreground, 0, "no foreground window to watch");
+    println!("{capture}: foreground is {}", if before.foreground == window.hwnd { "the test window" } else { "another window (foreground lock)" });
+    let mut samples = Vec::new();
+    let sample_for = |samples: &mut Vec<(&'static str, InputState)>, phase: &'static str, ms: u64| {
+        let end = Instant::now() + Duration::from_millis(ms);
+        while Instant::now() < end {
+            samples.push((phase, input_state()));
+            thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let mut process = Process::open();
+    let mut request = start(&directory(), 1, true);
+    request["capture"] = json!(capture);
+    request["capture_cursor"] = json!(true);
+    process.send(request);
+    let started = process.until(|v| v["ev"] == "started" || v["ok"] == false);
+    assert_eq!(started["ev"], "started", "{started}");
+    assert_eq!(process.reply(1)["ok"], true);
+    let cpu_begin = resources(&process.child).0;
+    let begin = Instant::now();
+    sample_for(&mut samples, "recording", 5000);
+    let cpu = (resources(&process.child).0 - cpu_begin) / begin.elapsed().as_secs_f64();
+    process.send(json!({"id":2,"cmd":"stop"}));
+    assert_eq!(process.reply(2)["ok"], true);
+    process.exit();
+    sample_for(&mut samples, "stopped", 500);
+    // SAFETY: 0xffff is ALL_PROCESSOR_GROUPS.
+    let cores = f64::from(unsafe { GetActiveProcessorCount(0xffff) });
+    println!(
+        "{capture}: {} samples, recorder CPU {:.1}% of one core ({:.2}% of machine), before={before:?}",
+        samples.len(),
+        cpu * 100.0,
+        cpu * 100.0 / cores
+    );
+    for (phase, state) in &samples {
+        assert_eq!(state.foreground, before.foreground, "{capture} {phase}: focus moved: {state:?}");
+        assert_eq!(state.clip, before.clip, "{capture} {phase}: cursor clip changed: {state:?}");
+        assert_eq!(state.cursor_flags, before.cursor_flags, "{capture} {phase}: cursor visibility changed: {state:?}");
+    }
+    drop(window);
+}
+
+#[test]
+#[ignore = "Needs an interactive desktop: activates a topmost test window and clips the cursor to it for ~6 s"]
+fn wgc_recording_never_touches_focus_or_cursor() {
+    record_keeps_input("wgc");
+}
+
+#[test]
+#[ignore = "Needs an interactive desktop: covers the primary display and clips the cursor to it for ~6 s"]
+fn dda_recording_never_touches_focus_or_cursor() {
+    record_keeps_input("dda");
+}
+
 #[test]
 fn wgc_static_window_recovery_does_not_capture_the_desktop() {
     let _guard = HARDWARE.lock().unwrap_or_else(|e| e.into_inner());
