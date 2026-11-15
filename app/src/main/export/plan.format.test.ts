@@ -171,6 +171,13 @@ describe('H.265', () => {
     expect(a).not.toContain('-vf')
     expect(after(a, '-c:v')).toBe('hevc_nvenc')
     expect(after(a, '-tag:v')).toBe('hvc1')
+    // HEVC Main is 8-bit 4:2:0: a 10-bit source must be converted even without a reframe filter.
+    expect(after(a, '-pix_fmt')).toBe('yuv420p')
+  })
+
+  it('H.264 at the source frame keeps its args without -pix_fmt (unchanged behaviour)', () => {
+    const a = separate(DEFAULT_EXPORT_FORMAT, probe(1920, 1080, 60), 'h264_nvenc').jobs[0].args
+    expect(a).not.toContain('-pix_fmt')
   })
 
   it('concat H.265: segments and the final MP4 mux carry hvc1; the final job copies HEVC video', () => {

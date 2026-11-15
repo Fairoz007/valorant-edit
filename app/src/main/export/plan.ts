@@ -204,7 +204,7 @@ export function buildJobs(
     const probe = probes.get(item.source)
     const src = sourceSpec(probe)
     const out = resolveOutputSpec(src, format)
-    const vf = needsReframe(format, src, out) ? ['-vf', itemFilter(probe, src, out, format)] : []
+    const vf = needsReframe(format, src, out) ? ['-vf', itemFilter(probe, src, out, format)] : mainProfilePixFmt(format)
     // Bitrate follows the output spec (a 1080×1920@60 Short is encoded for 1080×1920@60, not for the source).
     const video = [...videoEncodeArgs(opts.encoder!, out), ...codecTag(format)]
     // Put -ss before -i: precise seeking when transcoding, without decoding from the start of the file to the cut (I8).
@@ -216,6 +216,12 @@ export function buildJobs(
 
 /** H.265 in MP4/MOV: tag the track `hvc1` so Apple players, browsers and editors recognise it (FFmpeg's default `hev1` is often rejected). */
 const codecTag = (format: ExportFormat): string[] => (format.codec === 'h265' ? ['-tag:v', 'hvc1'] : [])
+
+/**
+ * HEVC Main profile is 8-bit 4:2:0: without a reframe filter (which ends in format=yuv420p), a 10-bit or 4:4:4 source would make the
+ * encoder fail, so convert explicitly. H.264 keeps its existing args unchanged.
+ */
+const mainProfilePixFmt = (format: ExportFormat): string[] => (format.codec === 'h265' ? ['-pix_fmt', 'yuv420p'] : [])
 
 /** A filter is needed to change the frame shape, apply an explicit size, or lower the frame rate. */
 function needsReframe(format: ExportFormat, src: VideoSpec, out: VideoSpec): boolean {
@@ -306,7 +312,7 @@ function buildPreciseConcat(
   const tag = segmentTag()
   const segments: FfmpegJob[] = items.map((item, idx) => {
     const output = segmentPath(opts.outDir, tag, idx, '.mov')
-    const vf = filtered ? ['-vf', itemFilter(probes.get(item.source), spec, out, format)] : []
+    const vf = filtered ? ['-vf', itemFilter(probes.get(item.source), spec, out, format)] : mainProfilePixFmt(format)
     const silent = opts.silentSources?.has(item.source) === true
     const audioInput = silent ? ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'] : []
     const streams = silent ? ['-map', '0:v:0', '-map', '1:a:0'] : STREAM_SELECT
