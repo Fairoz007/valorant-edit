@@ -1,0 +1,93 @@
+{
+ "clip": "Valorant_10-30-2026_19-7-13-0.mp4",
+ "source": "960x720 30 fps Outplayed highlight clip (H.264 ~6 Mbps)",
+ "method": "Labelled by eye. The minimal FFmpeg build has no PNG encoder (and no tile/drawtext), so frames were decoded read-only with OpenCV (venv cv2.VideoCapture, sequential grab; t = frame_index / container fps). Kill-feed crop x=600,y=55,w=360,h=180 (source px), scaled 1.75x, sampled every 0.5 s into 3x5 contact sheets with timestamp + frame index drawn on each tile; every sheet was viewed. Each candidate row was then pinned with per-frame (1/30 s) sheets of the top rows (x=600,y=55,w=360,h=80 at 1.2x). t = first frame on which the row (including its solid-colour slide-in bar) is visible. Own rows identified by the yellow chevron/edge on the player's side of the row (player name in-game is 'Me'), cross-checked against the on-screen combat report (KILLED YOU / KILLED). Detector output was not consulted.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "crop": {
+  "x": 600,
+  "y": 55,
+  "w": 360,
+  "h": 180
+ },
+ "events": [
+  {
+   "t": 7.64,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Jett)",
+   "confidence": "high",
+   "note": "Rifle. Slide-in bar frame 229."
+  },
+  {
+   "t": 17.46,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Jett)",
+   "confidence": "high",
+   "note": "Rifle. Second, separate kill: the first row expired ~12.8 and this one slides in fresh at frame 523; match timer is continuous (1:09 at 9.0 s, 1:00 at 18.5 s) and the combat report at 22.0 shows two 'KILLED' entries against <player>."
+  },
+  {
+   "t": 21.23,
+   "type": "death",
+   "killer": "<player> (Jett)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Rifle. 'KILLED BY JETT' banner and combat report confirm."
+  },
+  {
+   "t": 28.01,
+   "type": "death",
+   "killer": "<player> (Jett)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Rifle. Team Deathmatch respawn; first slide-in frame 839 (none at 838). Combat report at 29.0 shows a fresh single incoming kill."
+  },
+  {
+   "t": 34.45,
+   "type": "death",
+   "killer": "<player> (Jett)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Knife/melee icon, red 'III' multikill tag on killer side."
+  },
+  {
+   "t": 42.96,
+   "type": "death",
+   "killer": "<player> (Jett)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Knife/melee icon, 'IV' tag."
+  },
+  {
+   "t": 49.67,
+   "type": "death",
+   "killer": "<player> (Jett)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Knife/melee icon, 'V' tag."
+  },
+  {
+   "t": 56.08,
+   "type": "death",
+   "killer": "<player> (Jett)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Knife/melee icon, 'VI' tag."
+  },
+  {
+   "t": 65.16,
+   "type": "kill",
+   "killer": "Me",
+   "victim": "<player> (Jett)",
+   "confidence": "high",
+   "note": "Different rifle icon from the earlier kills. Slide-in frame 1952."
+  }
+ ],
+ "notes": [
+  "Game mode is Team Deathmatch (FINAL STAGE timer, RESPAWNING IN banners), so repeated rows between the same two players are separate kills/deaths, not replays; the match timer runs continuously through the clip.",
+  "52.0-52.5: weapon/buy menu overlays the kill feed; the 'V' death row is visible before (51.5) and after (53.0) and is the same row, so no new row was hidden there.",
+  "Only two players appear in the whole feed (Me and <player>); every row is an own row."
+ ],
+ "anonymized": "Player gamertags replaced: the recording player is 'Me', everyone else '<player>'."
+}

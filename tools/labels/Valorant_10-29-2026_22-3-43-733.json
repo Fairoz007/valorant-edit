@@ -1,0 +1,39 @@
+{
+ "clip": "Valorant_10-29-2026_22-3-43-733.mp4",
+ "source": "960x720 30 fps Outplayed highlight clip (H.264 ~6 Mbps)",
+ "method": "Labelled by eye. The minimal FFmpeg build has no PNG encoder (and no tile/drawtext), so frames were decoded read-only with OpenCV (venv cv2.VideoCapture, sequential grab; t = frame_index / container fps). Kill-feed crop x=600,y=55,w=360,h=180 (source px), scaled 1.75x, sampled every 0.5 s into 3x5 contact sheets with timestamp + frame index drawn on each tile; every sheet was viewed. Each candidate row was then pinned with per-frame (1/30 s) sheets of the top rows (x=600,y=55,w=360,h=80 at 1.2x). t = first frame on which the row (including its solid-colour slide-in bar) is visible. Own rows identified by the yellow chevron/edge on the player's side of the row (player name in-game is 'Me'), cross-checked against the on-screen combat report (KILLED YOU / KILLED). Detector output was not consulted.",
+ "tolerance_s": 1.0,
+ "player": "Me",
+ "crop": {
+  "x": 600,
+  "y": 55,
+  "w": 360,
+  "h": 180
+ },
+ "events": [
+  {
+   "t": 8.47,
+   "type": "death",
+   "killer": "<player> (Neon)",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Shotgun kill. First visible as red slide-in bar at frame 254; names readable from frame 256 (8.53). Combat report 'KILLED BY NEON / <player> KILLED YOU' confirms."
+  },
+  {
+   "t": 18.2,
+   "type": "death",
+   "killer": "<player>",
+   "victim": "Me",
+   "confidence": "high",
+   "note": "Player was resurrected by teammate Sage at 16.13 (teal 'Sage [res icon] Me' row, not a kill/death, not labelled), then killed again. <player>->Sage (teammate death, no yellow chevron) slides in on the same frame 546; not labelled. Combat report at 19.0 lists <player> and <player> both 'KILLED YOU'."
+  }
+ ],
+ "notes": [
+  "0-7 s: kill feed empty.",
+  "16.13: 'Sage -> Me' row with Sage resurrection icon and yellow chevron on Me: a revive, not a kill/death; not labelled.",
+  "13.0: Sage -> <player> is a teammate kill (no yellow); not labelled.",
+  "~22.8-23.3: compression glitch / cut to a different part of the match; after that the feed shows only teammate/enemy rows (<player>-><player>, <player>-><player>, <player>-><player>, <player>-><player>, <player> 'III'-><player>); none has the yellow marker.",
+  "58.0-58.6: buy menu covers the screen at the end."
+ ],
+ "anonymized": "Player gamertags replaced: the recording player is 'Me', everyone else '<player>'."
+}
