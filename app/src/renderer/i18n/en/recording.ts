@@ -3,7 +3,7 @@ import type { Messages } from '../index'
 export const recordingI18n: Messages['recordingI18n'] = {
   title: 'Recording',
   card: 'Game recording',
-  cards: { basics: 'Basics', recorder: 'Recorder', video: 'Video', audio: 'Audio', disk: 'Disk space and notifications' },
+  cards: { basics: 'Basics', recorder: 'Recorder', video: 'Video', audio: 'Audio', disk: 'Disk space and notifications', autoMontage: 'Auto montage' },
   advanced: 'Advanced options',
   current: 'Current: {value}',
   fit: 'Fit',
@@ -124,5 +124,71 @@ export const recordingI18n: Messages['recordingI18n'] = {
   watchLive: 'Watch this match',
   watchLiveHint: 'You can watch the match only while it is being recorded',
   kills: 'Kills this match',
-  matchIndex: 'Match'
+  matchIndex: 'Match',
+  autoMontage: {
+    rows: {
+      enabled: { title: 'Auto montage', desc: 'After each recorded VALORANT match is analyzed, picks its highlights and exports one montage video. VALORANT only. Building a montage uses the GPU and CPU.' },
+      formatPreset: { title: 'Montage format', desc: 'Export preset used for the montage.' },
+      minClips: { title: 'Minimum clips', desc: 'No montage is made when a match has fewer highlight clips than this.' },
+      maxDurationSec: { title: 'Maximum length', desc: 'Cap on the total length of the montage.' },
+      include: { title: 'Highlights to include', desc: 'Choose which kinds of highlights can go into the montage.' },
+      timing: { title: 'When to build', desc: '"After each match" builds the montage as soon as the match is analyzed (at low priority while the game runs). "After VALORANT closes" waits until the game exits.' },
+      keepSourceRecording: { title: 'Keep the match recording', desc: 'When turned off, the per-match recording is deleted after the montage is exported and verified.' },
+      outputDir: { title: 'Montage folder', desc: 'Where montage videos are saved.' }
+    },
+    include: { multiKills: 'Multi-kills (2–4 kills)', aces: 'Aces (5 kills)', clutches: 'Clutches', singleKills: 'Single kills' },
+    timingAfterEachMatch: 'After each match',
+    timingAfterGameExit: 'After VALORANT closes',
+    clipsUnit: 'clips',
+    secondsUnit: 's',
+    offHint: 'Turn on Auto montage to change these options.',
+    outputDefault: 'Default: {dir} (one folder per day)',
+    outputDefaultUnset: 'Default: the Montages folder in your storage location (one folder per day)',
+    outputChoose: 'Choose folder',
+    outputReset: 'Use default',
+    outputPickFailed: 'Could not choose a folder. Try again.',
+    analysisNoneDisabled: 'Auto montage needs analysis results, so "No analysis" is unavailable while it is on.',
+    enableDialog: {
+      title: 'Turn on Auto montage',
+      body: 'Montages need the match analysis. "Analyze after recording" is currently set to "No analysis" and will switch to "After each match".',
+      confirm: 'Turn on and switch',
+      cancel: 'Cancel'
+    },
+    keepSourceDialog: {
+      title: 'Stop keeping match recordings?',
+      body: 'The per-match recording is deleted after the montage is exported and verified. Deleted recordings cannot be recovered.',
+      confirm: 'Delete after export',
+      cancel: 'Cancel'
+    },
+    status: {
+      title: 'Auto montage',
+      idleEach: 'On: a montage is built after each match',
+      idleExit: 'On: montages are built after VALORANT closes',
+      recorded: 'Preparing montage…',
+      analyzing: 'Waiting for match analysis…',
+      selecting: 'Picking highlights…',
+      exporting: 'Building montage… {pct}%',
+      deferred: 'Waiting for VALORANT to close',
+      done: 'Montage ready: {n} clips, {dur}',
+      doneOne: 'Montage ready: 1 clip, {dur}',
+      skipped: {
+        tooFew: 'Skipped: only {n} highlights',
+        tooFewOne: 'Skipped: only 1 highlight',
+        tooFewNoCount: 'Skipped: too few highlights',
+        empty: 'Skipped: no highlights in this match',
+        lowDisk: 'Skipped: not enough disk space',
+        notValorant: 'Skipped: not a VALORANT recording',
+        sourceMissing: 'Skipped: the match recording was removed'
+      },
+      failed: 'Failed: {error}',
+      failedUnknown: 'Montage failed',
+      cancelled: 'Montage cancelled',
+      open: 'Open in Studio',
+      retry: 'Retry',
+      cancel: 'Cancel montage',
+      openFailed: 'Could not open the montage project.',
+      actionFailed: 'The action failed. Try again.',
+      unavailable: 'Unable to get the Auto montage status.'
+    }
+  }
 }

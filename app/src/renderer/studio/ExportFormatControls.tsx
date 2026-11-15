@@ -69,10 +69,21 @@ interface PresetCardsProps {
   /** Spec the output is derived from (for presets without a fixed size and for Original). */
   srcSpec: VideoSpec
   onChoose: (id: PresetId | 'source') => void
+  /** Radio group name (default 'xd-preset'; set it when more than one group can be on screen). */
+  name?: string
+  /** Leave out the Original card (callers that only accept a platform preset, such as Auto montage). */
+  hideSource?: boolean
+  /** Disable every card. */
+  disabled?: boolean
+  /** Id for the fieldset. */
+  id?: string
+  /** Name the group by an existing heading instead of the built-in legend. */
+  labelledBy?: string
+  describedBy?: string
 }
 
 /** Preset cards (radio group): Original + one per platform preset, plus a Custom card while the fields no longer match one. */
-export function ExportPresetCards({ format, srcSpec, onChoose }: PresetCardsProps): JSX.Element {
+export function ExportPresetCards({ format, srcSpec, onChoose, name = 'xd-preset', hideSource = false, disabled, id: groupId, labelledBy, describedBy }: PresetCardsProps): JSX.Element {
   const t = i18n.export
   const state = presetState(format)
   const src = { width: srcSpec.width, height: srcSpec.height }
@@ -80,7 +91,7 @@ export function ExportPresetCards({ format, srcSpec, onChoose }: PresetCardsProp
     const on = state === id
     return (
       <label key={id} className={`xd-card${on ? ' on' : ''}`} data-preset={id} data-selected={on ? 'true' : undefined}>
-        <input type="radio" className="xd-vh" name="xd-preset" value={id} checked={on} onChange={() => onChoose(id)} />
+        <input type="radio" className="xd-vh" name={name} value={id} checked={on} disabled={disabled} onChange={() => onChoose(id)} />
         <FrameShape frame={frame} src={src} />
         <b>{presetName(id)}</b>
         <small>{`${spec.width}×${spec.height}`}</small>
@@ -90,14 +101,14 @@ export function ExportPresetCards({ format, srcSpec, onChoose }: PresetCardsProp
   }
   const sourceSpecOut = resolveOutputSpec(srcSpec, { ...format, frame: 'source', width: null, height: null, fpsCap: null })
   return (
-    <fieldset className="xd-sec">
-      <legend>{t.preset}</legend>
+    <fieldset className="xd-sec" id={groupId} disabled={disabled} aria-labelledby={labelledBy} aria-describedby={describedBy}>
+      {!labelledBy && <legend>{t.preset}</legend>}
       <div className="xd-cards">
-        {card('source', 'source', sourceSpecOut, null)}
+        {!hideSource && card('source', 'source', sourceSpecOut, null)}
         {PRESETS.map((p) => card(p.id, p.frame, resolveOutputSpec(srcSpec, applyPreset(format, p.id)), p.maxSeconds))}
         {state === 'custom' && (
           <label className="xd-card on" data-preset="custom" data-selected="true">
-            <input type="radio" className="xd-vh" name="xd-preset" value="custom" checked onChange={() => undefined} />
+            <input type="radio" className="xd-vh" name={name} value="custom" checked disabled={disabled} onChange={() => undefined} />
             <FrameShape frame={format.frame} src={src} />
             <b>{t.presetCustom}</b>
             <small>{t.presetCustomDesc}</small>

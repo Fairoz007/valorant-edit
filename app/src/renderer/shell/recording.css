@@ -16,3 +16,7 @@
 .rec-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
 .rec-pause { display: flex; align-items: center; gap: 8px; }
 .rec-error { color: var(--danger); margin-top: 16px; overflow-wrap: anywhere; }
+.rec-montage { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.rec-montage h3 { font-size: var(--fs-body); font-weight: var(--fw-bold); margin-bottom: 8px; }
+.rec-montage-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rec-montage-status { margin: 0; color: var(--text-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
