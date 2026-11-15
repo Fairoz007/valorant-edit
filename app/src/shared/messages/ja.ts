@@ -287,6 +287,7 @@ const messages: MessageTable = {
   '精華合輯檢查未通過：{reason}': 'モンタージュの最終チェックに失敗しました：{reason}',
   '無法把精華合輯加入媒體庫：{error}': 'モンタージュをライブラリに追加できませんでした：{error}',
   '精華合輯完成：{count} 個片段，{duration}': 'モンタージュが完成しました — {count} クリップ、{duration}',
+  '無法連線 Riot Client，{game} 本次整段錄影；儲存時只剪掉確定不是遊戲畫面的部分': 'Riot Client に接続できないため、今回は {game} を通しで録画します。保存時には確実にゲームプレイでない部分だけをカットします',
   // In-game overlay cards
   '第 {round} 回合': 'ラウンド {round}',
   '第 {index} 局': '第 {index} 試合',

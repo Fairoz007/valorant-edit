@@ -140,8 +140,9 @@ describe('recording service state machine', () => {
     expect(commands(value, 'start')[0]).toMatchObject({ pid: 4321, frames: { banner: [1436, 84, 480, 256], spec: [20, 790, 440, 100] } })
     const dir = commands(value, 'start')[0].session_dir as string
     await waitFor(() => fs.existsSync(path.join(dir, 'recording.json')))
-    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'session', game: 'valorant' })
-    expect(vi.mocked(value.deps.notify).mock.calls.some(([level, message]) => level === 'warning' && message.includes('VALORANT'))).toBe(true)
+    // Whole session (no pruning while recording), but finalization may trim what the live engine proves is not gameplay.
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'session', game: 'valorant', trimGameplay: true })
+    expect(vi.mocked(value.deps.notify).mock.calls.some(([level, message]) => level === 'warning' && message.includes('VALORANT') && message.includes('Riot Client'))).toBe(true)
   })
 
   it('cuts Valorant per match from the Riot Client when it answers', async () => {
@@ -157,10 +158,12 @@ describe('recording service state machine', () => {
     const client = Object.assign(new EventEmitter(), { probe: async () => true, start: vi.fn(), stop: vi.fn() })
     value.deps.createValorantClient = () => client as never
     value.settings.mode = 'match'
+    value.settings.trimBuyPhase = true
     value.service.start()
     await waitFor(() => value.service.status().phase === 'recording')
     const dir = commands(value, 'start')[0].session_dir as string
-    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'match', game: 'valorant' })
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'match', game: 'valorant', trimBuyPhase: true })
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8')).trimGameplay).toBeUndefined()
     expect(client.start).toHaveBeenCalledOnce()
     client.emit('event', { type: 'match_start', at: Date.now() })
     await waitFor(() => fs.existsSync(path.join(dir, 'events.jsonl')) &&

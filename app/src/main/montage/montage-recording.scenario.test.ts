@@ -32,6 +32,15 @@ vi.mock('child_process', async (importOriginal) => {
     spawn: (command: string, args: string[], options: unknown) => {
       if (command !== 'fake-ffmpeg') return actual.spawn(command, args, options as never)
       const proc = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; stdin: Writable; kill: () => void }
+      if (args.includes('concat')) {
+        // Jump cut (finalize.ts remuxJumpCut): join the listed parts.
+        const list = args[args.indexOf('-i') + 1]
+        const parts = fs.readFileSync(list, 'utf8').split(/\r?\n/).filter((l) => l.startsWith('file ')).map((l) => l.slice(6, -1))
+        fs.writeFileSync(args.at(-1)!, parts.map((p) => fs.readFileSync(path.join(path.dirname(list), p))).join(''))
+        proc.stderr = new PassThrough()
+        setImmediate(() => proc.emit('close', 0))
+        return proc
+      }
       const chunks: Buffer[] = []
       proc.stdout = new PassThrough()
       proc.stderr = new PassThrough()
@@ -230,6 +239,8 @@ describe('scenario 1: match cancelled (matchCancel) or remake', () => {
     const m = montageRig(base)
     const { deps, dir } = matchSession(base, { matches: [{ start: 10, end: 40 }] })
     m.wire(deps)
+    // Healthy detection: a remake is not a detection failure, so the footage outside the match is not kept as a remainder.
+    fs.writeFileSync(path.join(dir, 'live-complete.json'), '{"version":1}')
     const outputs = await finalizeSession(dir, deps)
     expect(outputs).toHaveLength(1)
     m.caches.set(outputs[0], cacheFor(outputs[0], [...events], 40))

@@ -377,6 +377,25 @@ describe('capture method setting', () => {
   })
 })
 
+describe('gameplay-only recording mode', () => {
+  it('defaults to per-match (gameplay only) with the buy phase kept', () => {
+    expect(DEFAULT_SETTINGS.recording.mode).toBe('match')
+    expect(DEFAULT_SETTINGS.recording.trimBuyPhase).toBe(false)
+  })
+
+  it('moves the old default session mode to match once, and keeps an explicit session choice from version 3 on', () => {
+    expect(migrateSettings({ version: 2, recording: { mode: 'session' } }).recording.mode).toBe('match')
+    expect(migrateSettings({ recording: { mode: 'session' } }).recording.mode).toBe('match')
+    expect(migrateSettings({ version: 3, recording: { mode: 'session' } }).recording.mode).toBe('session')
+    expect(migrateSettings({ version: 2, recording: { mode: 'match' } }).recording.mode).toBe('match')
+  })
+
+  it('validates trimBuyPhase', () => {
+    expect(migrateSettings({ version: 3, recording: { trimBuyPhase: true } }).recording.trimBuyPhase).toBe(true)
+    expect(migrateSettings({ version: 3, recording: { trimBuyPhase: 'yes' } }).recording.trimBuyPhase).toBe(false)
+  })
+})
+
 describe('auto montage settings', () => {
   let dir: string
   let file: string

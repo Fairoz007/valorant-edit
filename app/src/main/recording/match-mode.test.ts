@@ -23,6 +23,17 @@ vi.mock('child_process', async (importOriginal) => {
     spawn: (command: string, args: string[], options: any) => {
       if (command !== 'fake-ffmpeg') return actual.spawn(command, args, options)
       const proc = new EventEmitter() as any
+      if (args.includes('concat')) {
+        // Jump cut: join the listed parts like the concat demuxer would and record what was joined.
+        const list = args[args.indexOf('-i') + 1]
+        const parts = fs.readFileSync(list, 'utf8').split('\n').filter((l) => l.startsWith('file ')).map((l) => l.slice(6, -1))
+        const joined = parts.map((p) => fs.readFileSync(path.join(path.dirname(list), p), 'utf8')).join('+')
+        remux.inputs.push(`concat:${joined}`)
+        fs.writeFileSync(args.at(-1)!, joined)
+        proc.stderr = new PassThrough()
+        setImmediate(() => proc.emit('close', 0))
+        return proc
+      }
       const chunks: Buffer[] = []
       proc.stdout = new PassThrough()
       proc.stderr = new PassThrough()
@@ -780,4 +791,110 @@ it.each([{ backend: 'builtin', mode: 'session' }, { backend: 'obs', mode: 'match
   service.scheduleCuts(session)
   await session.cuts
   expect(session.live.prune).not.toHaveBeenCalled()
+})
+
+/**
+ * VALORANT gameplay only. Timeline (recording seconds, 2 s segments, 0–400 s):
+ * 0–40 menus · 40–80 queue + agent select (PREGAME, no match) · 80 Riot Client INGAME = loading screen ·
+ * 130 HUD score first shows (round 1 buy phase) · rounds 130–230, 230–330, 330–355 · 360 match over (MENUS) · menus to 400.
+ */
+describe('VALORANT: only gameplay is kept', () => {
+  const long = Array.from({ length: 200 }, (_, i) => ({ seq: i + 1, pts: i * 2, dur: 2 }))
+  const rounds = [
+    { start: 130, end: 230, winner: 'ally', ally: 1, enemy: 0 },
+    { start: 230, end: 330, winner: 'enemy', ally: 1, enemy: 1 },
+    { start: 330, end: 355, winner: 'ally', ally: 2, enemy: 1 }
+  ]
+  const kill = (t: number) => ({ id: `k${t}`, t, type: 'kill', score: 1, source: 'auto', counted: true })
+  const joined = (list: readonly { pts: number }[]) => '初始化|' + list.map((e) => `${e.pts}|`).join('')
+  const between = (from: number, to: number) => long.filter((e) => e.pts >= from && e.pts <= to)
+
+  function valorant(snapshot: object, live: object, complete = true) {
+    const r = rig()
+    fs.writeFileSync(path.join(r.dir, 'recording.json'), JSON.stringify({ startedAt: new Date(2026, 10, 15, 20, 0).getTime(), postAnalysis: 'none', game: 'valorant', ...snapshot }))
+    for (const name of fs.readdirSync(r.dir)) if (name.startsWith('seg_')) fs.unlinkSync(path.join(r.dir, name))
+    for (const e of long) fs.writeFileSync(path.join(r.dir, `seg_${String(e.seq).padStart(6, '0')}.m4s`), `${e.pts}|`)
+    fs.writeFileSync(path.join(r.dir, 'index.jsonl'), long.map((e) => JSON.stringify(e) + '\n').join(''))
+    r.saveLive({ engine_version: '0.3.0', events: [kill(175), kill(300)], spectating: [], rounds, quality: { complete }, width: 1920, height: 1080, ...live })
+    if (complete) fs.writeFileSync(path.join(r.dir, 'live-complete.json'), '{"version":1}')
+    return r
+  }
+
+  it('lobby → agent select → loading → match → menus: the file starts at the first round buy phase and loses no gameplay second', async () => {
+    const r = valorant({ mode: 'match' }, { matches: [{ start: 80, end: 360 }] })
+    const outputs = await finalizeSession(r.dir, r.deps)
+    expect(outputs).toHaveLength(1)
+    // From the HUD (130 s) minus its 2 s pad, to match end + 5 s.
+    expect(remux.inputs).toEqual([joined(between(128, 364))])
+    const kept = new Set(between(128, 364).map((e) => e.pts))
+    // Every segment overlapping gameplay (130–360) is in the file …
+    expect(long.filter((e) => e.pts + e.dur > 130 && e.pts < 360).every((e) => kept.has(e.pts))).toBe(true)
+    // … and the menus, agent select and loading screen are not.
+    expect(long.filter((e) => e.pts < 126).some((e) => kept.has(e.pts))).toBe(false)
+    expect(fs.existsSync(r.dir)).toBe(false)
+  })
+
+  it('a kill before the first HUD frame keeps the footage before it', async () => {
+    const r = valorant({ mode: 'match' }, { matches: [{ start: 80, end: 360 }], events: [kill(120)] })
+    await finalizeSession(r.dir, r.deps)
+    expect(remux.inputs).toEqual([joined(between(114, 364))])
+  })
+
+  it('without rounds (detection missed the HUD) the match keeps its loading screen, as before', async () => {
+    const r = valorant({ mode: 'match' }, { matches: [{ start: 80, end: 360 }], rounds: [] })
+    await finalizeSession(r.dir, r.deps)
+    expect(remux.inputs).toEqual([joined(between(74, 364))])
+  })
+
+  it('a remake (one round, then back to the menus) is still one file from its first gameplay frame', async () => {
+    const r = valorant({ mode: 'match' }, { matches: [{ start: 80, end: 200 }], rounds: [rounds[0]].map((x) => ({ ...x, end: 190 })), events: [] })
+    expect(await finalizeSession(r.dir, r.deps)).toHaveLength(1)
+    expect(remux.inputs).toEqual([joined(between(128, 204))])
+  })
+
+  it('a dodge in agent select or a cancelled queue never reaches INGAME: no match, no library entry', async () => {
+    const r = valorant({ mode: 'match' }, { matches: [], rounds: [], events: [] })
+    expect(await finalizeSession(r.dir, r.deps)).toEqual([])
+    expect(remux.inputs).toEqual([])
+    expect(r.deps.addToLibrary).not.toHaveBeenCalled()
+  })
+
+  it('Riot Client unreachable, healthy detection: only the stretch the live engine proved to be gameplay is kept', async () => {
+    const r = valorant({ mode: 'session', trimGameplay: true }, { matches: [] })
+    const outputs = await finalizeSession(r.dir, r.deps)
+    expect(outputs).toHaveLength(1)
+    // Inferred 40 s to the recording end (last round 355 s + 60 s, capped at 400 s), then the same HUD start rule: from 128 s.
+    // The menus before 126 s are gone.
+    expect(remux.inputs).toEqual([joined(between(128, 398))])
+    expect(fs.existsSync(r.dir)).toBe(false)
+  })
+
+  it('Riot Client unreachable and detection incomplete (or no evidence): everything is kept', async () => {
+    for (const [live, complete] of [[{ matches: [] }, false], [{ matches: [], rounds: [], events: [] }, true]] as const) {
+      remux.inputs = []
+      const r = valorant({ mode: 'session', trimGameplay: true }, live, complete)
+      expect(await finalizeSession(r.dir, r.deps)).toHaveLength(1)
+      expect(remux.inputs).toEqual([joined(long)])
+    }
+  })
+
+  it('Riot Client dropped out mid-session (distrusted): the matches are cut and the rest is kept as one more file', async () => {
+    const r = valorant({ mode: 'match' }, { matches: [{ start: 80, end: 360 }] }, false)
+    const outputs = await finalizeSession(r.dir, r.deps)
+    expect(outputs).toHaveLength(2)
+    expect(remux.inputs[0]).toBe(joined(between(128, 364)))
+    // The remainder (0–126 s and 366–398 s) is joined from two parts with the concat demuxer.
+    expect(remux.inputs.at(-1)).toBe(`concat:${joined(between(0, 126))}+${joined(between(366, 398))}`)
+    expect(r.deps.addToLibrary).toHaveBeenCalledTimes(2)
+  })
+
+  it('trimBuyPhase cuts the buy phases between rounds into one seamless file and skips the live cache', async () => {
+    const r = valorant({ mode: 'match', trimBuyPhase: true }, { matches: [{ start: 80, end: 360 }] })
+    expect(await finalizeSession(r.dir, r.deps)).toHaveLength(1)
+    // Buy phases 239–263 s and 339–354 s are cut; segments only partly inside a cut are kept.
+    const parts = [between(128, 238), between(262, 338), between(354, 364)]
+    expect(remux.inputs.at(-1)).toBe(`concat:${parts.map(joined).join('+')}`)
+    expect(r.deps.onLiveAnalysis).not.toHaveBeenCalled()
+    for (const name of fs.readdirSync(path.dirname(path.dirname(r.dir)))) expect(name).not.toMatch(/^jump_/)
+  })
 })

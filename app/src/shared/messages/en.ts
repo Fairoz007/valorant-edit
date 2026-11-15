@@ -287,6 +287,7 @@ const messages: MessageTable = {
   '精華合輯檢查未通過：{reason}': 'The montage failed its final check: {reason}',
   '無法把精華合輯加入媒體庫：{error}': 'Could not add the montage to the library: {error}',
   '精華合輯完成：{count} 個片段，{duration}': 'Montage ready — {count} clips, {duration}',
+  '無法連線 Riot Client，{game} 本次整段錄影；儲存時只剪掉確定不是遊戲畫面的部分': 'Could not reach the Riot Client, so {game} is recorded whole this time; only parts that are certainly not gameplay are cut when it is saved',
   // In-game overlay cards
   '第 {round} 回合': 'Round {round}',
   '第 {index} 局': 'Match {index}',

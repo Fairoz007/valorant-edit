@@ -47,8 +47,13 @@ describe('Recording settings validation and migration', () => {
     }
   })
 
+  test('mode accepts only session or match; a legacy session moves to match once (gameplay only became the default)', () => {
+    for (const mode of ['session', 'match']) expect(migrateSettings({ version: SETTINGS_VERSION, recording: { mode } }).recording.mode).toBe(mode)
+    expect(migrate({ mode: 'session' }).mode).toBe('match')
+    for (const value of ['invalid', null, false, {}, [], -1, 999]) expect(migrate({ mode: value }).mode).toBe(defaults.mode)
+  })
+
   test.each([
-    ['mode', ['session', 'match']],
     ['codec', ['hevc', 'h264', 'av1']],
     ['preset', ['speed', 'balanced', 'quality']],
     ['aspectMode', ['fit', 'stretch']],

@@ -179,7 +179,7 @@ export const SETTING_ROWS: SettingRow[] = [
     control: { kind: 'storageRoot' }
   },
   // ── Recording ──
-  ...recordingRows(rc.basics, ['autoRecord', 'mode', 'postAnalysis']),
+  ...recordingRows(rc.basics, ['autoRecord', 'mode', 'trimBuyPhase', 'postAnalysis']),
   ...autoMontageRows(),
   ...overlayRows(),
   ...recordingRows(rc.recorder, ['backend', 'obsHost', 'obsPort', 'obsPassword', 'obsFallbackBuiltin']),

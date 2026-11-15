@@ -60,6 +60,27 @@
     notices become Windows toasts once the game loses focus. Settings tells you to use Windowed Fullscreen.
   - Not yet checked over a running VALORANT match.
 
+- **Record gameplay only** (VALORANT, built-in recorder):
+  - "Gameplay only (one file per match)" is now the default recording mode. Settings saved by older versions on the old
+    "Whole session" default move to it once; a "Whole session" chosen from this version on is kept.
+  - A match file now starts at the first round's buy phase (the first frame with the top-HUD score, from the live
+    engine's round tracker), not at the Riot Client's INGAME, which begins at the loading screen.
+  - The menus, queue and agent select were already outside matches. The start is never moved past a detected kill or
+    death, and is not moved at all when the HUD was first seen more than 180 s after INGAME or no round was detected.
+  - The Range and the tutorial no longer count as matches, read from the presence's `provisioningFlow`/`matchMap`. These
+    field names come from community documentation and were not checked against a live client.
+  - Riot Client unreachable: the session is still recorded whole with no pruning. At save time only the stretches the live
+    engine proved to be gameplay (rounds and events, padded) are kept, and only if detection stayed healthy for the
+    whole recording; otherwise everything is kept.
+  - Riot Client dropped out mid-session (live detection not complete): the detected matches are cut as before, and the
+    footage outside them is now kept as one more file instead of being deleted.
+  - Optional **Trim buy phase** (off by default) also cuts the buy phase between rounds, never within 5 s of a kill or
+    death. The parts are joined with FFmpeg's concat demuxer (stream copy), checked with the bundled FFmpeg: 12 s in,
+    4 s cut, a decodable 8 s file starting at 0.
+  - Covered by fake-FFmpeg scenario tests: lobby → agent select → loading → match → menus, a kill before the HUD, a
+    remake, a dodge, Riot Client unreachable (healthy and incomplete), Riot Client dropping out, and trim buy phase.
+    Not yet checked on a real VALORANT recording. The OBS backend still records each match from INGAME.
+
 #### Known limitations
 
 - The pinned LGPL FFmpeg is a minimal build (no `xfade`, `fade`, `drawtext`, `amix`, `sidechaincompress`, `atempo`, `zoompan`).

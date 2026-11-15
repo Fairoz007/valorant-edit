@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
-import { shellI18n } from '../i18n'
+import { recordingI18n, shellI18n } from '../i18n'
 import { joinForDisplay } from '../../shared/storage'
 import { Onboarding, OnboardingHost } from './Onboarding'
 import type { OnboardingApi } from './onboardingModel'
@@ -66,14 +66,14 @@ describe('Onboarding step content', () => {
     expect(out).toContain(t.back)
   })
 
-  test('Step 3: recording mode radio cards (session selected by default) and default resolution, frame rate, and bitrate', () => {
+  test('Step 3: recording mode radio cards (gameplay only selected by default) and default resolution, frame rate, and bitrate', () => {
     const out = html(2)
-    expect(out).toContain('一局一個檔')
-    expect(out).toContain('從頭錄到尾')
+    expect(out).toContain(recordingI18n.match)
+    expect(out).toContain(recordingI18n.session)
     expect(out).toContain(t.recording.modeMatchDesc)
     expect(out).toContain(t.recording.modeSessionDesc)
-    expect(out).toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="session"/)
-    expect(out).not.toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="match"/)
+    expect(out).toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="match"/)
+    expect(out).not.toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="session"/)
     expect(out).toMatch(/<option value="1080" selected/)
     expect(out).toMatch(/<option value="60" selected/)
     expect(out).toMatch(/<option value="10000" selected/)
@@ -83,7 +83,7 @@ describe('Onboarding step content', () => {
   test('Step 4: settings summary and next steps, with a “Get started” button', () => {
     const out = html(3, { mode: 'match', height: 1440, fps: 120, bitrateKbps: 30000 })
     expect(out).toContain(`儲存位置：${SUGGESTED}`)
-    expect(out).toContain('錄影模式：一局一個檔')
+    expect(out).toContain(`錄影模式：${recordingI18n.match}`)
     expect(out).toContain('畫質：1440p (2K)、120 fps、30000 kbps')
     expect(out).toContain(t.done.next1)
     expect(out).toContain(t.done.next2)

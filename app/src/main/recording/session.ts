@@ -489,13 +489,19 @@ export class RecordingSessionService implements RecordingService {
     // Valorant's match boundaries come from the Riot Client; Apex detection finds its own.
     const gameClient = game === 'valorant' ? (this.deps.createValorantClient ?? (() => new ValorantClient()))() : undefined
     const clientReachable = gameClient ? await gameClient.probe() : false
+    let trimGameplay = false
     if (game !== DEFAULT_GAME && settings.mode === 'match' && !clientReachable) {
       // Per-match cutting needs match events. Without them a healthy session with no match would be pruned and
-      // discarded as lobby time, so record the whole session instead.
+      // discarded as lobby time, so record the whole session instead (no pruning while recording).
       settings.mode = 'session'
+      // VALORANT: at finalization, keep only what the live engine proved to be gameplay, and only if detection stayed
+      // healthy for the whole recording; otherwise everything is kept (finalize.ts matchesToCut).
+      trimGameplay = game === 'valorant'
       if (!this.matchModeNoticed) {
         this.matchModeNoticed = true
-        this.notice('warning', tr('{game} 尚不支援逐局分割，本次整段錄成一個檔', { game: GAMES[game].displayName }))
+        this.notice('warning', trimGameplay
+          ? tr('無法連線 Riot Client，{game} 本次整段錄影；儲存時只剪掉確定不是遊戲畫面的部分', { game: GAMES[game].displayName })
+          : tr('{game} 尚不支援逐局分割，本次整段錄成一個檔', { game: GAMES[game].displayName }))
       }
     }
     this.log(`begin pid=${pid}${game === DEFAULT_GAME ? '' : ` game=${game}`} backend=${settings.backend} capture=${capture}`)
@@ -522,6 +528,7 @@ export class RecordingSessionService implements RecordingService {
       const startedAt = Date.now()
       const writeSnapshot = (): Promise<void> => writeJson(path.join(dir, 'recording.json'), {
         startedAt, postAnalysis: settings.postAnalysis, mode: settings.mode, backend: session?.backend ?? settings.backend, gameAspect, game,
+        ...(game === 'valorant' && settings.trimBuyPhase ? { trimBuyPhase: true } : {}), ...(trimGameplay ? { trimGameplay: true } : {}),
         livePending: true
       })
       await writeSnapshot()

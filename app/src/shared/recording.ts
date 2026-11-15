@@ -9,7 +9,7 @@ import { DEFAULT_AUTO_MONTAGE, type AutoMontageSettings } from './montage'
 /** Built-in recorder or OBS Studio (WebSocket v5). */
 export type RecordingBackend = 'builtin' | 'obs'
 
-/** 'match' = record continuously and split by match; 'session' = record from start to finish. */
+/** 'match' = keep only gameplay, one file per match (default); 'session' = keep everything from start to finish. */
 export type RecordingMode = 'match' | 'session'
 
 /** Full post-recording analysis (R9): none, after Apex exits (default), or at low priority after each match. */
@@ -36,6 +36,11 @@ export interface RecordingSettings {
   obsPassword?: string
   obsFallbackBuiltin: boolean
   mode: RecordingMode
+  /**
+   * Also cut the buy phase between rounds out of each match file (VALORANT, built-in recorder; off by default).
+   * Never cuts within 5 s of a detected kill or death.
+   */
+  trimBuyPhase: boolean
   /** Recording folder; null uses the first watched folder, or `Valorant Editor` under the Videos folder if none are watched. */
   outputDir: string | null
   codec: RecordingCodec
@@ -133,7 +138,8 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   obsPort: 4455,
   obsPasswordEnc: null,
   obsFallbackBuiltin: true,
-  mode: 'session',
+  mode: 'match',
+  trimBuyPhase: false,
   outputDir: null,
   codec: 'hevc',
   gpu: 'auto',

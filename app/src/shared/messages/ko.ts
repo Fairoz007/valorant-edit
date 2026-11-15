@@ -287,6 +287,7 @@ const messages: MessageTable = {
   '精華合輯檢查未通過：{reason}': '몽타주 최종 확인에 실패했습니다: {reason}',
   '無法把精華合輯加入媒體庫：{error}': '몽타주를 라이브러리에 추가할 수 없습니다: {error}',
   '精華合輯完成：{count} 個片段，{duration}': '몽타주 완성 — 클립 {count}개, {duration}',
+  '無法連線 Riot Client，{game} 本次整段錄影；儲存時只剪掉確定不是遊戲畫面的部分': 'Riot Client에 연결할 수 없어 이번에는 {game}을(를) 전체 녹화합니다. 저장할 때 게임 화면이 확실히 아닌 부분만 잘라냅니다',
   // In-game overlay cards
   '第 {round} 回合': '{round}라운드',
   '第 {index} 局': '{index}번째 매치',

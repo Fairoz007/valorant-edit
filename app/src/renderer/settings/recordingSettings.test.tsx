@@ -161,7 +161,7 @@ describe('Recording settings screen and controller', () => {
     await show()
     // Launch-at-login and minimize-to-tray are app-wide settings under General; OBS rows appear only for the OBS backend.
     const fields = [
-      'autoRecord', 'mode', 'postAnalysis',
+      'autoRecord', 'mode', 'trimBuyPhase', 'postAnalysis',
       'backend',
       'height', 'bitrateKbps', 'fps', 'captureCursor', 'forceAspect', 'aspectMode', 'codec', 'gpu', 'encoder', 'preset', 'captureMethod',
       'systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono',
@@ -170,7 +170,7 @@ describe('Recording settings screen and controller', () => {
     const montageRows = AUTO_MONTAGE_FIELDS.map((field) => `autoMontage-${field}`)
     const overlayRows = OVERLAY_FIELDS.map((field) => `overlay-${field}`)
     expect(Array.from(document.querySelectorAll<HTMLElement>('[data-row]')).map((el) => el.dataset.row))
-      .toEqual([...fields.slice(0, 3).map((field) => `recording-${field}`), ...montageRows, ...overlayRows, ...fields.slice(3).map((field) => `recording-${field}`)])
+      .toEqual([...fields.slice(0, 4).map((field) => `recording-${field}`), ...montageRows, ...overlayRows, ...fields.slice(4).map((field) => `recording-${field}`)])
     expect(Array.from(document.querySelectorAll('.set-card h2')).map((el) => el.textContent))
       .toEqual([t.cards.basics, t.cards.autoMontage, t.overlay.card, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
     for (const field of fields) {
@@ -180,7 +180,8 @@ describe('Recording settings screen and controller', () => {
     }
     const match = control<HTMLSelectElement>('mode').querySelector<HTMLOptionElement>('option[value="match"]')!
     expect(match.disabled).toBe(false)
-    expect(match.textContent).toBe('一局一個檔')
+    expect(match.textContent).toBe(t.match)
+    expect(options('mode')).toEqual(['match', 'session'])
     expect(options('encoder')).toEqual(['auto', 'hevc_nvenc'])
     expect(options('gpu')).toEqual(['auto', '10de:2684', '8086:46a6'])
     expect(options('renderDevice')).toEqual(['default', 'speakers'])
@@ -252,9 +253,9 @@ describe('Recording settings screen and controller', () => {
     await Promise.all([r.controller.setRecording('fps', 90), r.controller.setRecording('micEnabled', false)])
     expect(r.controller.getState().settings?.recording).toMatchObject({ fps: 90, micEnabled: false })
     r.api.settings.set = async () => { throw new Error('ipc') }
-    await r.controller.setRecording('mode', 'match')
+    await r.controller.setRecording('mode', 'session')
     expect(r.controller.getState().settings?.recording.fps).toBe(90)
-    expect(r.controller.getState().settings?.recording.mode).toBe('session')
+    expect(r.controller.getState().settings?.recording.mode).toBe('match')
     expect(r.controller.getState().saveFailed).toBe(true)
     r.controller.stop()
     expect(r.listeners.size).toBe(0)

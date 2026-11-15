@@ -287,6 +287,7 @@ const messages: MessageTable = {
   '精華合輯檢查未通過：{reason}': '精华合辑检查未通过：{reason}',
   '無法把精華合輯加入媒體庫：{error}': '无法将精华合辑加入媒体库：{error}',
   '精華合輯完成：{count} 個片段，{duration}': '精华合辑已完成：{count} 个片段，{duration}',
+  '無法連線 Riot Client，{game} 本次整段錄影；儲存時只剪掉確定不是遊戲畫面的部分': '无法连接 Riot Client，本次 {game} 整段录制；保存时只剪掉确定不是游戏画面的部分',
   // In-game overlay cards
   '第 {round} 回合': '第 {round} 回合',
   '第 {index} 局': '第 {index} 局',

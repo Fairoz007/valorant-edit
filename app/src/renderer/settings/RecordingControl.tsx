@@ -7,7 +7,7 @@ import type { SettingsController, SettingsState } from './settingsController'
 import { fillTemplate } from './settingsModel'
 import { bitrateOptions, fpsOptions, heightOptions } from './recordingOptions'
 
-const BOOL_FIELDS = ['captureCursor', 'autoRecord', 'launchAtLogin', 'closeToTray', 'micEnabled', 'notifyMatch', 'openOnGameExit', 'forceAspect', 'systemAudioEnabled', 'gameAudioOnly', 'micMono', 'obsFallbackBuiltin'] as const
+const BOOL_FIELDS = ['captureCursor', 'trimBuyPhase', 'autoRecord', 'launchAtLogin', 'closeToTray', 'micEnabled', 'notifyMatch', 'openOnGameExit', 'forceAspect', 'systemAudioEnabled', 'gameAudioOnly', 'micMono', 'obsFallbackBuiltin'] as const
 const HOOK_WARN_SECONDS = 5
 
 function CaptureHookWarningDialog({ selectId, onCancel, onConfirm }: {
@@ -133,7 +133,9 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
     describedBy={describedBy(ids)} onCommit={(v) => controller.setRecording('obsPort', Math.round(v))} />
   if ((BOOL_FIELDS as readonly string[]).includes(field)) {
     const key = field as typeof BOOL_FIELDS[number]
-    const unsupported = key === 'captureCursor' && settings.captureMethod === 'hook'
+    // Buy-phase trimming cuts the built-in recorder's per-match files only.
+    const unsupported = (key === 'captureCursor' && settings.captureMethod === 'hook') ||
+      (key === 'trimBuyPhase' && (settings.mode !== 'match' || settings.backend === 'obs'))
     return <SwitchControl ids={ids} checked={unsupported ? false : settings[key]} disabled={unsupported} onChange={(v) => set(key, v)} />
   }
   if (field === 'fps' || field === 'aspectMode') {
@@ -162,7 +164,7 @@ export function RecordingControl({ field, ids, state, settings, controller }: {
       options = [{ value: 'builtin', label: t.builtin }, { value: 'obs', label: t.obs }]
       break
     case 'mode':
-      options = [{ value: 'session', label: t.session }, { value: 'match', label: t.match }]
+      options = [{ value: 'match', label: t.match }, { value: 'session', label: t.session }]
       break
     case 'codec':
       options = [{ value: 'hevc', label: 'HEVC' }, { value: 'h264', label: 'H.264' }, { value: 'av1', label: 'AV1' }]

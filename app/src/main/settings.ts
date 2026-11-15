@@ -19,6 +19,8 @@ import { isSafeLocalDirPath } from './safe-path'
 const RANGES = SETTINGS_RANGES
 /** First settings version with the 'auto' capture method. */
 const CAPTURE_AUTO_VERSION = 2
+/** Version 3 made 'match' (gameplay only) the default; earlier files saved the then-default 'session' whether chosen or not. */
+const GAMEPLAY_ONLY_VERSION = 3
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -106,6 +108,7 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
       /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(s.obsPasswordEnc)) ? s.obsPasswordEnc : base.obsPasswordEnc,
     obsFallbackBuiltin: pickBool(s.obsFallbackBuiltin, base.obsFallbackBuiltin),
     mode: pickEnum(s.mode, ['session', 'match'] as const, base.mode),
+    trimBuyPhase: pickBool(s.trimBuyPhase, base.trimBuyPhase),
     outputDir: pickStringOrNull(s.outputDir, base.outputDir),
     codec,
     gpu: pickDevice(s.gpu, base.gpu),
@@ -188,6 +191,11 @@ export function migrateSettings(raw: unknown): Settings {
   // Version 1 saved the then-default WGC whether or not the user chose it; DDA was never the default, so it is kept.
   if (rawVersion < CAPTURE_AUTO_VERSION && migrated.recording.captureMethod === 'wgc') {
     migrated = { ...migrated, recording: { ...migrated.recording, captureMethod: 'auto' } }
+  }
+  // Settings files store every field, so an older 'session' cannot be told apart from the old default; move it to
+  // gameplay only once. From version 3 on an explicit 'session' is kept.
+  if (rawVersion < GAMEPLAY_ONLY_VERSION && migrated.recording.mode === 'session') {
+    migrated = { ...migrated, recording: { ...migrated.recording, mode: 'match' } }
   }
   if (migrated.recording.outputDir !== null) {
     // An unavailable drive must not erase the saved location or redirect recording to another disk.
