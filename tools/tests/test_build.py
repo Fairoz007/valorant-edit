@@ -9,6 +9,7 @@ def test_skip_engine_rejects_stale_binary_by_hash_even_with_equal_mtime(tmp_path
     scripts.mkdir()
     source = Path(__file__).resolve().parents[2] / "scripts/build.ps1"
     shutil.copyfile(source, scripts / "build.ps1")
+    shutil.copyfile(source.with_name("msvc-env.ps1"), scripts / "msvc-env.ps1")
     (scripts / "verify-live-engine.ps1").write_text("Write-Host 'compatibility checked'", encoding="utf-8")
     release = tmp_path / "engine/target/release/aditor.exe"
     staged = tmp_path / "build/engine/aditor/aditor.exe"
@@ -16,7 +17,10 @@ def test_skip_engine_rejects_stale_binary_by_hash_even_with_equal_mtime(tmp_path
         path.parent.mkdir(parents=True)
         path.write_bytes(data)
         os.utime(path, (1000, 1000))
-    args = ["pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(scripts / "build.ps1"),
+    # PowerShell 7 when present, otherwise the Windows PowerShell 5.1 every Windows 10/11 machine has.
+    shell = shutil.which("pwsh") or shutil.which("powershell")
+    assert shell, "no PowerShell found"
+    args = [shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(scripts / "build.ps1"),
             "-SkipEngine", "-EngineOnly"]
     stale = subprocess.run(args, capture_output=True, timeout=30)
     assert stale.returncode != 0

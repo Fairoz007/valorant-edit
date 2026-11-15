@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = [System.IO.Path]::GetFullPath("$PSScriptRoot\..")
 Set-Location $root
+. "$PSScriptRoot/msvc-env.ps1"
 
 Write-Host "========================================"
 Write-Host " Building Valorant Editor Application"
@@ -18,6 +19,7 @@ Write-Host "========================================"
 # 1. Build Engine
 if (-not $SkipEngine) {
     Write-Host "`n[1/6] Building Rust engine..."
+    Enter-MsvcEnvironment
     $releaseExe = Join-Path $root "engine/target/release/aditor.exe"
     # Cargo relinks whenever sources change; its uplifted exe keeps the link time, so compare hashes, not mtimes.
     cargo build --release --manifest-path (Join-Path $root "engine/Cargo.toml")
@@ -85,6 +87,7 @@ if (-not $SkipObsHook) {
 
 # 4. Build the recorder and place it beside the FFmpeg DLLs.
 Write-Host "`n[4/6] Building Rust recorder..."
+Enter-MsvcEnvironment
 $previousFfmpegDir = $env:ADITORREC_FFMPEG_DIR
 try {
     $env:ADITORREC_FFMPEG_DIR = Join-Path $root "build\ffmpeg"
