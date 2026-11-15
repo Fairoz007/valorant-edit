@@ -1,6 +1,6 @@
 import { EventType } from '../../shared/types'
 import { i18n } from '../i18n'
-import { Scissors, Sparkles } from '../components/icons'
+import { Film, Scissors, Sparkles } from '../components/icons'
 import { EventFilterChips } from './EventFilterChips'
 
 interface TransportBarProps {
@@ -13,6 +13,9 @@ interface TransportBarProps {
   bladeMode: boolean
   onAutoClip: () => void
   autoClipOpen: boolean
+  /** Open the Auto edit dialog (montage project from detected kills); omitted = no button. */
+  onAutoEdit?: () => void
+  autoEditOpen?: boolean
   onToggleFilter: (t: EventType) => void
 }
 
@@ -26,6 +29,8 @@ export function TransportBar({
   bladeMode,
   onAutoClip,
   autoClipOpen,
+  onAutoEdit,
+  autoEditOpen = false,
   onToggleFilter
 }: TransportBarProps): JSX.Element {
   const t = i18n.studio.transport
@@ -50,6 +55,11 @@ export function TransportBar({
       >
         <Sparkles className="ic sm" /> {i18n.studio.autoClip}
       </button>
+      {onAutoEdit && (
+        <button type="button" className="btn-ghost" data-autoedit="toggle" aria-haspopup="dialog" aria-expanded={autoEditOpen} onClick={onAutoEdit}>
+          <Film className="ic sm" /> {i18n.autoEdit.open}
+        </button>
+      )}
       <EventFilterChips counts={counts} filter={filter} onToggle={onToggleFilter} types={chipTypes} />
       <button type="button" className="btn-ghost" onClick={onAddEvent}>
         {t.addEvent} <kbd>M</kbd>
