@@ -1,7 +1,7 @@
-import { BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { applyWindowSecurity } from '../window-security'
-import { OVERLAY_WINDOW_OPTIONS, supportsCaptureExclusion, type OverlayBrowserWindow, type OverlayPlacement, type Rect } from './overlay-window'
+import { decidePlacement, OVERLAY_WINDOW_OPTIONS, supportsCaptureExclusion, type OverlayBrowserWindow, type OverlayPlacement } from './overlay-window'
 import type { ForegroundInfo } from '../foreground'
 
 /** Creates the real overlay BrowserWindow (options in OVERLAY_WINDOW_OPTIONS) and loads the overlay page. */
@@ -37,24 +37,28 @@ export function createElectronOverlayWindow(): OverlayBrowserWindow {
   }
 }
 
-function toRect([x, y, width, height]: [number, number, number, number]): Rect {
-  return { x, y, width, height }
+/** Real transparency needs GPU compositing; without it a "transparent" window can render as an opaque box over the game. */
+export function transparencyAvailable(): boolean {
+  try {
+    if (!app.isHardwareAccelerationEnabled()) return false
+    return String(app.getGPUFeatureStatus().gpu_compositing ?? '').startsWith('enabled')
+  } catch {
+    return false
+  }
 }
 
-/**
- * Placement from the game's window: its monitor while the game is in front (converted to DIP), else the last monitor it was on,
- * else the primary display. Exclusive fullscreen, or a Windows build without capture exclusion, keeps the overlay off.
- */
+/** Placement from the game's window (rules in decidePlacement): only its own monitor, only while it is in front and not Fullscreen. */
 export function createOverlayPlacement(deps: { gamePid: () => number | null; queryForeground: (pid: number) => Promise<ForegroundInfo | null> }): () => Promise<OverlayPlacement> {
-  let lastDisplay: Rect | null = null
   return async () => {
-    if (!supportsCaptureExclusion()) return { kind: 'exclusive' }
-    const pid = deps.gamePid()
-    if (pid === null) return { kind: 'none' }
-    const info = await deps.queryForeground(pid)
-    if (info?.gameForeground && info.exclusiveFullscreen) return { kind: 'exclusive' }
-    if (info?.monitorRect) lastDisplay = screen.screenToDipRect(null, toRect(info.monitorRect))
-    return { kind: 'screen', display: lastDisplay ?? screen.getPrimaryDisplay().bounds }
+    const gamePid = deps.gamePid()
+    const info = gamePid === null ? null : await deps.queryForeground(gamePid)
+    return decidePlacement({
+      captureExclusion: supportsCaptureExclusion(),
+      transparency: transparencyAvailable(),
+      gamePid,
+      info,
+      toDip: (rect) => screen.screenToDipRect(null, rect)
+    })
   }
 }
 

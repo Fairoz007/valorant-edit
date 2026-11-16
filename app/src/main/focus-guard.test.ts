@@ -93,7 +93,9 @@ describe('No focus while the game is in front', () => {
 describe('aditorrec --foreground output', () => {
   it('parses the recorder line', () => {
     expect(parseForeground('{"exclusive_fullscreen":false,"foreground_pid":42,"fullscreen_busy":false,"game_foreground":true,"game_rect":[0,0,1920,1080],"monitor_rect":[0,0,1920,1080]}\n'))
-      .toEqual({ foregroundPid: 42, gameForeground: true, exclusiveFullscreen: false, gameRect: [0, 0, 1920, 1080], monitorRect: [0, 0, 1920, 1080] })
+      .toEqual({ foregroundPid: 42, gameForeground: true, exclusiveFullscreen: false, gameRect: [0, 0, 1920, 1080], monitorRect: [0, 0, 1920, 1080], coversMonitor: false, displayModeChanged: false })
+    expect(parseForeground('{"foreground_pid":42,"game_foreground":true,"game_rect":[0,0,1920,1440],"monitor_rect":[0,0,1920,1440],"covers_monitor":true,"display_mode_changed":true}'))
+      .toMatchObject({ coversMonitor: true, displayModeChanged: true })
   })
 
   it('returns null for anything malformed', () => {

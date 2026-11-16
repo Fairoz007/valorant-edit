@@ -110,8 +110,9 @@ export const OVERLAY_RANGES = {
   opacity: { min: 0.3, max: 1 }
 } as const
 
+/** Off by default (settings version 4): a card over a Fullscreen VALORANT can make the game minimize. */
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  enabled: true,
+  enabled: false,
   position: 'topRight',
   durationSec: 3,
   showKills: true,

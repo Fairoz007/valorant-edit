@@ -21,6 +21,8 @@ const RANGES = SETTINGS_RANGES
 const CAPTURE_AUTO_VERSION = 2
 /** Version 3 made 'match' (gameplay only) the default; earlier files saved the then-default 'session' whether chosen or not. */
 const GAMEPLAY_ONLY_VERSION = 3
+/** Version 4 turned the in-game overlay off by default; earlier files saved the then-default 'on' whether chosen or not. */
+const OVERLAY_OPT_IN_VERSION = 4
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -196,6 +198,11 @@ export function migrateSettings(raw: unknown): Settings {
   // gameplay only once. From version 3 on an explicit 'session' is kept.
   if (rawVersion < GAMEPLAY_ONLY_VERSION && migrated.recording.mode === 'session') {
     migrated = { ...migrated, recording: { ...migrated.recording, mode: 'match' } }
+  }
+  // The overlay could make a Fullscreen VALORANT minimize (docs/recording-mouse-input-fix.md); a saved 'on' from before version 4
+  // cannot be told apart from the old default, so it is turned off once. From version 4 on an explicit choice is kept.
+  if (rawVersion < OVERLAY_OPT_IN_VERSION && migrated.recording.overlay.enabled) {
+    migrated = { ...migrated, recording: { ...migrated.recording, overlay: { ...migrated.recording.overlay, enabled: false } } }
   }
   if (migrated.recording.outputDir !== null) {
     // An unavailable drive must not erase the saved location or redirect recording to another disk.

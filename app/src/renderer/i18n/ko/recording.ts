@@ -196,7 +196,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
   overlay: {
     card: '게임 내 오버레이',
     rows: {
-      enabled: { title: '게임 내 오버레이', desc: '녹화 상태, 킬, 라운드, 저장 알림을 게임 화면 모서리에 표시합니다. 마우스나 포커스를 가져가지 않으며 녹화에도 나타나지 않습니다.' },
+      enabled: { title: '게임 내 오버레이', desc: '기본적으로 꺼져 있습니다. 녹화 상태, 킬, 라운드, 저장 알림을 게임 화면 모서리에 작은 카드로 표시합니다. VALORANT가 앞에 있고 창 모드 전체 화면 또는 창 모드일 때만 표시합니다. 마우스나 포커스를 가져가지 않으며 녹화에도 나타나지 않습니다.' },
       position: { title: '위치', desc: '카드가 표시될 화면 모서리입니다.' },
       durationSec: { title: '표시 시간', desc: '각 카드가 표시되는 시간(초)입니다. 오류는 두 배 동안 표시됩니다.' },
       showKills: { title: '킬 카드', desc: '킬이 감지되면 표시합니다. 한 라운드의 킬은 카드 하나로 합쳐지고 5킬은 ACE로 표시됩니다.' },
@@ -209,7 +209,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
     test: '테스트 카드 표시',
     testShown: '테스트 카드를 표시했습니다',
     testFailed: '테스트 카드를 표시할 수 없습니다.',
-    windowedHint: '오버레이를 사용하려면 VALORANT 디스플레이 모드를 「창 모드 전체 화면」으로 설정해야 합니다. 독점 전체 화면에서는 게임 위에 아무것도 표시할 수 없으므로 게임이 포커스를 잃은 뒤 Windows 알림으로 표시합니다.',
+    windowedHint: '오버레이를 사용하려면 VALORANT 디스플레이 모드를 「창 모드 전체 화면」으로 설정해야 합니다. 전체 화면(늘린 해상도 포함)에서는 다른 창이 위에 나타나면 게임이 최소화될 수 있으므로 카드를 표시하지 않고, 게임이 포커스를 잃은 뒤 Windows 알림으로 표시합니다.',
     previewLabel: '미리 보기',
     previewTitle: 'ACE',
     previewDetail: '7라운드',

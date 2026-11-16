@@ -28,7 +28,7 @@ describe('defaultDraft', () => {
       height: 1080,
       fps: 60,
       bitrateKbps: 10_000,
-      overlay: true
+      overlay: false
     })
   })
 })

@@ -195,7 +195,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
   overlay: {
     card: 'In-game overlay',
     rows: {
-      enabled: { title: 'In-game overlay', desc: 'Shows recorder status, kills, rounds and saved clips in a corner of the game. It never takes the mouse or focus and never appears in the recording.' },
+      enabled: { title: 'In-game overlay', desc: 'Off by default. Shows recorder status, kills, rounds and saved clips as a small card in a corner of the game, only while VALORANT is in front in Windowed Fullscreen or Windowed mode. It never takes the mouse or focus and never appears in the recording.' },
       position: { title: 'Position', desc: 'Which corner of the game screen the cards appear in.' },
       durationSec: { title: 'Duration', desc: 'How long each card stays on screen; errors stay twice as long.' },
       showKills: { title: 'Kill cards', desc: 'Shown when a kill is detected. Kills in one round share one card, and five kills show as ACE.' },
@@ -208,7 +208,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
     test: 'Show test cards',
     testShown: 'Test cards shown',
     testFailed: 'Could not show the test cards.',
-    windowedHint: 'The overlay needs VALORANT set to Windowed Fullscreen. In exclusive Fullscreen nothing can appear over the game, so cards become Windows notifications once the game loses focus.',
+    windowedHint: 'The overlay needs VALORANT set to Windowed Fullscreen. In Fullscreen (also with a stretched resolution) the game can minimize when another window appears over it, so no card is shown there: notices become Windows notifications once the game loses focus.',
     previewLabel: 'Preview',
     previewTitle: 'ACE',
     previewDetail: 'Round 7',

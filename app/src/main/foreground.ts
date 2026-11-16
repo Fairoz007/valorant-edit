@@ -11,6 +11,10 @@ export interface ForegroundInfo {
   /** Game window and its monitor in screen pixels ([x, y, width, height]); null unless the game is in front. */
   gameRect: [number, number, number, number] | null
   monitorRect: [number, number, number, number] | null
+  /** The game window covers its whole monitor (Fullscreen or Windowed Fullscreen). */
+  coversMonitor: boolean
+  /** The monitor runs a resolution other than the desktop one: the game is in Fullscreen with its own display mode. */
+  displayModeChanged: boolean
 }
 
 const QUERY_TIMEOUT_MS = 3000
@@ -29,7 +33,9 @@ export function parseForeground(stdout: string): ForegroundInfo | null {
       gameForeground: raw.game_foreground,
       exclusiveFullscreen: raw.exclusive_fullscreen === true,
       gameRect: rect(raw.game_rect),
-      monitorRect: rect(raw.monitor_rect)
+      monitorRect: rect(raw.monitor_rect),
+      coversMonitor: raw.covers_monitor === true,
+      displayModeChanged: raw.display_mode_changed === true
     }
   } catch {
     return null

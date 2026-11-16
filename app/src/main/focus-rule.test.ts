@@ -21,7 +21,7 @@ const ALLOWED: Record<string, number> = {
   'notify.ts': 1,
   // In-game overlay: new BrowserWindow with focusable: false, and setAlwaysOnTop on that window; it is only ever shown with showInactive().
   'overlay/electron-overlay.ts': 2,
-  'overlay/overlay-window.ts': 2
+  'overlay/overlay-window.ts': 1
 }
 
 function sources(dir: string, root = dir): string[] {

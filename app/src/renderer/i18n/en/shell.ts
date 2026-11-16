@@ -56,7 +56,7 @@ export const shellI18n: Messages['shellI18n'] = {
       intro: 'Valorant Editor shows recorder status, kills and saved clips in a corner of the game. The cards never take the mouse or focus and never appear in your recordings.',
       step1: 'In VALORANT, open Settings → Video → General',
       step2: 'Set Display Mode to Windowed Fullscreen',
-      note: 'In exclusive Fullscreen nothing can appear over the game, so the cards become Windows notifications after you leave the game.',
+      note: 'Off by default. In Fullscreen (also with a stretched resolution) no card is shown, because the game can minimize when another window appears over it; notices become Windows notifications after you leave the game.',
       toggle: 'Show the in-game overlay'
     },
     done: {

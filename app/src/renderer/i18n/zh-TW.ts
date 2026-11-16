@@ -712,7 +712,7 @@ const shellI18n = {
       intro: 'Valorant Editor 會在遊戲畫面角落顯示錄影狀態、擊殺與存檔通知。通知不會搶走滑鼠或焦點，也不會出現在錄影中。',
       step1: '在 VALORANT 開啟「設定 → 影像 → 一般」',
       step2: '把「顯示模式」設為「無邊框視窗」（Windowed Fullscreen）',
-      note: '使用獨佔「全螢幕」時無法在遊戲上顯示通知，通知會在離開遊戲後改用 Windows 通知。',
+      note: '預設關閉。使用「全螢幕」（包括拉伸解析度）時不顯示卡片，因為其他視窗出現在遊戲上方時遊戲可能會縮小；通知會在離開遊戲後改用 Windows 通知。',
       toggle: '顯示遊戲內通知'
     },
     done: {
@@ -1200,7 +1200,7 @@ const recordingI18n = {
   overlay: {
     card: '遊戲內通知',
     rows: {
-      enabled: { title: '遊戲內通知', desc: '在遊戲畫面角落顯示錄影狀態、擊殺、回合與存檔通知。不會搶走滑鼠或焦點，也不會出現在錄影中。' },
+      enabled: { title: '遊戲內通知', desc: '預設關閉。在遊戲畫面角落以小卡片顯示錄影狀態、擊殺、回合與存檔通知，只在 VALORANT 位於前景且為「無邊框視窗」或「視窗」模式時顯示。不會搶走滑鼠或焦點，也不會出現在錄影中。' },
       position: { title: '位置', desc: '通知顯示在遊戲畫面的哪個角落。' },
       durationSec: { title: '顯示時間', desc: '每則通知停留的秒數；錯誤會停留兩倍時間。' },
       showKills: { title: '擊殺通知', desc: '偵測到擊殺時顯示；同一回合的多殺合併成一則，五殺顯示為 ACE。' },
@@ -1213,7 +1213,7 @@ const recordingI18n = {
     test: '顯示測試通知',
     testShown: '已顯示測試通知',
     testFailed: '無法顯示測試通知。',
-    windowedHint: '遊戲內通知需要把 VALORANT 的顯示模式設為「無邊框視窗」（Windowed Fullscreen）。在獨佔「全螢幕」下無法顯示，通知會在遊戲失去焦點後改用 Windows 通知。',
+    windowedHint: '遊戲內通知需要把 VALORANT 的顯示模式設為「無邊框視窗」（Windowed Fullscreen）。在「全螢幕」（包括拉伸解析度）下，其他視窗出現在遊戲上方時遊戲可能會縮小，因此不顯示卡片，通知會在遊戲失去焦點後改用 Windows 通知。',
     previewLabel: '預覽',
     previewTitle: 'ACE',
     previewDetail: '第 7 回合',

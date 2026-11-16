@@ -196,7 +196,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
   overlay: {
     card: 'ゲーム内オーバーレイ',
     rows: {
-      enabled: { title: 'ゲーム内オーバーレイ', desc: '録画の状態、キル、ラウンド、保存をゲーム画面の隅に表示します。マウスやフォーカスを奪わず、録画にも映りません。' },
+      enabled: { title: 'ゲーム内オーバーレイ', desc: '既定ではオフです。録画の状態、キル、ラウンド、保存をゲーム画面の隅に小さなカードで表示します。表示するのは VALORANT が前面にあり、ウィンドウフルスクリーンまたはウィンドウモードのときだけです。マウスやフォーカスを奪わず、録画にも映りません。' },
       position: { title: '位置', desc: 'カードを表示する画面の隅。' },
       durationSec: { title: '表示時間', desc: '各カードを表示する秒数。エラーは 2 倍の時間表示されます。' },
       showKills: { title: 'キルカード', desc: 'キルを検出したときに表示します。同じラウンドのキルは 1 枚にまとめ、5 キルは ACE と表示します。' },
@@ -209,7 +209,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
     test: 'テストカードを表示',
     testShown: 'テストカードを表示しました',
     testFailed: 'テストカードを表示できませんでした。',
-    windowedHint: 'オーバーレイには VALORANT の表示モードを「ウィンドウフルスクリーン」にする必要があります。排他的フルスクリーンではゲームの上に何も表示できないため、ゲームのフォーカスが外れた後に Windows 通知で表示します。',
+    windowedHint: 'オーバーレイには VALORANT の表示モードを「ウィンドウフルスクリーン」にする必要があります。フルスクリーン（引き伸ばし解像度を含む）では、上に別のウィンドウが出るとゲームが最小化されることがあるため、カードは表示せず、ゲームのフォーカスが外れた後に Windows 通知で表示します。',
     previewLabel: 'プレビュー',
     previewTitle: 'ACE',
     previewDetail: 'ラウンド 7',

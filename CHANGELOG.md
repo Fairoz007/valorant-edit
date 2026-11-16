@@ -43,7 +43,7 @@
 - Project schema v2 (per-clip speed, audio gain, effects, caption and transition; project style, music, intro/outro, letterbox
   and preset). v1 project files are migrated on load and left untouched on disk.
 
-- **In-game overlay** (Settings → Recording → In-game overlay, on by default):
+- **In-game overlay** (Settings → Recording → In-game overlay, off by default since settings version 4, see Fixed below):
   - Small kill-feed-style cards in a corner of the game for every recorder activity: game detected, recording
     started/paused/resumed/stopped, match found/started/cancelled/over, round won/lost, kills, saved, analysis done, montage
     ready, low disk space, capture fallback (DDA ↔ WGC), warnings and errors.
@@ -58,6 +58,27 @@
     The foreground window never changed (`docs/screenshots/overlay-excluded-from-recording.png`).
   - Exclusive fullscreen cannot show other windows. There, and on Windows builds older than 2004 (no capture exclusion),
     notices become Windows toasts once the game loses focus. Settings tells you to use Windowed Fullscreen.
+
+#### Fixed
+
+- **In-game overlay no longer comes up over a Fullscreen game, the desktop or other apps** (`docs/recording-mouse-input-fix.md`,
+  "Follow-up"). Reported: with VALORANT in Fullscreen at a stretched 4:3 resolution, the game minimized when a card appeared,
+  the overlay stayed on screen, and the menu pointer was gone after a recording until VALORANT was restarted.
+  - Cards are shown only while the game is the foreground window in Windowed Fullscreen or Windowed mode. A game that is not
+    in front gets a Windows toast instead (before, the overlay fell back to the last or the primary monitor, i.e. over the
+    desktop). Fullscreen with its own display mode (`aditorrec --foreground` now reports `display_mode_changed` and
+    `covers_monitor`), exclusive fullscreen, an unknown foreground, or no GPU compositing (no real transparency) show no card.
+  - The overlay window exists only while a card is on screen: it is destroyed after the last card and at once when a check
+    (every second while a card shows) finds the game no longer in front. Its topmost band is set once at creation instead of
+    being re-asserted on every card.
+  - The overlay is **off by default**. Settings saved before version 4 had it on as the old default, so it is turned off once;
+    from version 4 on your choice is kept. Settings and onboarding explain that Fullscreen shows no cards.
+  - Toasts also wait until the game loses focus, whether or not the overlay is on.
+  - The overlay page sets no CSS cursor. `app/scripts/verify-overlay-cursor.cjs` (new) shows the real overlay window over a
+    focused test window that holds the pointer and checks cursor flags, cursor handle, `WindowFromPoint`, the foreground
+    window and the cursor clip every 50 ms: unchanged, and hit-testing passed through to the window below.
+  - "Record mouse cursor" now says that it only changes the video, never the pointer on screen.
+  - Not verified in a VALORANT match: see "What is still unverified" in the findings doc.
   - Not yet checked over a running VALORANT match.
 
 - **Record gameplay only** (VALORANT, built-in recorder):

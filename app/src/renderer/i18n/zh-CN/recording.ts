@@ -196,7 +196,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
   overlay: {
     card: '游戏内通知',
     rows: {
-      enabled: { title: '游戏内通知', desc: '在游戏画面角落显示录制状态、击杀、回合与保存通知。不会抢走鼠标或焦点，也不会出现在录像中。' },
+      enabled: { title: '游戏内通知', desc: '默认关闭。在游戏画面角落以小卡片显示录制状态、击杀、回合与保存通知，仅在 VALORANT 位于前台且为“窗口化全屏”或“窗口”模式时显示。不会抢走鼠标或焦点，也不会出现在录像中。' },
       position: { title: '位置', desc: '通知显示在游戏画面的哪个角落。' },
       durationSec: { title: '显示时间', desc: '每条通知停留的秒数；错误会停留两倍时间。' },
       showKills: { title: '击杀通知', desc: '检测到击杀时显示；同一回合的多杀合并为一条，五杀显示为 ACE。' },
@@ -209,7 +209,7 @@ export const recordingI18n: Messages['recordingI18n'] = {
     test: '显示测试通知',
     testShown: '已显示测试通知',
     testFailed: '无法显示测试通知。',
-    windowedHint: '游戏内通知需要将 VALORANT 的显示模式设为“窗口化全屏”。在独占“全屏”下无法显示，通知会在游戏失去焦点后改用 Windows 通知。',
+    windowedHint: '游戏内通知需要将 VALORANT 的显示模式设为“窗口化全屏”。在“全屏”（包括拉伸分辨率）下，其他窗口出现在游戏上方时游戏可能会最小化，因此不显示卡片，通知会在游戏失去焦点后改用 Windows 通知。',
     previewLabel: '预览',
     previewTitle: 'ACE',
     previewDetail: '第 7 回合',

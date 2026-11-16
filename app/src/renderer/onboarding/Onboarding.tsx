@@ -123,7 +123,7 @@ function RecordingStep({ draft, onDraft }: StepProps): JSX.Element {
   )
 }
 
-/** Windowed Fullscreen: the overlay cannot appear over an exclusive-fullscreen game. */
+/** Windowed Fullscreen: the overlay is never shown over a Fullscreen game (it can minimize the game). Off by default. */
 function OverlayStep({ draft, onDraft }: StepProps): JSX.Element {
   const o = t.overlay
   return (

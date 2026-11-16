@@ -44,7 +44,7 @@ describe('Onboarding step content', () => {
     expect(html(2)).toContain('第 3 步，共 5 步')
   })
 
-  test('Step 4: in-game overlay asks for Windowed Fullscreen, shows a preview card and an on/off choice (on by default)', () => {
+  test('Step 4: in-game overlay asks for Windowed Fullscreen, shows a preview card and an on/off choice (off by default)', () => {
     const out = html(3)
     expect(out).toContain(t.overlay.title)
     expect(out).toContain(t.overlay.step1)
@@ -52,7 +52,8 @@ describe('Onboarding step content', () => {
     expect(out).toContain(t.overlay.note)
     expect(out).toContain(t.overlay.toggle)
     expect(out).toContain('class="ovp')
-    expect(out).toMatch(/<input type="checkbox" checked=""/)
+    expect(out).toMatch(/<input type="checkbox"\/>/)
+    expect(out).not.toMatch(/<input type="checkbox" checked=""/)
   })
 
   test('Step 1: welcome text and language selector (system default and all languages)', () => {
@@ -129,7 +130,7 @@ describe('Onboarding interactions and submitted data', () => {
     await flush()
     click(buttonByText(document.body, t.next)!)
     await flush()
-    // Step 4: the overlay step; turn the overlay off.
+    // Step 4: the overlay step (off by default); turn the overlay on.
     expect(document.body.textContent).toContain(t.overlay.title)
     click(document.querySelector<HTMLInputElement>('.ob-check input[type="checkbox"]')!)
     await flush()
@@ -141,7 +142,7 @@ describe('Onboarding interactions and submitted data', () => {
     expect(set).toHaveBeenCalledWith({
       storageRoot: SUGGESTED,
       onboardingDone: true,
-      recording: { mode: 'session', height: 1080, fps: 60, bitrateKbps: 10000, overlay: { enabled: false } }
+      recording: { mode: 'session', height: 1080, fps: 60, bitrateKbps: 10000, overlay: { enabled: true } }
     })
     expect(onClose).toHaveBeenCalledTimes(1)
   })

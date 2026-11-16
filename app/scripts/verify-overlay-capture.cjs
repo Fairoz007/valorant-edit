@@ -39,7 +39,7 @@ async function overlay(protect, display) {
   })
   win.setIgnoreMouseEvents(true)
   win.setContentProtection(protect)
-  win.setAlwaysOnTop(true, 'screen-saver')
+  win.setAlwaysOnTop(true, 'floating') // OVERLAY_TOPMOST_LEVEL
   await win.loadFile(path.join(REPO, 'app', 'out', 'renderer', 'overlay', 'index.html'))
   win.setBounds({ x: display.x + display.width - 440 - 24, y: display.y + 24, width: 440, height: 220 })
   const cards = [

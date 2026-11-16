@@ -261,8 +261,8 @@ async function initEngineAndServices(): Promise<void> {
   cancelExport = handlers.cancelExport
 
   const toast = createRecordingNotifier(() => settingsStore!.get().recording)
-  // In-game overlay: recorder activity shows as click-through cards over the game; without a game it falls back to toasts,
-  // and in exclusive fullscreen the toast waits until the game loses focus (it would not be visible over the game anyway).
+  // In-game overlay (off by default): recorder activity shows as click-through cards over the game, only while the game is in
+  // front in Windowed Fullscreen / Windowed. Otherwise notices become toasts, which wait until the game loses focus.
   const overlayWin = new OverlayWindow({
     create: createElectronOverlayWindow,
     getSettings: () => settingsStore!.get().recording.overlay,
@@ -277,13 +277,17 @@ async function initEngineAndServices(): Promise<void> {
     void overlay.handle(input).catch((error) => console.error('[overlay] Failed to handle activity:', error))
   }
   let deferredToasts = 0
+  // A toast is another window over the game, so it goes through the focus guard too: shown at once when the game is not in
+  // front (or not running), and after the game loses focus otherwise. With the overlay off this is the only notice path.
+  const deferredToast = (kind: RecordingNoticeKind, message: string): void => {
+    void focusGuard.run(`toast-${++deferredToasts}`, () => toast(kind, message))
+  }
   const notify = (kind: RecordingNoticeKind, message: string): void => {
     void overlay.handle({ type: 'notice', kind, message }).then((outcome) => {
-      if (outcome === 'off') toast(kind, message)
-      else if (outcome === 'exclusive') void focusGuard.run(`toast-${++deferredToasts}`, () => toast(kind, message))
+      if (outcome !== 'shown') deferredToast(kind, message)
     }, (error) => {
       console.error('[overlay] Failed to handle notice:', error)
-      toast(kind, message)
+      deferredToast(kind, message)
     })
   }
   ipcMain.handle(OVERLAY_CHANNELS.test, async () => {

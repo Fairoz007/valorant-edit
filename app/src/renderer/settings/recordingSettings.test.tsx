@@ -69,12 +69,16 @@ async function slider(field: string, value: string): Promise<void> {
 }
 
 describe('Recording settings screen and controller', () => {
-  test('in-game overlay: defaults on, writes settings.recording.overlay, disables its options when off, and the Test button asks main', async () => {
+  test('in-game overlay: defaults off, writes settings.recording.overlay, disables its options when off, and the Test button asks main', async () => {
     const r = await show()
     const testOverlay = vi.fn(async () => true)
     r.api.recording!.testOverlay = testOverlay
     const ov = <T extends HTMLElement>(field: string): T => document.getElementById(`set-overlay-${field}`) as T
-    expect(ov<HTMLInputElement>('enabled').checked).toBe(true)
+    expect(ov<HTMLInputElement>('enabled').checked).toBe(false)
+    expect(ov<HTMLSelectElement>('position').disabled).toBe(true)
+    click(ov('enabled'))
+    await flush()
+    expect(r.controller.getState().settings?.recording.overlay.enabled).toBe(true)
     expect(ov<HTMLSelectElement>('position').value).toBe('topRight')
     act(() => { ov<HTMLSelectElement>('position').value = 'bottomLeft'; ov('position').dispatchEvent(new Event('change', { bubbles: true })) })
     await flush()
