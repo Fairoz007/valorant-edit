@@ -113,7 +113,8 @@ function ShellFrame({
                 void openProject(projectId).then((ok) => { if (ok) onOpenVideo(job.sourcePath) })
               }
             : undefined
-          overlay.open(<RecordingPanel onClose={overlay.close} onWatchLive={watchLive} onOpenMontage={openMontage} />)
+          const openSettings = (): void => { overlay.close(); onNavigate('settings', 'recording') }
+          overlay.open(<RecordingPanel onClose={overlay.close} onWatchLive={watchLive} onOpenMontage={openMontage} onOpenSettings={openSettings} />)
         }}
       />
       <main className="app-main">{children}</main>

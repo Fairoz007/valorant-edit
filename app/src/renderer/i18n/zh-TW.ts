@@ -106,6 +106,10 @@ const i18n = {
       cancel: '取消',
       removeFailed: '移除失敗，無法刪除來源影片檔案，請確認檔案權限或是否正被使用。',
       montageTag: '精華剪輯',
+      resultWin: '勝',
+      resultLoss: '敗',
+      resultDraw: '平',
+      resultLabel: '{result} {ally}–{enemy}',
       montageRemoveConfirm: '要從影片庫移除精華剪輯「{name}」嗎？剪輯檔案會保留在磁碟上，來源錄影與專案不受影響。',
       montageOpenFailed: '無法開啟這個精華剪輯的專案。'
     },
@@ -703,6 +707,14 @@ const shellI18n = {
       fps: '影格率',
       bitrate: '位元率（kbps）'
     },
+    overlay: {
+      title: '遊戲內通知',
+      intro: 'Valorant Editor 會在遊戲畫面角落顯示錄影狀態、擊殺與存檔通知。通知不會搶走滑鼠或焦點，也不會出現在錄影中。',
+      step1: '在 VALORANT 開啟「設定 → 影像 → 一般」',
+      step2: '把「顯示模式」設為「無邊框視窗」（Windowed Fullscreen）',
+      note: '預設關閉。使用「全螢幕」（包括拉伸解析度）時不顯示卡片，因為其他視窗出現在遊戲上方時遊戲可能會縮小；通知會在離開遊戲後改用 Windows 通知。',
+      toggle: '顯示遊戲內通知'
+    },
     done: {
       title: '都設定好了',
       summaryStorage: '儲存位置：{dir}',
@@ -996,7 +1008,7 @@ const settingsI18n = {
 const recordingI18n = {
   title: '錄影',
   card: '遊戲錄影',
-  cards: { basics: '基本', recorder: '錄影器', video: '影像', audio: '音訊', disk: '磁碟空間與通知', autoMontage: '自動精華影片' },
+  cards: { basics: '錄什麼', recorder: '擷取', video: '畫質', audio: '音訊', disk: '儲存與通知', autoMontage: '自動精華影片' },
   advanced: '進階選項',
   current: '目前：{value}',
   fit: '適配',
@@ -1025,8 +1037,9 @@ const recordingI18n = {
     obsPort: { title: 'OBS 連接埠', desc: '預設為 4455。' },
     obsPassword: { title: 'OBS 密碼', desc: '密碼由系統加密儲存，無法查看已儲存的密碼。' },
     obsFallbackBuiltin: { title: 'OBS 連不上時改用內建錄影', desc: '關閉後仍繼續即時偵測，但不錄製影片。' },
-    mode: { title: '錄影模式', desc: '一局一個檔模式下，OBS 僅在對局期間錄影；內建錄影器整場持續錄影，每局結束後自動剪出該局（前後各留 5 秒），只保留對局，大廳只暫存最近 15 秒，久待大廳不會持續占用磁碟；即時偵測無法運作時保留整段錄影' },
+    mode: { title: '錄影模式', desc: '「只錄遊戲畫面」：每局一個檔，從第一回合的購買階段開始、到對局結束後 5 秒；大廳、排隊、選角與載入畫面都不保留（大廳只暫存最近 15 秒）。無法確定對局範圍時（例如 Riot Client 無法連線）會保留錄影，只剪掉確定不是遊戲的部分。「整段錄影」保留全部內容。' },
     postAnalysis: { title: '錄後分析', desc: '「每局結束後」只在一局一個檔模式下於每局影片完成後立即分析；從頭錄到尾模式在收尾後分析' },
+    trimBuyPhase: { title: '剪掉購買階段', desc: '每局影片再剪掉回合之間的購買階段，只留交戰。偵測到擊殺或陣亡的前後 5 秒不會剪；僅限 VALORANT 與內建錄影器。' },
     diskWarnGb: { title: '磁碟提醒門檻', desc: '剩餘空間低於此值時通知。' },
     diskStopGb: { title: '磁碟停止門檻', desc: '剩餘空間低於此值時停止錄影並收尾；不可高於提醒門檻。' },
     notifyMatch: { title: '對局通知', desc: '對局偵測完成後，通知對局開始與結束；錯誤一律通知。' },
@@ -1041,7 +1054,7 @@ const recordingI18n = {
     encoder: { title: '錄影編碼器', desc: '依目前編碼格式列出錄影器可用的硬體編碼器。' },
     preset: { title: '編碼預設', desc: '品質越高，GPU 使用量越高。' },
     captureMethod: { title: '擷取方式', desc: '自動（預設）：Windows 10 用螢幕擷取，因為 Windows 10 的視窗擷取會在遊戲周圍顯示黃框；其他系統用視窗擷取。視窗擷取（WGC）只錄遊戲視窗，但大廳滑鼠會有延遲；螢幕擷取（DDA）不會造成滑鼠延遲，但會錄下整個螢幕，蓋在遊戲上的視窗與切出遊戲後的畫面都會被錄進去。下次開始錄影時生效。 Hook擷取需手動選用並確認風險，自動模式絕不使用；無法使用時會退回螢幕擷取（DDA）。' },
-    captureCursor: { title: '錄製滑鼠游標', desc: '預設開啟，將滑鼠游標錄進影片。下次開始錄影時生效。 Hook擷取不支援錄製系統滑鼠游標。' },
+    captureCursor: { title: '錄製滑鼠游標', desc: '預設開啟，將滑鼠游標錄進影片。下次開始錄影時生效。 Hook擷取不支援錄製系統滑鼠游標。只影響錄影，不會隱藏或移動螢幕上的游標。' },
     systemAudioEnabled: { title: '錄製系統聲音', desc: '將系統聲音錄進影片。' },
     renderDevice: { title: '系統聲音裝置', desc: '擷取此輸出裝置播放的系統聲音。' },
     systemGain: { title: '系統聲音音量', desc: '100% 為原始音量，最高 200%。' },
@@ -1053,8 +1066,8 @@ const recordingI18n = {
   },
   auto: '自動',
   defaultDevice: '預設',
-  session: '從頭錄到尾',
-  match: '一局一個檔',
+  session: '整段錄影',
+  match: '只錄遊戲畫面（每局一個檔）',
   native: '原生',
   analysisNone: '不分析',
   analysisAfterExit: '關閉 Apex 後',
@@ -1183,6 +1196,47 @@ const recordingI18n = {
       actionFailed: '操作失敗，請再試一次。',
       unavailable: '無法取得自動精華影片狀態。'
     }
+  },
+  overlay: {
+    card: '遊戲內通知',
+    rows: {
+      enabled: { title: '遊戲內通知', desc: '預設關閉。在遊戲畫面角落以小卡片顯示錄影狀態、擊殺、回合與存檔通知，只在 VALORANT 位於前景且為「無邊框視窗」或「視窗」模式時顯示。不會搶走滑鼠或焦點，也不會出現在錄影中。' },
+      position: { title: '位置', desc: '通知顯示在遊戲畫面的哪個角落。' },
+      durationSec: { title: '顯示時間', desc: '每則通知停留的秒數；錯誤會停留兩倍時間。' },
+      showKills: { title: '擊殺通知', desc: '偵測到擊殺時顯示；同一回合的多殺合併成一則，五殺顯示為 ACE。' },
+      showRounds: { title: '回合結果', desc: '每回合結束時顯示勝負與比分（需要 Riot Client）。' },
+      opacity: { title: '不透明度', desc: '通知卡片的不透明度。' },
+      test: { title: '測試通知', desc: '在這個螢幕的角落顯示範例通知，確認位置與大小。' }
+    },
+    positions: { topRight: '右上', topLeft: '左上', bottomRight: '右下', bottomLeft: '左下' },
+    secondsUnit: '秒',
+    test: '顯示測試通知',
+    testShown: '已顯示測試通知',
+    testFailed: '無法顯示測試通知。',
+    windowedHint: '遊戲內通知需要把 VALORANT 的顯示模式設為「無邊框視窗」（Windowed Fullscreen）。在「全螢幕」（包括拉伸解析度）下，其他視窗出現在遊戲上方時遊戲可能會縮小，因此不顯示卡片，通知會在遊戲失去焦點後改用 Windows 通知。',
+    previewLabel: '預覽',
+    previewTitle: 'ACE',
+    previewDetail: '第 7 回合',
+    offHint: '開啟「遊戲內通知」後才能調整這些選項。'
+  },
+  panel: {
+    title: '錄影器',
+    states: { idle: '待命', paused: '已暫停', starting: '啟動中', waiting: '等待對局', recording: '錄影中', recordingMatch: '錄影中・第 {n} 局', obsWaiting: '等待對局（OBS）', detectionOnly: '僅即時偵測', saving: '儲存中', error: '錯誤' },
+    elapsed: '錄影時間',
+    kills: '本局擊殺',
+    score: '回合比分',
+    match: '對局',
+    disk: '磁碟剩餘',
+    capture: '{method} 擷取',
+    overlayOn: '遊戲內通知：開',
+    overlayOff: '遊戲內通知：關',
+    pause: '暫停',
+    resume: '繼續',
+    pauseHint: '暫停／繼續自動錄影',
+    details: '技術細節',
+    fixTitle: '解決方法',
+    hints: { no_hw_encoder: '更新顯示卡驅動，或在「設定 → 錄影 → 畫質」改用 H.264。', disk_full: '清出磁碟空間，或在「設定 → 一般 → 儲存位置」改用其他磁碟。', audio_failed: '在「設定 → 錄影 → 音訊」重新選擇裝置，再按「開始錄影」。', restart_limit: '重新啟動 Valorant Editor；若仍發生，請在「設定 → 錄影 → 擷取」改用其他擷取方式。', finalize_failed: '錄影段落已保留，下次啟動時會自動重試儲存。', default: '在「設定 → 錄影」檢查擷取與畫質設定，然後再按「開始錄影」。' },
+    openSettings: '錄影設定'
   }
 }
 

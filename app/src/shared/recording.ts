@@ -9,7 +9,7 @@ import { DEFAULT_AUTO_MONTAGE, type AutoMontageSettings } from './montage'
 /** Built-in recorder or OBS Studio (WebSocket v5). */
 export type RecordingBackend = 'builtin' | 'obs'
 
-/** 'match' = record continuously and split by match; 'session' = record from start to finish. */
+/** 'match' = keep only gameplay, one file per match (default); 'session' = keep everything from start to finish. */
 export type RecordingMode = 'match' | 'session'
 
 /** Full post-recording analysis (R9): none, after Apex exits (default), or at low priority after each match. */
@@ -36,6 +36,11 @@ export interface RecordingSettings {
   obsPassword?: string
   obsFallbackBuiltin: boolean
   mode: RecordingMode
+  /**
+   * Also cut the buy phase between rounds out of each match file (VALORANT, built-in recorder; off by default).
+   * Never cuts within 5 s of a detected kill or death.
+   */
+  trimBuyPhase: boolean
   /** Recording folder; null uses the first watched folder, or `Valorant Editor` under the Videos folder if none are watched. */
   outputDir: string | null
   codec: RecordingCodec
@@ -79,6 +84,40 @@ export interface RecordingSettings {
   openOnGameExit: boolean
   /** Build and export a highlight montage after each analyzed match (`shared/montage.ts`; off by default). */
   autoMontage: AutoMontageSettings
+  /** In-game overlay notifications for recorder activity (click-through, never focused, excluded from capture). */
+  overlay: OverlaySettings
+}
+
+export type OverlayPosition = 'topRight' | 'topLeft' | 'bottomRight' | 'bottomLeft'
+
+export interface OverlaySettings {
+  enabled: boolean
+  position: OverlayPosition
+  /** Seconds a card stays on screen (errors stay twice as long). */
+  durationSec: number
+  /** Kill / multi-kill / ace cards from the live engine. */
+  showKills: boolean
+  /** Round won / lost cards. */
+  showRounds: boolean
+  /** Card opacity, 0.3..1. */
+  opacity: number
+}
+
+export const OVERLAY_POSITIONS: readonly OverlayPosition[] = ['topRight', 'topLeft', 'bottomRight', 'bottomLeft']
+
+export const OVERLAY_RANGES = {
+  durationSec: { min: 1, max: 10 },
+  opacity: { min: 0.3, max: 1 }
+} as const
+
+/** Off by default (settings version 4): a card over a Fullscreen VALORANT can make the game minimize. */
+export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
+  enabled: false,
+  position: 'topRight',
+  durationSec: 3,
+  showKills: true,
+  showRounds: true,
+  opacity: 0.9
 }
 
 export type RecordingCaptureMethod = 'auto' | 'wgc' | 'dda' | 'hook'
@@ -100,7 +139,8 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   obsPort: 4455,
   obsPasswordEnc: null,
   obsFallbackBuiltin: true,
-  mode: 'session',
+  mode: 'match',
+  trimBuyPhase: false,
   outputDir: null,
   codec: 'hevc',
   gpu: 'auto',
@@ -126,7 +166,8 @@ export const DEFAULT_RECORDING_SETTINGS: RecordingSettings = {
   captureCursor: true,
   captureMethod: 'auto',
   openOnGameExit: true,
-  autoMontage: { ...DEFAULT_AUTO_MONTAGE, include: { ...DEFAULT_AUTO_MONTAGE.include } }
+  autoMontage: { ...DEFAULT_AUTO_MONTAGE, include: { ...DEFAULT_AUTO_MONTAGE.include } },
+  overlay: { ...DEFAULT_OVERLAY_SETTINGS }
 }
 
 /** Recording service status (pushed from main to renderer on `recording:status`, also available via `recording:getStatus`). */
@@ -152,6 +193,8 @@ export interface RecordingStatus {
   sessionId: string | null
   /** Recording start time in epoch milliseconds. */
   startedAt: number | null
+  /** Capture method in use for the current recording (null when idle or with OBS). */
+  capture?: 'wgc' | 'dda' | 'hook' | null
   /** Actual encoder and dimensions reported by aditorrec `started`. */
   encoder: string | null
   width: number | null
@@ -170,6 +213,10 @@ export interface RecordingStatus {
   kills: number
   /** Match number (starting at 1); null before match data is available. */
   matchIndex: number | null
+  /** A match is being played right now (false in the menus, queue and agent select). */
+  inMatch?: boolean
+  /** Round score of the current match (VALORANT, Riot Client); 0–0 at match start, null when unknown. */
+  score?: { ally: number; enemy: number } | null
 }
 
 export const IDLE_RECORDING_STATUS: RecordingStatus = {
@@ -179,6 +226,7 @@ export const IDLE_RECORDING_STATUS: RecordingStatus = {
   detectionOnly: false,
   sessionId: null,
   startedAt: null,
+  capture: null,
   encoder: null,
   width: null,
   height: null,
@@ -189,7 +237,9 @@ export const IDLE_RECORDING_STATUS: RecordingStatus = {
   paused: false,
   error: null,
   kills: 0,
-  matchIndex: null
+  matchIndex: null,
+  inMatch: false,
+  score: null
 }
 
 /** A recording GPU reported by aditorrec `hello`. */

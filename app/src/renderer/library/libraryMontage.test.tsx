@@ -52,6 +52,20 @@ function clickRemove(el: ParentNode): void {
 }
 
 describe('Library: auto montage entries', () => {
+  test('a recorded match shows its result and score; a montage shows a Montage badge on the thumbnail', async () => {
+    const won: LibraryEntry = { path: 'D:/v/won.mp4', source: 'recording', status: 'done', progress: 1, favorite: false, addedAt: NOW - 5,
+      game: 'valorant', counts: { knock: 0, assist: 0, kill: 21, death: 12 }, score: { ally: 13, enemy: 9 } }
+    const lost: LibraryEntry = { ...won, path: 'D:/v/lost.mp4', score: { ally: 7, enemy: 13 } }
+    const { container } = await setup([won, lost, { ...montage, status: 'done', progress: 1 }])
+    const result = (path: string) => card(container, path).querySelector('.vbadge.result')
+    expect(result(won.path)?.textContent).toBe(`${t.card.resultWin} 13–9`)
+    expect(result(won.path)?.classList.contains('win')).toBe(true)
+    expect(result(lost.path)?.textContent).toBe(`${t.card.resultLoss} 7–13`)
+    expect(card(container, won.path).querySelector('.vbadge.knock')?.textContent).toContain('21')
+    expect(card(container, montage.path).querySelector('.vcard-tags .vbadge.montage')?.textContent).toBe(t.card.montageTag)
+    expect(result(montage.path)).toBeNull()
+  })
+
   test('show a Montage badge (also in the card label) and are not tagged as imported', async () => {
     const { container } = await setup([montage, imported])
     const c = card(container, montage.path)

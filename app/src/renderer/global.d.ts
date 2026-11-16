@@ -5,6 +5,8 @@ import type { MontageStatus } from '../shared/montage'
 /** Recording APIs are provided only by preload. Other legacy APIs remain for compatibility. */
 export interface RecordingApi {
   testObs?(): Promise<ObsTestResult>
+  /** Show sample in-game overlay cards; optional in test doubles. */
+  testOverlay?(): Promise<boolean>
   getStatus(): Promise<RecordingStatus>
   getCapabilities(): Promise<RecorderCapabilities | null>
   startManual(): Promise<boolean>

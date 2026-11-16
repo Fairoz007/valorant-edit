@@ -176,6 +176,8 @@ export class LiveSession extends EventEmitter {
 
   kills(): number { return countKills(this.snapshot.events, this.matches) }
   matchIndex(): number | null { return this.matches.length ? this.matches.length : null }
+  /** The last match has started and not ended. */
+  inMatch(): boolean { return this.matches.at(-1)?.end === null }
 
   async state(): Promise<LiveState> {
     if (!this.mime) {

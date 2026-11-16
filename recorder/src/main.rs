@@ -5,6 +5,7 @@ mod audio;
 mod capture;
 mod clock;
 mod encode;
+mod foreground;
 mod gpu;
 mod index;
 mod ipc;
@@ -14,6 +15,12 @@ mod shm;
 mod types;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(pid) = foreground::requested(&args) {
+        // Query mode: no encoder, GPU or capture setup; print one line and exit.
+        println!("{}", foreground::query(pid));
+        return;
+    }
     if let Err(error) = encode::check_version() {
         eprintln!("internal: {error:#}");
         std::process::exit(1);

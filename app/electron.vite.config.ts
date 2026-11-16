@@ -35,7 +35,12 @@ export default defineConfig({
     }
   },
   preload: {
-    build: { sourcemap: 'hidden', externalizeDeps: { exclude: SENTRY_BUNDLED } },
+    build: {
+      sourcemap: 'hidden',
+      externalizeDeps: { exclude: SENTRY_BUNDLED },
+      // index: main window; overlay: the in-game overlay page (receives cards only).
+      rollupOptions: { input: { index: resolve(__dirname, 'src/preload/index.ts'), overlay: resolve(__dirname, 'src/preload/overlay.ts') } }
+    },
     plugins: [...sentryPlugins('preload')],
     resolve: {
       alias: {
@@ -44,7 +49,10 @@ export default defineConfig({
     }
   },
   renderer: {
-    build: { sourcemap: 'hidden' },
+    build: {
+      sourcemap: 'hidden',
+      rollupOptions: { input: { index: resolve(__dirname, 'src/renderer/index.html'), overlay: resolve(__dirname, 'src/renderer/overlay/index.html') } }
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer'),

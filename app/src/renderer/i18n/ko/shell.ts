@@ -52,6 +52,14 @@ export const shellI18n: Messages['shellI18n'] = {
       fps: '프레임 레이트',
       bitrate: '비트레이트(kbps)'
     },
+    overlay: {
+      title: '게임 내 오버레이',
+      intro: 'Valorant Editor는 게임 화면 모서리에 녹화 상태, 킬, 저장 알림을 표시합니다. 카드는 마우스나 포커스를 가져가지 않으며 녹화에도 나타나지 않습니다.',
+      step1: 'VALORANT에서 「설정 → 비디오 → 일반」을 엽니다',
+      step2: '「디스플레이 모드」를 「창 모드 전체 화면」으로 설정합니다',
+      note: '기본적으로 꺼져 있습니다. 전체 화면(늘린 해상도 포함)에서는 다른 창이 위에 나타나면 게임이 최소화될 수 있으므로 카드를 표시하지 않고, 게임을 벗어난 뒤 Windows 알림으로 표시합니다.',
+      toggle: '게임 내 오버레이 표시'
+    },
     done: {
       title: '설정이 모두 끝났습니다',
       summaryStorage: '저장 위치: {dir}',

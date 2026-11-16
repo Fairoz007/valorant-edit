@@ -12,7 +12,7 @@ import { WatchManager } from './watch'
 import { ProjectStore } from './projects'
 import { registerIpcHandlers } from './ipc-handlers'
 import { createCloseGate } from './project-ipc'
-import { currentE2EConfig } from './e2e'
+import { currentE2EConfig, withStatusPatch } from './e2e'
 import { applyWindowSecurity } from './window-security'
 import { applyAppUserModelId } from './app-identity'
 import { sanitizeAnalyzeArgs, sanitizeAutoclipArgs, sanitizeProbeArgs } from './ipc-guards'
@@ -36,6 +36,13 @@ import { cleanupMontageOutput, createMontageRenderer, createOutputProbe } from '
 import { broadcastMontageStatus, registerMontageIpc } from './montage/montage-ipc'
 import { diskFreeBytes } from './recording/disk'
 import type { CacheDoc, Clip } from '../shared/types'
+import { createFocusGuard } from './focus-guard'
+import { createForegroundQuery } from './foreground'
+import { OverlayWindow } from './overlay/overlay-window'
+import { createElectronOverlayWindow, createOverlayPlacement, displayNear } from './overlay/electron-overlay'
+import { createOverlayController, type OverlayInput } from './overlay/overlay-controller'
+import { OVERLAY_CHANNELS } from '../shared/overlay'
+import type { RecordingNoticeKind } from './recording'
 
 // E2E hooks (ADITOR_E2E=1 only): use temporary appData/userData so tests do not touch user data; null in production.
 const e2e = currentE2EConfig()
@@ -66,6 +73,7 @@ let unregisterRecordingIpc: (() => void) | null = null
 let unsubscribeSettings: (() => void) | null = null
 let appUpdater: AppUpdaterService | null = null
 let montageService: MontageService | null = null
+let overlayWindow: OverlayWindow | null = null
 let quitting = false
 /** Currently active interface language (from the `language` setting; English by default, `auto` follows the Windows display language). */
 let locale: Locale = 'en'
@@ -73,6 +81,23 @@ let servicesReady = false
 let openRequested = !process.argv.includes('--hidden')
 /** Maximum time to wait before closing the window when the renderer does not respond to flush. */
 const CLOSE_FLUSH_TIMEOUT_MS = 1500
+/** PID of the detected game (null when none); set by the recording service's process poll. */
+let gamePid: number | null = null
+/** Diagnostic log for focus decisions; replaced by recording.log once services start. */
+let focusLog: (message: string) => void = () => {}
+const queryForeground = createForegroundQuery(aditorrecCommand(app.isPackaged))
+/**
+ * While the game is the foreground window nothing may show, focus or raise a window of ours (docs/recording-mouse-input-fix.md):
+ * a fullscreen game that loses the foreground releases its mouse capture. Such calls wait until the game loses focus or exits.
+ */
+const focusGuard = createFocusGuard({
+  isGameForeground: async () => {
+    if (gamePid === null) return false
+    const info = await queryForeground(gamePid)
+    return info ? info.gameForeground : null
+  },
+  log: (message) => focusLog(message)
+})
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -134,10 +159,18 @@ function createWindow(): void {
     void cancelExport?.()
   })
 
-  win.on('ready-to-show', () => {
-    win.show()
-    win.focus()
+  // Electron emits ready-to-show on every first paint of a new document, including a reload of a window hidden in the tray
+  // (language change); showing only once keeps a reload from popping the window over the game.
+  win.once('ready-to-show', () => {
+    void focusGuard.run('main-window', () => {
+      if (win.isDestroyed()) return
+      win.show()
+      win.focus()
+    }, { userInitiated: true })
   })
+  // Diagnostic: every focus change of our window with the game state, so a report of lost input can be checked against recording.log.
+  win.on('focus', () => focusLog(`main window focus (game pid ${gamePid ?? 'none'})`))
+  win.on('blur', () => focusLog('main window blur'))
 
   loadRenderer(mainWindow)
 }
@@ -162,15 +195,19 @@ function syncLocale(): boolean {
   return true
 }
 
-function showMainWindow(): void {
+/** `userInitiated`: the user asked (tray, second launch, app start); an unknown foreground then does not block it, a game in front still does. */
+function showMainWindow(userInitiated = true): void {
   openRequested = true
   if (!servicesReady || quitting) return
-  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
-  else {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  }
+  void focusGuard.run('main-window', () => {
+    if (quitting) return
+    if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+    else {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }, { userInitiated })
 }
 
 async function initEngineAndServices(): Promise<void> {
@@ -223,7 +260,44 @@ async function initEngineAndServices(): Promise<void> {
   const handlers = registerIpcHandlers(library, queue, () => (mainWindow ? [mainWindow] : []), engineClient, settingsStore, watchManager, projectStore, (ok) => closeGate?.ack(ok), (sources) => mediaAccess.allowProjectSources(sources))
   cancelExport = handlers.cancelExport
 
-  const notify = createRecordingNotifier(() => settingsStore!.get().recording)
+  const toast = createRecordingNotifier(() => settingsStore!.get().recording)
+  // In-game overlay (off by default): recorder activity shows as click-through cards over the game, only while the game is in
+  // front in Windowed Fullscreen / Windowed. Otherwise notices become toasts, which wait until the game loses focus.
+  const overlayWin = new OverlayWindow({
+    create: createElectronOverlayWindow,
+    getSettings: () => settingsStore!.get().recording.overlay,
+    placement: createOverlayPlacement({ gamePid: () => gamePid, queryForeground })
+  })
+  overlayWindow = overlayWin
+  const overlay = createOverlayController({
+    getSettings: () => settingsStore!.get().recording.overlay,
+    present: (card) => overlayWin.present(card)
+  })
+  const toOverlay = (input: OverlayInput): void => {
+    void overlay.handle(input).catch((error) => console.error('[overlay] Failed to handle activity:', error))
+  }
+  let deferredToasts = 0
+  // A toast is another window over the game, so it goes through the focus guard too: shown at once when the game is not in
+  // front (or not running), and after the game loses focus otherwise. With the overlay off this is the only notice path.
+  const deferredToast = (kind: RecordingNoticeKind, message: string): void => {
+    void focusGuard.run(`toast-${++deferredToasts}`, () => toast(kind, message))
+  }
+  const notify = (kind: RecordingNoticeKind, message: string): void => {
+    void overlay.handle({ type: 'notice', kind, message }).then((outcome) => {
+      if (outcome !== 'shown') deferredToast(kind, message)
+    }, (error) => {
+      console.error('[overlay] Failed to handle notice:', error)
+      deferredToast(kind, message)
+    })
+  }
+  ipcMain.handle(OVERLAY_CHANNELS.test, async () => {
+    const placement = displayNear(mainWindow)
+    for (const [i, card] of overlay.test().entries()) {
+      if (i) await new Promise((resolve) => setTimeout(resolve, 180))
+      await overlayWin.present(card, placement)
+    }
+    return true
+  })
   const pushLibrary = (): void => {
     const payload = queue!.payload()
     for (const win of BrowserWindow.getAllWindows()) {
@@ -238,6 +312,7 @@ async function initEngineAndServices(): Promise<void> {
   // Game presence comes from the shared poll; unknown (before the first poll) counts as running.
   let gameRunning: boolean | null = null
   const recordingLog = createDiagnosticLog(join(appDataDir(), 'recording.log'))
+  focusLog = recordingLog
   const montage = createMontageService({
     store: new MontageJobStore(join(appDataDir(), 'montage', 'jobs.json')),
     getSettings: () => {
@@ -300,7 +375,11 @@ async function initEngineAndServices(): Promise<void> {
     log: (message) => recordingLog(message)
   })
   montageService = montage
-  queue.on('analyzed', (videoPath: string, game) => montage.onMatchAnalyzed(videoPath, game))
+  queue.on('analyzed', (videoPath: string, game) => {
+    montage.onMatchAnalyzed(videoPath, game)
+    const entry = library?.get(videoPath)
+    if (entry?.source === 'recording') toOverlay({ type: 'analysis', kills: entry.counts?.kill ?? null })
+  })
   queue.on('analysisFailed', (videoPath: string, _game: unknown, error: string) => montage.onAnalysisFailed(videoPath, error))
   const unregisterMontageIpc = registerMontageIpc(ipcMain, montage)
   const unsubscribeMontage = settingsStore.onChange(() => montage.onSettingsChanged())
@@ -324,7 +403,13 @@ async function initEngineAndServices(): Promise<void> {
     },
     enqueueAnalysis: (videoPath) => queue!.enqueue(videoPath),
     notify,
-    onGameExit: () => showMainWindow(),
+    onGameExit: () => showMainWindow(false),
+    onActivity: (activity) => toOverlay({ type: 'activity', activity }),
+    onGamePid: (pid) => {
+      gamePid = pid
+      // The game exited: anything deferred while it was in front can run now.
+      if (pid === null) void focusGuard.flush()
+    },
     onGameRunning: (running) => {
       gameRunning = running
       queue!.setGameRunning(running)
@@ -338,18 +423,24 @@ async function initEngineAndServices(): Promise<void> {
     liveCachePath: (videoPath) => cacheFilePath(videoPath, cacheDir(), settingsStore!.get().cacheLocation === 'besideVideo'),
     // Live cache is already done, so the library entry can open immediately; if full analysis is queued next, the queue returns it to pending and replaces it when complete.
     onLiveAnalysis: (videoPath, summary) => {
-      if (library!.update(videoPath, { status: 'done', progress: 1, counts: summary.counts, game: summary.game, durationSec: summary.durationSec, codec: summary.codec || undefined, hl: undefined })) pushLibrary()
+      if (summary.trusted) toOverlay({ type: 'analysis', kills: summary.counts.kill ?? null })
+      if (library!.update(videoPath, { status: 'done', progress: 1, counts: summary.counts, score: summary.score ?? undefined, game: summary.game, durationSec: summary.durationSec, codec: summary.codec || undefined, hl: undefined })) pushLibrary()
       void generateThumbnail(videoPath, summary.durationSec).then((thumb) => {
         if (!thumb || library!.get(videoPath)?.status !== 'done') return
         if (library!.update(videoPath, { thumb })) pushLibrary()
       }, (error) => console.error('Failed to generate recording thumbnail:', error))
     }
   })
-  unregisterRecordingIpc = registerRecordingIpc(recordingService, () => BrowserWindow.getAllWindows())
+  // E2E screenshots only (ADITOR_E2E_RECORDING_STATUS): the UI sees a fixed live status; production passes the service as is.
+  const uiRecording = e2e?.recordingStatus ? withStatusPatch(recordingService, e2e.recordingStatus) : recordingService
+  unregisterRecordingIpc = registerRecordingIpc(uiRecording, () => BrowserWindow.getAllWindows())
+  const unsubscribeOverlayStatus = recordingService.onStatus((status) => toOverlay({ type: 'status', status }))
+  toOverlay({ type: 'status', status: recordingService.status() })
+  const unsubscribeOverlayLive = recordingService.onLive?.((update) => toOverlay({ type: 'live', update })) ?? (() => {})
   tray = createRecordingTray({
-    service: recordingService,
+    service: uiRecording,
     iconDir: join(app.isPackaged ? process.resourcesPath : resolve(__dirname, '../..'), 'resources'),
-    openWindow: showMainWindow,
+    openWindow: () => showMainWindow(true),
     quit: () => app.quit(),
     notifyError: (message) => notify('error', message)
   })
@@ -385,6 +476,9 @@ async function initEngineAndServices(): Promise<void> {
     if (mainWindow && !mainWindow.isDestroyed()) loadRenderer(mainWindow)
   })
   unsubscribeSettings = () => {
+    unsubscribeOverlayStatus()
+    unsubscribeOverlayLive()
+    ipcMain.removeHandler(OVERLAY_CHANNELS.test)
     unsubscribeLogin()
     unsubscribeLanguage()
     unsubscribeMontage()
@@ -423,8 +517,9 @@ const quitGuard = createAppQuitGuard({
     quitting = false
     watchManager?.start()
     if (!e2e) recordingService?.start()
-    showMainWindow()
-    dialog.showErrorBox('Valorant Editor', tr('無法儲存媒體庫，變更尚未寫入磁碟。請確認磁碟空間與檔案權限後重試。'))
+    showMainWindow(false)
+    // A modal error box takes the foreground too; it waits for the game to leave the front like the window.
+    void focusGuard.run('library-error', () => dialog.showErrorBox('Valorant Editor', tr('無法儲存媒體庫，變更尚未寫入磁碟。請確認磁碟空間與檔案權限後重試。')))
   },
   stopEngine: () => engineClient?.stop(),
   cancelExport: () => cancelExport?.(),
@@ -452,7 +547,7 @@ if (!app.requestSingleInstanceLock()) {
     app.quit() // Goes through the quit guard (project flush, recording finalization).
   })
   initializeTelemetry(startupSettings.telemetryEnabled)
-  app.on('second-instance', showMainWindow)
+  app.on('second-instance', () => showMainWindow(true))
   app.whenReady().then(async () => {
     protocol.handle(MEDIA_SCHEME, (request) => handleMediaRequest(request, mediaAccess))
     await initEngineAndServices()
@@ -463,13 +558,16 @@ if (!app.requestSingleInstanceLock()) {
       const { writeFileSync } = await import('fs')
       writeFileSync(join(appDataDir(), 'sentry-verification.json'), JSON.stringify(await verifyTelemetry()))
     }
-    app.on('activate', showMainWindow)
+    app.on('activate', () => showMainWindow(true))
   })
   app.on('before-quit', (e) => {
     quitting = true
     quitGuard.onBeforeQuit(e)
   })
   app.on('will-quit', () => {
+    focusGuard.dispose()
+    overlayWindow?.destroy()
+    overlayWindow = null
     unsubscribeSettings?.()
     unregisterRecordingIpc?.()
     tray?.destroy()

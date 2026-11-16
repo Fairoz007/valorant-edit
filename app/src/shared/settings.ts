@@ -4,7 +4,7 @@ import type { LanguageSetting } from './locale'
 import { DEFAULT_EXPORT_FORMAT, type ExportFormat } from './exportFormat'
 
 /** Settings file format version; increment when the format changes and handle older versions in `migrateSettings`. */
-export const SETTINGS_VERSION = 2
+export const SETTINGS_VERSION = 4
 
 /**
  * Application settings (`%APPDATA%\Valorant Editor\settings.json`).

@@ -108,6 +108,10 @@ export const i18n: Messages['i18n'] = {
       cancel: '취소',
       removeFailed: '원본 영상 파일을 삭제하지 못했습니다. 파일 권한이나 사용 중인지 확인하세요.',
       montageTag: '몽타주',
+      resultWin: '승',
+      resultLoss: '패',
+      resultDraw: '무',
+      resultLabel: '{result} {ally}–{enemy}',
       montageRemoveConfirm: '몽타주 "{name}"을(를) 라이브러리에서 제거할까요? 파일은 디스크에 남고 원본 녹화와 프로젝트에는 영향이 없습니다.',
       montageOpenFailed: '이 몽타주의 프로젝트를 열지 못했습니다.'
     },

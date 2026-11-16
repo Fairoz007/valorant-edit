@@ -43,6 +43,86 @@
 - Project schema v2 (per-clip speed, audio gain, effects, caption and transition; project style, music, intro/outro, letterbox
   and preset). v1 project files are migrated on load and left untouched on disk.
 
+- **In-game overlay** (Settings → Recording → In-game overlay, off by default since settings version 4, see Fixed below):
+  - Small kill-feed-style cards in a corner of the game for every recorder activity: game detected, recording
+    started/paused/resumed/stopped, match found/started/cancelled/over, round won/lost, kills, saved, analysis done, montage
+    ready, low disk space, capture fallback (DDA ↔ WGC), warnings and errors.
+  - Kills in one round update a single card (KILL → DOUBLE → TRIPLE → QUADRA → ACE), so a five-kill round shows one ACE card.
+  - Cards auto-hide after 3 s (1–10 s; errors twice as long), at most three are stacked, and they make no sound. Settings
+    cover the corner, duration, kills, rounds and opacity, with a live preview and a "Show test cards" button.
+  - The window is transparent, frameless, never focusable, click-through (`setIgnoreMouseEvents`), shown only with
+    `showInactive()`, and excluded from capture (`setContentProtection`, WDA_EXCLUDEFROMCAPTURE). It is placed on the
+    game's monitor.
+  - Measured on Windows 11 with `app/scripts/verify-overlay-capture.cjs`, using the real overlay page and the real recorder:
+    the cards were absent from the DDA and WGC recordings and visible in a control recording without content protection.
+    The foreground window never changed (`docs/screenshots/overlay-excluded-from-recording.png`).
+  - Exclusive fullscreen cannot show other windows. There, and on Windows builds older than 2004 (no capture exclusion),
+    notices become Windows toasts once the game loses focus. Settings tells you to use Windowed Fullscreen.
+
+#### Fixed
+
+- **In-game overlay no longer comes up over a Fullscreen game, the desktop or other apps** (`docs/recording-mouse-input-fix.md`,
+  "Follow-up"). Reported: with VALORANT in Fullscreen at a stretched 4:3 resolution, the game minimized when a card appeared,
+  the overlay stayed on screen, and the menu pointer was gone after a recording until VALORANT was restarted.
+  - Cards are shown only while the game is the foreground window in Windowed Fullscreen or Windowed mode. A game that is not
+    in front gets a Windows toast instead (before, the overlay fell back to the last or the primary monitor, i.e. over the
+    desktop). Fullscreen with its own display mode (`aditorrec --foreground` now reports `display_mode_changed` and
+    `covers_monitor`), exclusive fullscreen, an unknown foreground, or no GPU compositing (no real transparency) show no card.
+  - The overlay window exists only while a card is on screen: it is destroyed after the last card and at once when a check
+    (every second while a card shows) finds the game no longer in front. Its topmost band is set once at creation instead of
+    being re-asserted on every card.
+  - The overlay is **off by default**. Settings saved before version 4 had it on as the old default, so it is turned off once;
+    from version 4 on your choice is kept. Settings and onboarding explain that Fullscreen shows no cards.
+  - Toasts also wait until the game loses focus, whether or not the overlay is on.
+  - The overlay page sets no CSS cursor. `app/scripts/verify-overlay-cursor.cjs` (new) shows the real overlay window over a
+    focused test window that holds the pointer and checks cursor flags, cursor handle, `WindowFromPoint`, the foreground
+    window and the cursor clip every 50 ms: unchanged, and hit-testing passed through to the window below.
+  - "Record mouse cursor" now says that it only changes the video, never the pointer on screen.
+  - Not verified in a VALORANT match: see "What is still unverified" in the findings doc.
+- **Recordings started while the game was minimized got the minimized window's shape** (for example 6170×1080 at 1080p).
+  WGC reports a 160×28 placeholder size for a minimized window, and the first size fixed the output size for the whole
+  session. Such a start now begins on the game's monitor (black until the game is restored) and switches to window capture
+  on restore.
+  - Not yet checked over a running VALORANT match.
+
+- **Record gameplay only** (VALORANT, built-in recorder):
+  - "Gameplay only (one file per match)" is now the default recording mode. Settings saved by older versions on the old
+    "Whole session" default move to it once; a "Whole session" chosen from this version on is kept.
+  - A match file now starts at the first round's buy phase (the first frame with the top-HUD score, from the live
+    engine's round tracker), not at the Riot Client's INGAME, which begins at the loading screen.
+  - The menus, queue and agent select were already outside matches. The start is never moved past a detected kill or
+    death, and is not moved at all when the HUD was first seen more than 180 s after INGAME or no round was detected.
+  - The Range and the tutorial no longer count as matches, read from the presence's `provisioningFlow`/`matchMap`. These
+    field names come from community documentation and were not checked against a live client.
+  - Riot Client unreachable: the session is still recorded whole with no pruning. At save time only the stretches the live
+    engine proved to be gameplay (rounds and events, padded) are kept, and only if detection stayed healthy for the
+    whole recording; otherwise everything is kept.
+  - Riot Client dropped out mid-session (live detection not complete): the detected matches are cut as before, and the
+    footage outside them is now kept as one more file instead of being deleted.
+  - Optional **Trim buy phase** (off by default) also cuts the buy phase between rounds, never within 5 s of a kill or
+    death. The parts are joined with FFmpeg's concat demuxer (stream copy), checked with the bundled FFmpeg: 12 s in,
+    4 s cut, a decodable 8 s file starting at 0.
+  - Covered by fake-FFmpeg scenario tests: lobby → agent select → loading → match → menus, a kill before the HUD, a
+    remake, a dodge, Riot Client unreachable (healthy and incomplete), Riot Client dropping out, and trim buy phase.
+    Not yet checked on a real VALORANT recording. The OBS backend still records each match from INGAME.
+
+- **Recording UI**:
+  - Recording panel: a status header with a big state pill (Idle / Paused / Waiting for match / Recording match N /
+    Saving / Error, with a pulsing red dot while recording), elapsed time, and Capture-method and Overlay on/off chips.
+    It has stat tiles (kills this match, round score, match, disk left), one primary Start/Stop button plus Pause/Resume,
+    and an inline error banner with a fix hint and a link to Recording settings. Technical details are folded away.
+  - New status fields `inMatch` and `score` (Riot Client round results) feed it.
+  - Rail: the recording icon shows a pulsing red dot while recording, blue while starting or saving and amber after an
+    error, on every screen, with the state as its name.
+  - Settings → Recording is grouped into What to record (mode, trim buy phase, analysis), Auto montage, Capture,
+    In-game overlay (with a live preview card and a test button), Quality, Audio, and Storage and notifications.
+    Advanced rows are folded under "Advanced options".
+  - Library cards show the match result and score (W 13–9 / L 8–13, from the analysis rounds of single-match
+    recordings), kills, and a Montage badge.
+  - Onboarding has a new step explaining Windowed Fullscreen for the overlay, with an on/off choice.
+  - Before/after screenshots are in `docs/screenshots/` (`before-*` from `main`, `after-*` from this branch), taken
+    with `app/e2e/screenshots.spec.ts` (fake engine, E2E-only status hook `ADITOR_E2E_RECORDING_STATUS`).
+
 #### Known limitations
 
 - The pinned LGPL FFmpeg is a minimal build (no `xfade`, `fade`, `drawtext`, `amix`, `sidechaincompress`, `atempo`, `zoompan`).
@@ -70,6 +150,18 @@
 
 ### Fixed
 
+- The overlay preload no longer shares a module with the main preload. A shared chunk would be `require`d by the
+  sandboxed main preload, which cannot load it, so `window.api` disappeared. This came in with the overlay and was
+  caught by the e2e run before release; `overlay-preload.test.ts` guards it.
+- **Mouse stops working after a recording starts** (details in `docs/recording-mouse-input-fix.md`):
+  - The game watcher no longer opens the game process. It used `process.kill(pid, 0)` every 3 s, which on Windows is
+    `OpenProcess(PROCESS_TERMINATE | …)` on the Vanguard-protected VALORANT process; it now only asks `tasklist` by image name.
+  - Nothing may show, focus or raise an app window, or open a dialog, while the game is the foreground window; such calls wait
+    until the game loses focus or exits (`main/focus-guard.ts`, foreground read with `aditorrec --foreground`, no process handle).
+  - `ready-to-show` is handled once, so reloading a tray-hidden window can no longer pop it over the game.
+  - The recorder only lifts its frame thread back to normal priority when its process is below normal.
+  - Measured: recording with WGC and with DDA, cursor capture on, never changed the foreground window, cursor clip or
+    cursor visibility (new ignored e2e tests). Not yet checked in a real VALORANT match.
 - **A Sage resurrect of the player is no longer counted as a death** (`valorant-feed@11`, so cached analyses are redone).
   Measured on 6 newly labelled 960×720 30 fps clips (21 events, ±1 s):
   - before: 17 correct / 2 false / 4 missed;

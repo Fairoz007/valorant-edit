@@ -25,7 +25,8 @@ export function fakeLiveCommand(mode = 'normal', env: Record<string, string> = {
 export function makeDeps(root: string): RecordingDeps {
   fs.writeFileSync(path.join(root, 'profile.json'), JSON.stringify({ banner_roi: [560, 700, 800, 180], spec_roi: [60, 1028, 480, 40] }))
   return {
-    getSettings: () => ({ ...DEFAULT_RECORDING_SETTINGS, postAnalysis: 'none' }),
+    // Existing tests were written for whole-session recording, the default before gameplay-only ('match') became the default.
+    getSettings: () => ({ ...DEFAULT_RECORDING_SETTINGS, mode: 'session', postAnalysis: 'none' }),
     getWatchFolders: () => [], defaultOutputDir: path.join(root, 'videos'),
     recorderCommand: fakeCommand(), ffmpegPath: 'missing-ffmpeg', profileDir: root, obsHookDir: path.join(root, 'obs-hook'),
     addToLibrary: () => {}, enqueueAnalysis: () => {}, notify: () => {},

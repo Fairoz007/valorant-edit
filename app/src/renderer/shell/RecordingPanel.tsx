@@ -11,6 +11,9 @@ import { tr } from '../../shared/locale'
 import { fillTemplate } from '../../shared/template'
 import { formatTime } from '../../shared/time'
 import type { AutoMontageSettings, MontageJob } from '../../shared/montage'
+import type { RecordingMode, RecordingStatus } from '../../shared/recording'
+
+const p = t.panel
 
 type MontageAction = 'open' | 'retry' | 'cancel'
 
@@ -103,13 +106,47 @@ function elapsedTime(seconds: number): string {
   return [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60].map((n) => String(n).padStart(2, '0')).join(':')
 }
 
-export function RecordingPanel({ onClose, onWatchLive, onOpenMontage }: {
+export type PanelTone = 'idle' | 'live' | 'wait' | 'busy' | 'error'
+
+/** The one-line state shown in the panel's pill: Idle / Waiting for match / Recording match N / Saving / Error … */
+export function panelState(status: RecordingStatus, mode?: RecordingMode): { label: string; tone: PanelTone } {
+  const s = p.states
+  switch (status.phase) {
+    case 'error': return { label: s.error, tone: 'error' }
+    case 'finalizing': return { label: s.saving, tone: 'busy' }
+    case 'starting': return { label: s.starting, tone: 'busy' }
+    case 'idle': return { label: status.paused ? s.paused : s.idle, tone: 'idle' }
+    case 'recording':
+      if (status.detectionOnly) return { label: s.detectionOnly, tone: 'wait' }
+      if (status.backend === 'obs' && status.obsRecording === false) return { label: s.obsWaiting, tone: 'wait' }
+      // Gameplay-only mode keeps nothing outside matches, so between matches the recorder is effectively waiting.
+      if (mode === 'match' && status.inMatch === false) return { label: s.waiting, tone: 'wait' }
+      if (status.inMatch && status.matchIndex !== null) return { label: fillTemplate(s.recordingMatch, { n: status.matchIndex }), tone: 'live' }
+      return { label: s.recording, tone: 'live' }
+  }
+}
+
+/** A short fix for the recorder errors users can act on. */
+export function errorHint(code: string | undefined): string {
+  const h = p.hints
+  return code && Object.prototype.hasOwnProperty.call(h, code) ? h[code as keyof typeof h] : h.default
+}
+
+function captureLabel(capture: RecordingStatus['capture']): string | null {
+  const method = capture === 'wgc' ? 'WGC' : capture === 'dda' ? 'DDA' : capture === 'hook' ? 'Hook' : null
+  return method ? fillTemplate(p.capture, { method }) : null
+}
+
+export function RecordingPanel({ onClose, onWatchLive, onOpenMontage, onOpenSettings }: {
   onClose: () => void
   onWatchLive?: () => void
   /** Open the montage project (id from `montage.open`) in Studio; without it, "Open" shows the montage file's folder. */
   onOpenMontage?: (projectId: string, job: MontageJob) => void
+  /** Open Settings → Recording (offered with the fix hint of a recorder error). */
+  onOpenSettings?: () => void
 }): JSX.Element {
   const { status, error, refresh } = useRecordingStatus()
+  const settings = useAppSettings()
   const [now, setNow] = useState(Date.now)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -132,7 +169,7 @@ export function RecordingPanel({ onClose, onWatchLive, onOpenMontage }: {
     try {
       if (action === 'start') {
         if (!await api.startManual()) {
-          // Show the failure reason (such as a recorder error) first; report that Apex was not found only when there is no error.
+          // Show the failure reason (such as a recorder error) first; report that the game was not found only when there is no error.
           const latest = await api.getStatus()
           setActionError(latest.error?.message ?? t.apexNotRunning)
         }
@@ -145,17 +182,25 @@ export function RecordingPanel({ onClose, onWatchLive, onOpenMontage }: {
       setBusy(false)
     }
   }
-  const rows: Array<[string, string | number]> = [
-    [t.statusTitle, status.phase === 'recording' ? status.detectionOnly ? t.detectionOnly : status.backend === 'obs' ? status.obsRecording === false ? t.obsStandby : t.obsRecording : t.phases[status.phase] : t.phases[status.phase]],
-    [t.elapsed, elapsedTime(seconds)],
+  const state = panelState(status, settings?.recording.mode)
+  const active = status.phase === 'starting' || status.phase === 'recording'
+  const capture = captureLabel(status.capture)
+  const overlayOn = settings?.recording.overlay?.enabled !== false
+  const tiles: Array<[string, string | number]> = [
+    [p.kills, status.kills],
+    [p.score, status.score ? `${status.score.ally} – ${status.score.enemy}` : '—'],
+    [p.match, status.matchIndex ?? '—'],
+    [p.disk, status.diskFreeBytes === null ? t.unknown : formatBytes(status.diskFreeBytes)]
+  ]
+  const details: Array<[string, string | number]> = [
     [t.segments, status.segments],
     [t.actualEncoder, status.encoder ?? t.unknown],
     [t.resolution, status.width !== null && status.height !== null ? `${status.width} × ${status.height}` : t.unknown],
-    [t.dropped, status.droppedFrames],
-    [t.matchIndex, status.matchIndex ?? '—'],
-    [t.kills, status.kills],
-    [t.diskFree, status.diskFreeBytes === null ? t.unknown : formatBytes(status.diskFreeBytes)]
+    [t.dropped, status.droppedFrames]
   ]
+  // The recorder's own error gets a fix hint; an action or service failure is shown as is.
+  const recorderError = !actionError && !error ? status.error : null
+  const banner = actionError ?? error ?? (recorderError ? tr('{code}：{message}', { code: recorderError.code, message: recorderError.message }) : null)
   return (
     <div ref={boxRef} className="sc-dialog rec-panel" role="dialog" aria-modal="true" aria-labelledby="rec-title">
       <header className="sc-head">
@@ -163,17 +208,58 @@ export function RecordingPanel({ onClose, onWatchLive, onOpenMontage }: {
         <button ref={closeRef} type="button" className="icon-btn" aria-label={t.close} onClick={onClose}><X className="ic" /></button>
       </header>
       <div className="sc-body">
-        <dl className="rec-details">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-        {(actionError || error || status.error) && <p className="rec-error" role="alert">{actionError ?? error ?? tr('{code}：{message}', { code: status.error?.code, message: status.error?.message })}</p>}
+        <section className={`rec-hero tone-${state.tone}`} aria-label={p.title}>
+          <div className="rec-hero-top">
+            <span className="rec-pill" role="status" aria-live="polite">
+              <span className="rec-pill-dot" aria-hidden="true" />
+              {state.label}
+            </span>
+            <span className="rec-chips">
+              {capture && <span className="rec-chip">{capture}</span>}
+              <span className={`rec-chip${overlayOn ? ' on' : ''}`}>{overlayOn ? p.overlayOn : p.overlayOff}</span>
+            </span>
+          </div>
+          <div className="rec-clock">
+            <span className="rec-clock-label">{p.elapsed}</span>
+            <span className="rec-clock-time">{elapsedTime(seconds)}</span>
+          </div>
+        </section>
+        <dl className="rec-stats">
+          {tiles.map(([label, value]) => <div key={label} className="rec-tile"><dt>{label}</dt><dd>{value}</dd></div>)}
+        </dl>
+        {banner && (
+          <div className="rec-banner" role="alert">
+            <p className="rec-banner-msg">{banner}</p>
+            {recorderError && <p className="rec-banner-fix"><strong>{p.fixTitle}</strong> {errorHint(recorderError.code)}</p>}
+            {recorderError && onOpenSettings && (
+              <button type="button" className="lib-btn" onClick={onOpenSettings}>{p.openSettings}</button>
+            )}
+          </div>
+        )}
         <div className="rec-actions">
-          <button type="button" className="lib-btn" disabled={busy || !!error || !['idle', 'error'].includes(status.phase)} onClick={() => void run('start')}>{t.start}</button>
-          <button type="button" className="lib-btn" disabled={busy || !!error || !['starting', 'recording'].includes(status.phase)} onClick={() => void run('stop')}>{t.stop}</button>
+          {active ? (
+            <button type="button" className="lib-btn primary rec-main" disabled={busy || !!error} onClick={() => void run('stop')}>
+              <span className="rec-stop-ic" aria-hidden="true" />{t.stop}
+            </button>
+          ) : (
+            <button type="button" className="lib-btn primary rec-main" disabled={busy || !!error || status.phase === 'finalizing'}
+              onClick={() => void run('start')}>
+              <span className="rec-start-ic" aria-hidden="true" />{t.start}
+            </button>
+          )}
+          <button type="button" className="lib-btn" aria-pressed={status.paused} title={p.pauseHint} disabled={busy || !!error}
+            onClick={() => void run('pause', !status.paused)}>
+            {status.paused ? p.resume : p.pause}
+          </button>
           {onWatchLive && (
-            <button type="button" className="lib-btn primary" disabled={status.phase !== 'recording'}
+            <button type="button" className="lib-btn" disabled={status.phase !== 'recording'}
               title={status.phase === 'recording' ? undefined : t.watchLiveHint} onClick={onWatchLive}>{t.watchLive}</button>
           )}
-          <label className="rec-pause"><input type="checkbox" checked={status.paused} disabled={busy || !!error} onChange={(e) => void run('pause', e.target.checked)} />{t.pauseAuto}</label>
         </div>
+        <details className="rec-more">
+          <summary>{p.details}</summary>
+          <dl className="rec-details">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        </details>
         <MontageStatusSection onOpenMontage={onOpenMontage} />
       </div>
     </div>

@@ -6,7 +6,7 @@ import { SettingsController, type SettingsApi } from './settingsController'
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/settings'
 import type { RecorderCapabilities } from '../../shared/recording'
 import { recordingI18n as t } from '../i18n'
-import { AUTO_MONTAGE_FIELDS } from './rows'
+import { AUTO_MONTAGE_FIELDS, OVERLAY_FIELDS } from './rows'
 import { cleanupMounted, click, flush, installDomShims, mount } from '../../../test/dom'
 
 const capabilities: RecorderCapabilities = {
@@ -69,6 +69,32 @@ async function slider(field: string, value: string): Promise<void> {
 }
 
 describe('Recording settings screen and controller', () => {
+  test('in-game overlay: defaults off, writes settings.recording.overlay, disables its options when off, and the Test button asks main', async () => {
+    const r = await show()
+    const testOverlay = vi.fn(async () => true)
+    r.api.recording!.testOverlay = testOverlay
+    const ov = <T extends HTMLElement>(field: string): T => document.getElementById(`set-overlay-${field}`) as T
+    expect(ov<HTMLInputElement>('enabled').checked).toBe(false)
+    expect(ov<HTMLSelectElement>('position').disabled).toBe(true)
+    click(ov('enabled'))
+    await flush()
+    expect(r.controller.getState().settings?.recording.overlay.enabled).toBe(true)
+    expect(ov<HTMLSelectElement>('position').value).toBe('topRight')
+    act(() => { ov<HTMLSelectElement>('position').value = 'bottomLeft'; ov('position').dispatchEvent(new Event('change', { bubbles: true })) })
+    await flush()
+    expect(r.set).toHaveBeenLastCalledWith(expect.objectContaining({ recording: expect.objectContaining({ overlay: expect.objectContaining({ position: 'bottomLeft', enabled: true }) }) }))
+    expect(document.querySelector('.ovp.left.bottom')).not.toBeNull()
+    click(ov('test'))
+    await flush()
+    expect(testOverlay).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain(t.overlay.testShown)
+    expect(document.body.textContent).toContain(t.overlay.windowedHint)
+    click(ov('enabled'))
+    await flush()
+    expect(r.controller.getState().settings?.recording.overlay.enabled).toBe(false)
+    expect(ov<HTMLInputElement>('showKills').disabled).toBe(true)
+    expect(ov<HTMLSelectElement>('position').disabled).toBe(true)
+  })
   test('cursor recording defaults on and can be disabled in saved settings', async () => {
     const r = await show()
     expect(control<HTMLInputElement>('captureCursor').checked).toBe(true)
@@ -138,18 +164,21 @@ describe('Recording settings screen and controller', () => {
   test('Full row order and labels, enabled one-file-per-match, and encoder/device options matching the selected format', async () => {
     await show()
     // Launch-at-login and minimize-to-tray are app-wide settings under General; OBS rows appear only for the OBS backend.
+    // What to record · Auto montage · Capture · In-game overlay · Quality · Audio · Storage; advanced rows follow the others in a card.
     const fields = [
-      'autoRecord', 'mode', 'postAnalysis',
-      'backend',
-      'height', 'bitrateKbps', 'fps', 'captureCursor', 'forceAspect', 'aspectMode', 'codec', 'gpu', 'encoder', 'preset', 'captureMethod',
+      'autoRecord', 'mode', 'trimBuyPhase', 'postAnalysis',
+      'backend', 'captureCursor', 'captureMethod', 'gpu',
+      'height', 'bitrateKbps', 'fps', 'codec', 'encoder', 'preset', 'forceAspect', 'aspectMode',
       'systemAudioEnabled', 'renderDevice', 'systemGain', 'micEnabled', 'captureDevice', 'micGain', 'gameAudioOnly', 'micMono',
       'diskWarnGb', 'diskStopGb', 'notifyMatch', 'openOnGameExit'
     ]
     const montageRows = AUTO_MONTAGE_FIELDS.map((field) => `autoMontage-${field}`)
+    const overlayRows = OVERLAY_FIELDS.map((field) => `overlay-${field}`)
     expect(Array.from(document.querySelectorAll<HTMLElement>('[data-row]')).map((el) => el.dataset.row))
-      .toEqual([...fields.slice(0, 3).map((field) => `recording-${field}`), ...montageRows, ...fields.slice(3).map((field) => `recording-${field}`)])
+      .toEqual([...fields.slice(0, 4).map((field) => `recording-${field}`), ...montageRows, ...fields.slice(4, 8).map((field) => `recording-${field}`),
+        ...overlayRows.filter((id) => id !== 'overlay-opacity'), 'overlay-opacity', ...fields.slice(8).map((field) => `recording-${field}`)])
     expect(Array.from(document.querySelectorAll('.set-card h2')).map((el) => el.textContent))
-      .toEqual([t.cards.basics, t.cards.autoMontage, t.cards.recorder, t.cards.video, t.cards.audio, t.cards.disk])
+      .toEqual([t.cards.basics, t.cards.autoMontage, t.cards.recorder, t.overlay.card, t.cards.video, t.cards.audio, t.cards.disk])
     for (const field of fields) {
       const label = document.getElementById(`set-recording-${field}-title`)
       expect(label?.textContent).toBe(t.rows[field as keyof typeof t.rows].title)
@@ -157,7 +186,8 @@ describe('Recording settings screen and controller', () => {
     }
     const match = control<HTMLSelectElement>('mode').querySelector<HTMLOptionElement>('option[value="match"]')!
     expect(match.disabled).toBe(false)
-    expect(match.textContent).toBe('一局一個檔')
+    expect(match.textContent).toBe(t.match)
+    expect(options('mode')).toEqual(['match', 'session'])
     expect(options('encoder')).toEqual(['auto', 'hevc_nvenc'])
     expect(options('gpu')).toEqual(['auto', '10de:2684', '8086:46a6'])
     expect(options('renderDevice')).toEqual(['default', 'speakers'])
@@ -229,9 +259,9 @@ describe('Recording settings screen and controller', () => {
     await Promise.all([r.controller.setRecording('fps', 90), r.controller.setRecording('micEnabled', false)])
     expect(r.controller.getState().settings?.recording).toMatchObject({ fps: 90, micEnabled: false })
     r.api.settings.set = async () => { throw new Error('ipc') }
-    await r.controller.setRecording('mode', 'match')
+    await r.controller.setRecording('mode', 'session')
     expect(r.controller.getState().settings?.recording.fps).toBe(90)
-    expect(r.controller.getState().settings?.recording.mode).toBe('session')
+    expect(r.controller.getState().settings?.recording.mode).toBe('match')
     expect(r.controller.getState().saveFailed).toBe(true)
     r.controller.stop()
     expect(r.listeners.size).toBe(0)
@@ -247,7 +277,9 @@ describe('Recording settings screen and controller', () => {
   test('Advanced settings are collapsed by default and expand on search; bitrate preserves custom values and audio-source disabled state', async () => {
     const r = await show()
     const sections = Array.from(document.querySelectorAll('details'))
-    expect(sections).toHaveLength(2)
+    // Capture (method, GPU), In-game overlay (opacity), Quality (format details) and Audio each fold their advanced rows.
+    expect(sections.map((el) => el.closest('.set-card')?.querySelector('h2')?.textContent))
+      .toEqual([t.cards.recorder, t.overlay.card, t.cards.video, t.cards.audio])
     expect(sections.every((el) => !el.open)).toBe(true)
     expect(options('bitrateKbps')).toEqual(['5000', '8000', '10000', '15000', '20000', '30000', '40000', '50000', '60000', '80000', '100000', '150000'])
     expect(Array.from(control('aspectMode').querySelectorAll('input')).every((el) => el.disabled)).toBe(true)

@@ -10,7 +10,7 @@ import {
 import type { AutoClipParams } from '../../shared/types'
 import { clampToRange } from './settingsModel'
 import type { BoolField } from './rows'
-import type { RecordingSettings, RecorderCapabilities, ObsTestResult } from '../../shared/recording'
+import type { OverlaySettings, RecordingSettings, RecorderCapabilities, ObsTestResult } from '../../shared/recording'
 import { tr } from '../../shared/locale'
 import type { UpdateStatus } from '../../shared/update'
 
@@ -24,7 +24,7 @@ interface WatchStatus {
 
 /** Subset of window.api used by the settings screen (access through this type and gracefully degrade when parts are missing). */
 export interface SettingsApi {
-  recording?: { getCapabilities(): Promise<RecorderCapabilities | null>; testObs?(): Promise<ObsTestResult> }
+  recording?: { getCapabilities(): Promise<RecorderCapabilities | null>; testObs?(): Promise<ObsTestResult>; testOverlay?(): Promise<boolean> }
   settings: {
     get(): Promise<Settings>
     set(partial: Partial<Settings>): Promise<SettingsSetResult | unknown>
@@ -284,6 +284,21 @@ export class SettingsController {
       await this.commit(`recording-${field}`, { recording: { ...base, [field]: value } })
     })
     return this.recordingWrites
+  }
+
+  /** One in-game overlay field; merged into the latest overlay object inside the sequential recording write queue. */
+  setOverlay<K extends keyof OverlaySettings>(field: K, value: OverlaySettings[K]): Promise<void> {
+    this.recordingWrites = this.recordingWrites.then(async () => {
+      const base = this.state.settings?.recording ?? DEFAULT_SETTINGS.recording
+      await this.commit(`overlay-${field}`, { recording: { ...base, overlay: { ...base.overlay, [field]: value } } })
+    })
+    return this.recordingWrites
+  }
+
+  /** Shows sample overlay cards after pending overlay writes reach main; false when unavailable or failed. */
+  async testOverlay(): Promise<boolean> {
+    await this.recordingWrites
+    try { return await this.api.recording?.testOverlay?.() ?? false } catch { return false }
   }
 
   async testObs(): Promise<void> {

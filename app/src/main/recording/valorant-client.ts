@@ -19,6 +19,19 @@ export interface ValorantPresence {
   ally: number
   enemy: number
   queueId: string
+  /** How the session was created: 'Matchmaking', 'CustomGame', 'ShootingRange', 'NewPlayerExperience' (tutorial); '' when absent. */
+  provisioningFlow?: string
+  /** Map asset path, e.g. '/Game/Maps/Poveglia/Range' for the Range; '' when absent. */
+  matchMap?: string
+}
+
+/**
+ * The Range and the tutorial are INGAME too but are not matches, so they must never produce a library entry.
+ * Field names follow the presence payload as documented by the community (not by Riot); unverified on a live client.
+ */
+export function isPracticeSession(p: ValorantPresence): boolean {
+  const flow = (p.provisioningFlow ?? '').toLowerCase()
+  return flow === 'shootingrange' || flow === 'newplayerexperience' || /\/range$/i.test(p.matchMap ?? '')
 }
 
 export type PresenceEvent =
@@ -52,7 +65,9 @@ export function ownPresence(body: unknown, puuid: string): ValorantPresence | nu
     state,
     ally: num(party.partyOwnerMatchScoreAllyTeam ?? raw.partyOwnerMatchScoreAllyTeam),
     enemy: num(party.partyOwnerMatchScoreEnemyTeam ?? raw.partyOwnerMatchScoreEnemyTeam),
-    queueId: String(match.queueId ?? raw.queueId ?? '')
+    queueId: String(match.queueId ?? raw.queueId ?? ''),
+    provisioningFlow: String(match.provisioningFlow ?? raw.provisioningFlow ?? ''),
+    matchMap: String(match.matchMap ?? raw.matchMap ?? '')
   }
 }
 
@@ -64,8 +79,9 @@ export class PresenceTracker {
     const prev = this.last
     this.last = p
     const out: PresenceEvent[] = []
-    const inGame = p.state === 'INGAME'
-    const wasInGame = prev?.state === 'INGAME'
+    // Agent select (PREGAME), the menus and the custom-game lobby are not gameplay; neither are the Range and the tutorial.
+    const inGame = p.state === 'INGAME' && !isPracticeSession(p)
+    const wasInGame = prev?.state === 'INGAME' && !isPracticeSession(prev)
     if (inGame && !wasInGame) out.push({ type: 'match_start', at })
     if (!inGame && wasInGame) out.push({ type: 'match_end', at })
     if (inGame && wasInGame && prev) {

@@ -19,6 +19,13 @@ export interface RecorderCommand {
 
 export type RecordingNoticeKind = 'matchStart' | 'matchEnd' | 'matchCancel' | 'finalized' | 'diskWarn' | 'warning' | 'error' | 'montage'
 
+/** Recorder activity for the in-game overlay that is not already a notice or a status change. */
+export type RecorderActivity =
+  | { type: 'game'; running: boolean }
+  | { type: 'match'; ev: 'pending' | 'start' | 'cancel' | 'end'; index: number; kills: number }
+  | { type: 'round'; winner: 'ally' | 'enemy'; ally: number; enemy: number }
+  | { type: 'fallback'; from: 'hook' | 'dda'; to: 'dda' | 'wgc' }
+
 export interface RecordingDeps {
   onDiagnostic?: ChildDiagnosticHandler
   /** Decrypt the password with safeStorage in the main process; never return it through status or settings IPC. */
@@ -96,6 +103,10 @@ export interface RecordingDeps {
   onGameExit?: () => void
   /** Shared game presence, independent of recording settings and backend; failed queries retain the last state. */
   onGameRunning?: (running: boolean) => void
+  /** Overlay feed: game detected, match countdown/start/cancel/end, round results and capture fallbacks. */
+  onActivity?: (activity: RecorderActivity) => void
+  /** PID of the detected game (null when none), for the focus guard and overlay placement; failed queries retain the last value. */
+  onGamePid?: (pid: number | null) => void
 }
 
 export interface LiveAnalysisSummary {
@@ -105,6 +116,8 @@ export interface LiveAnalysisSummary {
   codec: string
   /** Live results are equivalent to offline analysis (the cache has the official version), so a full analysis is unnecessary. */
   trusted: boolean
+  /** Final score when the file is exactly one match (VALORANT). */
+  score?: { ally: number; enemy: number } | null
 }
 
 export function createRecordingService(_deps: RecordingDeps): RecordingService {

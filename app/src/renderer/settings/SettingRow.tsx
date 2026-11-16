@@ -27,10 +27,12 @@ export function SettingRow({ row, state, settings, controller }: SettingRowProps
     err: error ? `set-${row.id}-err` : undefined
   }
   const kind = row.control.kind
+  // The overlay test row holds a preview card next to its button, so it spans the full row like lists do.
+  const wide = WIDE_KINDS.has(kind) || (row.control.kind === 'overlay' && row.control.field === 'test')
   const grouped = GROUP_KINDS.has(kind) || row.control.kind === 'recording' && ['fps', 'aspectMode'].includes(row.control.field)
   return (
     <div
-      className={`set-row${WIDE_KINDS.has(kind) ? ' wide' : ''}${row.disabledReason ? ' is-disabled' : ''}`}
+      className={`set-row${wide ? ' wide' : ''}${row.disabledReason ? ' is-disabled' : ''}`}
       data-row={row.id}
       data-disabled={row.disabledReason ? 'true' : undefined}
     >

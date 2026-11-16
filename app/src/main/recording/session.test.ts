@@ -140,8 +140,9 @@ describe('recording service state machine', () => {
     expect(commands(value, 'start')[0]).toMatchObject({ pid: 4321, frames: { banner: [1436, 84, 480, 256], spec: [20, 790, 440, 100] } })
     const dir = commands(value, 'start')[0].session_dir as string
     await waitFor(() => fs.existsSync(path.join(dir, 'recording.json')))
-    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'session', game: 'valorant' })
-    expect(vi.mocked(value.deps.notify).mock.calls.some(([level, message]) => level === 'warning' && message.includes('VALORANT'))).toBe(true)
+    // Whole session (no pruning while recording), but finalization may trim what the live engine proves is not gameplay.
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'session', game: 'valorant', trimGameplay: true })
+    expect(vi.mocked(value.deps.notify).mock.calls.some(([level, message]) => level === 'warning' && message.includes('VALORANT') && message.includes('Riot Client'))).toBe(true)
   })
 
   it('cuts Valorant per match from the Riot Client when it answers', async () => {
@@ -157,10 +158,12 @@ describe('recording service state machine', () => {
     const client = Object.assign(new EventEmitter(), { probe: async () => true, start: vi.fn(), stop: vi.fn() })
     value.deps.createValorantClient = () => client as never
     value.settings.mode = 'match'
+    value.settings.trimBuyPhase = true
     value.service.start()
     await waitFor(() => value.service.status().phase === 'recording')
     const dir = commands(value, 'start')[0].session_dir as string
-    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'match', game: 'valorant' })
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8'))).toMatchObject({ mode: 'match', game: 'valorant', trimBuyPhase: true })
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'recording.json'), 'utf8')).trimGameplay).toBeUndefined()
     expect(client.start).toHaveBeenCalledOnce()
     client.emit('event', { type: 'match_start', at: Date.now() })
     await waitFor(() => fs.existsSync(path.join(dir, 'events.jsonl')) &&
@@ -169,6 +172,48 @@ describe('recording service state machine', () => {
     const distrust = vi.spyOn(LiveSession.prototype, 'distrust')
     client.emit('unavailable', new Error('offline'))
     expect(distrust).toHaveBeenCalledOnce()
+  })
+
+  it('feeds the overlay: game detected, capture method in status, round results, match events and the hook fallback', async () => {
+    const value = rig('hook-unavailable')
+    const activity = vi.fn()
+    const pids: Array<number | null> = []
+    value.deps.onActivity = activity
+    value.deps.onGamePid = (pid) => pids.push(pid)
+    value.settings.captureMethod = 'hook'
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    expect(activity).toHaveBeenCalledWith({ type: 'game', running: true })
+    expect(activity).toHaveBeenCalledWith({ type: 'fallback', from: 'hook', to: 'dda' })
+    expect(value.service.status().capture).toBe('dda')
+    expect(pids[0]).toBe(1234)
+    value.pid = null
+    await waitFor(() => activity.mock.calls.some(([a]) => a.type === 'game' && a.running === false))
+    expect(pids.at(-1)).toBeNull()
+  })
+
+  it('forwards Riot Client round results and live match events to the overlay feed', async () => {
+    const value = rig()
+    const icons = path.join(value.root, 'icons')
+    fs.mkdirSync(icons)
+    fs.copyFileSync(path.join(value.root, 'profile.json'), path.join(icons, 'profile.json'))
+    fs.mkdirSync(path.join(value.root, 'valorant', 'icons'), { recursive: true })
+    fs.writeFileSync(path.join(value.root, 'valorant', 'icons', 'profile.json'),
+      JSON.stringify({ templates_version: 'v', capture_rois: { banner: [1031, 84, 885, 256], spec: [647, 20, 655, 64] } }))
+    value.deps.profileDir = icons
+    value.deps.findGame = vi.fn(async () => ({ game: 'valorant' as const, pid: 4321 }))
+    const client = Object.assign(new EventEmitter(), { probe: async () => true, start: vi.fn(), stop: vi.fn() })
+    value.deps.createValorantClient = () => client as never
+    const activity = vi.fn()
+    value.deps.onActivity = activity
+    value.settings.mode = 'match'
+    value.service.start()
+    await waitFor(() => value.service.status().phase === 'recording')
+    client.emit('event', { type: 'match_start', at: Date.now() })
+    await waitFor(() => activity.mock.calls.some(([a]) => a.type === 'match' && a.ev === 'start'))
+    client.emit('event', { type: 'round_end', at: Date.now(), winner: 'ally', ally: 1, enemy: 0 })
+    expect(activity).toHaveBeenCalledWith({ type: 'round', winner: 'ally', ally: 1, enemy: 0 })
+    expect(activity).toHaveBeenCalledWith(expect.objectContaining({ type: 'match', ev: 'start', index: 1 }))
   })
 
   it('keeps recording when the storage probe fails', async () => {

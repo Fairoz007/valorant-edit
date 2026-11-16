@@ -1,0 +1,39 @@
+/* Settings preview of an in-game overlay card; mirrors renderer/overlay/overlay.css (kill-feed style). */
+.ovp-test { align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.ovp-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 360px; }
+.ovp { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.ovp-screen {
+  position: relative;
+  width: 260px;
+  height: 120px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 60%),
+    var(--bg-input);
+  overflow: hidden;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+.ovp.left .ovp-screen { justify-content: flex-start; }
+.ovp.bottom .ovp-screen { align-items: flex-end; }
+.ovp-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 18px 0 14px;
+  transform: skewX(-12deg);
+  background: #f8f8f9;
+  border: 1px solid rgba(20, 22, 30, 0.14);
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.ovp-card > * { transform: skewX(12deg); }
+.ovp-card::after { content: ''; position: absolute; top: -1px; bottom: -1px; right: -1px; width: 5px; background: #ff4a1c; }
+.ovp-title { color: #b82c0d; font-family: 'Montserrat', var(--font-ui); font-weight: 900; font-size: 13px; }
+.ovp-icon { color: #15171d; flex: none; }
+.ovp-detail { color: #4f5562; font-family: 'Montserrat', var(--font-ui); font-weight: 700; font-size: 12px; white-space: nowrap; }

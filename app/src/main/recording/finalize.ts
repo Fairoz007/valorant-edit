@@ -12,6 +12,7 @@ import { tr } from '../../shared/locale'
 import { DAY_FOLDER_PATTERN, dayFolderName } from '../../shared/storage'
 import { DEFAULT_GAME, GAMES, gameOf, type GameId } from '../../shared/games'
 import { outputWasRemoved } from './removed-output'
+import { gameplayStart, inferredMatches, liveEventTimes, liveRounds, withoutBuyPhases } from './gameplay'
 
 export interface SessionSnapshot {
   startedAt: number
@@ -20,6 +21,13 @@ export interface SessionSnapshot {
   gameAspect?: string | null
   /** Absent in recordings made before multi-game support (Apex). */
   game?: GameId
+  /** Cut the buy phase between rounds out of each match file (VALORANT). */
+  trimBuyPhase?: boolean
+  /**
+   * VALORANT recorded whole because the Riot Client was unreachable: at finalization, cut the stretches the live engine
+   * proved to be gameplay, but only when detection stayed healthy for the whole recording (gameplay.ts inferredMatches).
+   */
+  trimGameplay?: boolean
 }
 
 export interface IndexEntry { seq: number; pts: number; dur: number }
@@ -110,7 +118,8 @@ async function snapshot(dir: string, fallback: PostRecordAnalysis): Promise<Sess
     if (!Number.isFinite(value.startedAt) || !['none', 'afterExit', 'perMatch'].includes(value.postAnalysis)) {
       throw new Error(tr('錄影設定快照無效'))
     }
-    return { ...value, mode: value.mode === 'match' ? 'match' : 'session', game: gameOf(value.game) }
+    return { ...value, mode: value.mode === 'match' ? 'match' : 'session', game: gameOf(value.game),
+      trimBuyPhase: value.trimBuyPhase === true, trimGameplay: value.trimGameplay === true }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
@@ -124,8 +133,56 @@ export const MATCH_PRE_PAD_SEC = 5
 export const MATCH_POST_PAD_SEC = 5
 
 /** Keep complete segments covering five seconds before and after a match; select only recorded segments intersecting the range. */
-export function selectMatchEntries(entries: readonly IndexEntry[], start: number, end: number): IndexEntry[] {
-  return entries.filter((entry) => entry.pts + entry.dur > start - MATCH_PRE_PAD_SEC && entry.pts < end + MATCH_POST_PAD_SEC)
+export function selectMatchEntries(entries: readonly IndexEntry[], start: number, end: number, prePad = MATCH_PRE_PAD_SEC): IndexEntry[] {
+  return entries.filter((entry) => entry.pts + entry.dur > start - prePad && entry.pts < end + MATCH_POST_PAD_SEC)
+}
+
+/** Marker index of the VALORANT remainder file (footage outside detected matches, kept when detection was incomplete). */
+export const REMAINDER_INDEX = 1_000_000
+/** A remainder shorter than this is not worth a file. */
+export const REMAINDER_MIN_SEC = 20
+
+/**
+ * The range of one match file and its segments. VALORANT: from the first gameplay frame (the HUD's first appearance, not
+ * the loading screen) when the live rounds support it, and, with trimBuyPhase, without the buy phases between rounds.
+ */
+export function matchSelection(entries: readonly IndexEntry[], match: { start: number; end: number }, config: SessionSnapshot,
+  live: LiveFile | null): { start: number; entries: IndexEntry[]; jumpCut: boolean } {
+  if (config.game !== 'valorant') return { start: match.start, entries: selectMatchEntries(entries, match.start, match.end), jumpCut: false }
+  const rounds = liveRounds(live?.rounds)
+  const events = liveEventTimes(live?.events)
+  const start = gameplayStart(match, rounds, events)
+  // A trimmed start already includes its own small pad; the 5 s pre-pad would bring back the end of the loading screen.
+  const selected = selectMatchEntries(entries, start, match.end, start > match.start ? 0 : MATCH_PRE_PAD_SEC)
+  if (!config.trimBuyPhase) return { start, entries: selected, jumpCut: false }
+  const kept = withoutBuyPhases({ start, end: match.end + MATCH_POST_PAD_SEC }, rounds, events)
+  // A segment is dropped only when it lies entirely inside a buy-phase cut.
+  const filtered = selected.filter((e) => kept.some((r) => e.pts + e.dur > r.start && e.pts < r.end))
+  return filtered.length && filtered.length < selected.length
+    ? { start, entries: filtered, jumpCut: true } : { start, entries: selected, jumpCut: false }
+}
+
+/**
+ * Matches to cut: the recorded ones in per-match mode; for a Riot-Client-less VALORANT session (trimGameplay) the ones
+ * inferred from the live engine, and only when detection stayed healthy for the whole recording (otherwise none, so
+ * everything is kept).
+ */
+async function matchesToCut(dir: string, config: SessionSnapshot, live: LiveFile | null, entries: readonly IndexEntry[]): Promise<LiveMatch[]> {
+  if (config.mode === 'match') return liveMatches(live)
+  if (!config.trimGameplay || !live || !await readOptional(path.join(dir, LIVE_COMPLETE_FILE))) return []
+  const last = entries.at(-1)
+  return inferredMatches(liveRounds(live.rounds), liveEventTimes(live.events), last ? last.pts + last.dur : 0)
+}
+
+/** Split entries into runs of consecutive sequence numbers. */
+export function contiguousRuns(entries: readonly IndexEntry[]): IndexEntry[][] {
+  const runs: IndexEntry[][] = []
+  for (const entry of entries) {
+    const run = runs.at(-1)
+    if (run && run.at(-1)!.seq + 1 === entry.seq) run.push(entry)
+    else runs.push([entry])
+  }
+  return runs
 }
 
 interface MatchCut {
@@ -138,6 +195,8 @@ interface MatchCut {
   analysisQueued: boolean
   liveCached: boolean
   liveTrusted: boolean
+  /** Parts were left out (buy phases, the remainder's gaps): live event times would not line up, so no live cache. */
+  jumpCut?: boolean
 }
 
 interface MatchMarker { cuts: MatchCut[]; skipped?: number[] }
@@ -267,7 +326,7 @@ async function dropStaleCut(dir: string, marker: MatchMarker, outputPath: string
 }
 
 async function remuxMatch(dir: string, deps: RecordingDeps, config: SessionSnapshot, marker: MatchMarker,
-  index: number, match: { start: number; end: number }, entries: IndexEntry[]
+  index: number, match: { start: number; end: number }, entries: IndexEntry[], jumpCut = false
 ): Promise<MatchCut> {
   const outputDir = path.dirname(path.dirname(dir))
   const { output, part } = await reserveOutput(outputDir, outputBase(config.startedAt + entries[0].pts * 1000, config.game), config.startedAt + entries[0].pts * 1000)
@@ -279,10 +338,12 @@ async function remuxMatch(dir: string, deps: RecordingDeps, config: SessionSnaps
       const stat = await fs.promises.lstat(file)
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(tr('逐局剪檔缺少有效片段：{file}', { file }))
     }
-    await remux(deps.ffmpegPath, segmentPaths(dir, entries), part, config)
+    const runs = jumpCut ? contiguousRuns(entries) : [entries]
+    if (runs.length > 1) await remuxJumpCut(deps.ffmpegPath, dir, runs, part, config)
+    else await remux(deps.ffmpegPath, segmentPaths(dir, entries), part, config)
     if (fs.existsSync(output)) throw new Error(tr('輸出影片已存在：{output}', { output }))
     const cut: MatchCut = { index, ...match, firstSeq: entries[0].seq, lastSeq: entries.at(-1)!.seq,
-      outputPath: output, analysisQueued: false, liveCached: false, liveTrusted: false }
+      outputPath: output, analysisQueued: false, liveCached: false, liveTrusted: false, ...(jumpCut ? { jumpCut: true } : {}) }
     // Persist the marker before publishing so recovery can reuse the temporary file without leaving an unregistered final video.
     await writeJson(path.join(dir, 'matches.json'), { ...marker, cuts: [...marker.cuts, cut] })
     marker.cuts.push(cut)
@@ -341,7 +402,7 @@ async function completeCut(dir: string, deps: RecordingDeps, config: SessionSnap
   if (outputWasRemoved(dir, cut.outputPath)) return
   addRecorded(deps, [cut.outputPath], config.game)
   notifyMontage(deps, 'onMatchRecorded', cut.outputPath, config.game)
-  if (!cut.liveCached || (finishing && trusted && !cut.liveTrusted)) {
+  if (!cut.jumpCut && (!cut.liveCached || (finishing && trusted && !cut.liveTrusted))) {
     try {
       const summary = await writeLiveCache(dir, cut.outputPath, deps, entries, {
         forceUntrusted: !finishing, overwriteLive: finishing && trusted
@@ -377,15 +438,15 @@ export async function cutMatches(dir: string, deps: RecordingDeps, options: Matc
   const finishing = options.finishing === true
   dir = await validateSessionDir(dir)
   const config = await snapshot(dir, deps.getSettings().postAnalysis)
-  if (config.mode !== 'match') return []
+  if (config.mode !== 'match' && !(finishing && config.trimGameplay)) return []
   const entries = await readIndex(dir)
   const live = await readOptional<LiveFile>(path.join(dir, 'live.json'))
-  const matches = liveMatches(live)
+  const matches = await matchesToCut(dir, config, live, entries)
   const retainedFrom = live?.retained_from
   const retainedEntries = typeof retainedFrom === 'number' && Number.isFinite(retainedFrom) && retainedFrom >= 0
     ? entries.filter(entry => entry.pts >= retainedFrom) : entries
   const last = entries.at(-1)
-  if (finishing && last && matches.at(-1)?.end === null) {
+  if (config.mode === 'match' && finishing && last && matches.at(-1)?.end === null) {
     matches[matches.length - 1] = { start: matches.at(-1)!.start, end: last.pts + last.dur }
     await writeJson(path.join(dir, 'live.json'), { ...live, matches })
   }
@@ -414,7 +475,8 @@ export async function cutMatches(dir: string, deps: RecordingDeps, options: Matc
         (!finishing && options.failed?.has(index))) continue
     const end = match.end
     if (end === null || (!finishing && !entries.some((entry) => entry.pts >= end + MATCH_POST_PAD_SEC))) continue
-    const { present: range, missing } = await presentEntries(dir, selectMatchEntries(retainedEntries, match.start, end))
+    const selection = matchSelection(retainedEntries, { start: match.start, end }, config, live)
+    const { present: range, missing } = await presentEntries(dir, selection.entries)
     if (!range.length) {
       if (finishing && missing > 0) {
         marker.skipped = [...(marker.skipped ?? []), index]
@@ -426,7 +488,7 @@ export async function cutMatches(dir: string, deps: RecordingDeps, options: Matc
       continue
     }
     try {
-      const cut = await remuxMatch(dir, deps, config, marker, index, { start: match.start, end }, range)
+      const cut = await remuxMatch(dir, deps, config, marker, index, { start: selection.start, end }, range, selection.jumpCut)
       reportMissing(deps, missing, cut.outputPath)
       await completeCut(dir, deps, config, marker, cut, range, finishing, trusted)
       outputs.push(cut.outputPath)
@@ -494,7 +556,7 @@ export function gameMetadataArgs(config: { gameAspect?: string | null; game?: Ga
   return [...tags.flatMap((tag) => ['-metadata', tag]), '-movflags', tags.length ? '+faststart+use_metadata_tags' : '+faststart']
 }
 
-async function remux(ffmpeg: string, files: string[], output: string, config: SessionSnapshot): Promise<void> {
+async function remux(ffmpeg: string, files: string[], output: string, config: { gameAspect?: string | null; game?: GameId }): Promise<void> {
   const proc = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'mp4', '-i', 'pipe:0',
     '-map', '0', '-c', 'copy', ...gameMetadataArgs(config), output],
   { windowsHide: true, stdio: 'pipe' })
@@ -519,6 +581,48 @@ async function remux(ffmpeg: string, files: string[], output: string, config: Se
     await exited.catch(() => {})
     throw new Error(tr('錄影串接失敗：{stderr}', { stderr: stderr.toString('utf8') || String(error) }))
   }
+}
+
+/**
+ * Jump cut: each run of consecutive segments is remuxed on its own, then the parts are joined with FFmpeg's concat demuxer,
+ * which re-bases the timestamps so the output plays straight through the cuts (stream copy, no re-encode).
+ */
+export async function remuxJumpCut(ffmpeg: string, dir: string, runs: readonly IndexEntry[][], output: string, config: SessionSnapshot): Promise<void> {
+  const parts = runs.map((_, i) => path.join(dir, `jump_${String(i).padStart(4, '0')}.mp4`))
+  const list = path.join(dir, 'jump.ffconcat')
+  try {
+    for (const [i, run] of runs.entries()) await remux(ffmpeg, segmentPaths(dir, run), parts[i], {})
+    await fs.promises.writeFile(list, ['ffconcat version 1.0', ...parts.map((p) => `file '${path.basename(p)}'`)].join('\n') + '\n', 'utf8')
+    const proc = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list,
+      '-map', '0', '-c', 'copy', ...gameMetadataArgs(config), output], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    proc.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString('utf8')).slice(-65536) })
+    await new Promise<void>((resolve, reject) => {
+      proc.once('error', reject)
+      proc.once('close', (code) => code === 0 ? resolve() : reject(new Error(tr('錄影串接失敗（{code}）：{stderr}', { code, stderr }))))
+    })
+  } finally {
+    for (const p of [...parts, list]) await fs.promises.unlink(p).catch(() => {})
+  }
+}
+
+/**
+ * Footage outside every cut match, as one jump-cut file (recorded in matches.json under REMAINDER_INDEX, so recovery never
+ * cuts it twice). Segments already pruned during recording are gone and stay gone. Returns the new output, or null.
+ */
+async function keepRemainder(dir: string, deps: RecordingDeps, config: SessionSnapshot, marker: MatchMarker,
+  entries: readonly IndexEntry[], live: LiveFile | null): Promise<string | null> {
+  if (marker.cuts.some((cut) => cut.index === REMAINDER_INDEX)) return null
+  const retainedFrom = typeof live?.retained_from === 'number' && Number.isFinite(live.retained_from) ? live.retained_from : -Infinity
+  const covered = (seq: number): boolean => marker.cuts.some((cut) => seq >= cut.firstSeq && seq <= cut.lastSeq)
+  const { present } = await presentEntries(dir, entries.filter((entry) => !covered(entry.seq) && entry.pts >= retainedFrom))
+  const seconds = present.reduce((sum, entry) => sum + entry.dur, 0)
+  if (seconds < REMAINDER_MIN_SEC) return null
+  const cut = await remuxMatch(dir, deps, config, marker, REMAINDER_INDEX,
+    { start: present[0].pts, end: present.at(-1)!.pts + present.at(-1)!.dur }, present, true)
+  await completeCut(dir, deps, config, marker, cut, present, true, false)
+  try { deps.log?.(`kept ${Math.round(seconds)} s outside detected matches: ${path.basename(cut.outputPath)}`) } catch { /* logging only */ }
+  return cut.outputPath
 }
 
 /** Marker indicating live detection stayed healthy until stop (written by live-session). */
@@ -558,20 +662,29 @@ export async function finalizeSession(dir: string, deps: RecordingDeps): Promise
     }
     const config = await snapshot(dir, deps.getSettings().postAnalysis)
     // An interrupted live write may leave an older, non-empty match list. Preserve all available footage instead.
-    if (config.mode === 'match' && recording?.livePending !== true && !fs.existsSync(path.join(dir, 'live.json.tmp'))) {
+    if ((config.mode === 'match' || config.trimGameplay) && recording?.livePending !== true && !fs.existsSync(path.join(dir, 'live.json.tmp'))) {
       const live = await readOptional<LiveFile>(path.join(dir, 'live.json'))
+      const complete = !!await readOptional(path.join(dir, LIVE_COMPLETE_FILE))
+      const detected = await matchesToCut(dir, config, live, entries)
       const outputs = await cutMatches(dir, deps, { finishing: true })
       const matches = await readOptional<MatchMarker>(path.join(dir, 'matches.json'))
-      const detected = liveMatches(live)
       if (detected.length) {
         if (!matches?.cuts.length && !detected.every((_, index) => matches?.skipped?.includes(index))) {
           throw new Error(tr('對局沒有可剪出的片段，已保留工作'))
+        }
+        // VALORANT's match boundaries come from the Riot Client. When live detection did not stay healthy to the end
+        // (for example the client dropped out and distrust() was called), a match may have been missed: keep the
+        // footage outside the cut matches as one more file instead of deleting it.
+        if (config.game === 'valorant' && config.mode === 'match' && !complete && matches) {
+          const remainder = await keepRemainder(dir, deps, config, matches, entries, live)
+          if (remainder) outputs.push(remainder)
         }
         await removeSessionDir(dir)
         return outputs
       }
       // Only a healthy completion proves that no-match footage was lobby-only; pruning alone can precede an engine failure.
-      if (Array.isArray(live?.matches) && await readOptional(path.join(dir, LIVE_COMPLETE_FILE))) {
+      // A Riot-Client-less VALORANT session (trimGameplay) has no match evidence at all, so it never takes this path.
+      if (config.mode === 'match' && Array.isArray(live?.matches) && complete) {
         await removeSessionDir(dir)
         return []
       }

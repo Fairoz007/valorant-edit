@@ -68,29 +68,14 @@ export async function findGameProcess(
   return null
 }
 
-// Recheck image names every 10 polls (normally 30 seconds) to bound stale detection after PID reuse.
-export const GAME_PROCESS_RECHECK_POLLS = 10
-
+/**
+ * Every poll asks Windows for the game by image name (`tasklist`, which reads the system process list).
+ * It never opens the game process: `process.kill(pid, 0)` looked cheaper, but on Windows libuv implements it as
+ * `OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | SYNCHRONIZE)`, so it opened a terminate-rights handle to the
+ * Vanguard-protected VALORANT process every 3 seconds (docs/recording-mouse-input-fix.md).
+ */
 export function createGameProcessFinder(find = findGameProcess): () => Promise<GameProcess | null> {
-  let known: GameProcess | null = null
-  let polls = 0
-  return async () => {
-    if (known && ++polls < GAME_PROCESS_RECHECK_POLLS) {
-      try {
-        process.kill(known.pid, 0)
-        return known
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code
-        if (code === 'EPERM') return known
-        if (code !== 'ESRCH') throw error
-      }
-    }
-    // Keep retrying enumeration after a failed recheck, even if the old PID is alive.
-    polls = GAME_PROCESS_RECHECK_POLLS
-    known = await find()
-    polls = 0
-    return known
-  }
+  return () => find()
 }
 
 export function sameProcess(a: GameProcess | null, b: GameProcess | null): boolean {

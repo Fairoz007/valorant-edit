@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GAME_IDS } from '../../shared/games'
-import { createGameProcessFinder, findGameProcess, GAME_PROCESS_RECHECK_POLLS, GameWatcher, parseGameProcess, sameProcess } from './game-watcher'
+import { createGameProcessFinder, findGameProcess, GameWatcher, parseGameProcess, sameProcess } from './game-watcher'
 
 const tasklist = vi.hoisted(() => vi.fn<(file: string, args: string[], options: unknown, callback: (error: Error | null, stdout: string) => void) => void>())
 vi.mock('child_process', () => ({ execFile: tasklist }))
@@ -83,13 +83,14 @@ describe('Filtered game process queries', () => {
   })
 })
 
-describe('Cached game process detection', () => {
-  const game = { game: 'apex' as const, pid: 123 }
+describe('Game process polling never opens the game process', () => {
+  const game = { game: 'valorant' as const, pid: 123 }
   const interval = 3000
 
   function watch(initial: typeof game | null = game) {
     vi.useFakeTimers()
     const find = vi.fn().mockResolvedValue(initial)
+    // process.kill(pid, 0) is OpenProcess(PROCESS_TERMINATE | ...) on Windows; any call is a regression.
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
     const changed = vi.fn()
     const failed = vi.fn()
@@ -98,141 +99,56 @@ describe('Cached game process detection', () => {
     return { find, kill, changed, failed, watcher }
   }
 
-  it('reports startup immediately, uses liveness while known, and periodically rechecks the image', async () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
+
+  it('queries by image name on every poll and never calls process.kill', async () => {
     const { find, kill, changed, watcher } = watch()
     await vi.advanceTimersByTimeAsync(0)
     expect(changed.mock.calls).toEqual([[game]])
-    await vi.advanceTimersByTimeAsync(interval * (GAME_PROCESS_RECHECK_POLLS - 1))
-    expect(find).toHaveBeenCalledOnce()
-    expect(kill).toHaveBeenCalledTimes(GAME_PROCESS_RECHECK_POLLS - 1)
-    expect(kill).toHaveBeenCalledWith(game.pid, 0)
+    await vi.advanceTimersByTimeAsync(interval * 20)
+    expect(find).toHaveBeenCalledTimes(21)
+    expect(kill).not.toHaveBeenCalled()
     expect(changed).toHaveBeenLastCalledWith(game)
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(find).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(find).toHaveBeenCalledTimes(2)
-    expect(kill).toHaveBeenCalledTimes(GAME_PROCESS_RECHECK_POLLS)
     watcher.stop()
   })
 
-  it('resumes enumeration after exit and debounces absence across two polls', async () => {
+  it('debounces an exit across two polls', async () => {
     const { find, kill, changed, watcher } = watch()
     await vi.advanceTimersByTimeAsync(0)
     changed.mockClear()
-    kill.mockImplementation(() => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }) })
     find.mockResolvedValue(null)
     await vi.advanceTimersByTimeAsync(interval)
-    expect(find).toHaveBeenCalledTimes(2)
     expect(changed).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(interval * 2)
-    expect(find).toHaveBeenCalledTimes(4)
-    expect(kill).toHaveBeenCalledOnce()
-    expect(changed.mock.calls).toEqual([[null], [null]])
+    await vi.advanceTimersByTimeAsync(interval)
+    expect(changed.mock.calls).toEqual([[null]])
+    expect(kill).not.toHaveBeenCalled()
     watcher.stop()
   })
 
-  it('uses liveness for a newly found replacement while retaining transition debounce', async () => {
-    const { find, kill, changed, watcher } = watch()
+  it('reports a replacement PID after two polls', async () => {
+    const { find, changed, watcher } = watch()
     await vi.advanceTimersByTimeAsync(0)
     changed.mockClear()
-    kill.mockImplementationOnce(() => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }) })
     const next = { game: 'valorant' as const, pid: 456 }
     find.mockResolvedValue(next)
     await vi.advanceTimersByTimeAsync(interval)
     expect(changed).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(interval)
-    expect(find).toHaveBeenCalledTimes(2)
-    expect(kill).toHaveBeenLastCalledWith(next.pid, 0)
     expect(changed.mock.calls).toEqual([[next]])
     watcher.stop()
   })
 
-  it.each([null, { game: 'valorant' as const, pid: 123 }])('detects a live reused PID when enumeration returns %s', async (next) => {
-    const { find, kill, changed, watcher } = watch()
-    await vi.advanceTimersByTimeAsync(0)
-    find.mockResolvedValue(next)
-    await vi.advanceTimersByTimeAsync(interval * (GAME_PROCESS_RECHECK_POLLS - 1))
-    changed.mockClear()
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(changed).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(changed.mock.calls).toEqual([[next]])
-    expect(find).toHaveBeenCalledTimes(next ? 2 : 3)
-    expect(kill).toHaveBeenCalledTimes(next ? GAME_PROCESS_RECHECK_POLLS : GAME_PROCESS_RECHECK_POLLS - 1)
-    watcher.stop()
-  })
-
-  it('treats EPERM as alive', async () => {
-    const { find, kill, changed, failed, watcher } = watch()
-    await vi.advanceTimersByTimeAsync(0)
-    kill.mockImplementation(() => { throw Object.assign(new Error('denied'), { code: 'EPERM' }) })
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(find).toHaveBeenCalledOnce()
-    expect(changed).toHaveBeenLastCalledWith(game)
-    expect(failed).not.toHaveBeenCalled()
-    watcher.stop()
-  })
-
-  it('reports unexpected liveness errors without reporting an exit', async () => {
-    const { find, kill, changed, failed, watcher } = watch()
+  it('a failed query is reported and never read as an exit', async () => {
+    const { find, changed, failed, watcher } = watch()
     await vi.advanceTimersByTimeAsync(0)
     changed.mockClear()
-    const error = Object.assign(new Error('unknown failure'), { code: 'EIO' })
-    kill.mockImplementationOnce(() => { throw error })
+    const error = new Error('enumeration failed')
+    find.mockRejectedValueOnce(error)
     await vi.advanceTimersByTimeAsync(interval)
-    expect(find).toHaveBeenCalledOnce()
     expect(failed.mock.calls).toEqual([[error]])
     expect(changed).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(interval)
     expect(changed.mock.calls).toEqual([[game]])
-    watcher.stop()
-  })
-
-  it('retries a failed periodic enumeration instead of trusting the old live PID', async () => {
-    const { find, kill, changed, failed, watcher } = watch()
-    await vi.advanceTimersByTimeAsync(interval * (GAME_PROCESS_RECHECK_POLLS - 1))
-    changed.mockClear()
-    const error = new Error('enumeration failed')
-    find.mockRejectedValueOnce(error).mockResolvedValue(null)
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(failed.mock.calls).toEqual([[error]])
-    expect(changed).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(interval * 2)
-    expect(find).toHaveBeenCalledTimes(4)
-    expect(kill).toHaveBeenCalledTimes(GAME_PROCESS_RECHECK_POLLS - 1)
-    expect(changed.mock.calls).toEqual([[null]])
-    watcher.stop()
-  })
-
-  it('keeps enumerating when no game is found and reports a new game after two polls', async () => {
-    const { find, kill, changed, watcher } = watch(null)
-    await vi.advanceTimersByTimeAsync(interval * 2)
-    expect(changed).toHaveBeenLastCalledWith(null)
-    expect(find).toHaveBeenCalledTimes(3)
-    expect(kill).not.toHaveBeenCalled()
-    find.mockResolvedValue(game)
-    changed.mockClear()
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(changed).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(changed.mock.calls).toEqual([[game]])
-    watcher.stop()
-  })
-
-  it('retries enumeration after an exit query fails, even if the PID becomes alive again', async () => {
-    const { find, kill, changed, failed, watcher } = watch()
-    await vi.advanceTimersByTimeAsync(0)
-    changed.mockClear()
-    kill.mockImplementationOnce(() => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }) })
-    const error = new Error('enumeration failed')
-    find.mockRejectedValueOnce(error).mockResolvedValue(null)
-    await vi.advanceTimersByTimeAsync(interval)
-    expect(failed.mock.calls).toEqual([[error]])
-    expect(changed).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(interval * 2)
-    expect(find).toHaveBeenCalledTimes(4)
-    expect(kill).toHaveBeenCalledOnce()
-    expect(changed.mock.calls).toEqual([[null]])
     watcher.stop()
   })
 })

@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../../shared/settings'
-import { shellI18n } from '../i18n'
+import { recordingI18n, shellI18n } from '../i18n'
 import { joinForDisplay } from '../../shared/storage'
 import { Onboarding, OnboardingHost } from './Onboarding'
 import type { OnboardingApi } from './onboardingModel'
@@ -40,8 +40,20 @@ describe('Onboarding step content', () => {
     expect(out).toContain('role="dialog"')
     expect(out).toContain('aria-modal="true"')
     expect(out).toContain('aria-labelledby="ob-title"')
-    expect(out).toContain('第 1 步，共 4 步')
-    expect(html(2)).toContain('第 3 步，共 4 步')
+    expect(out).toContain('第 1 步，共 5 步')
+    expect(html(2)).toContain('第 3 步，共 5 步')
+  })
+
+  test('Step 4: in-game overlay asks for Windowed Fullscreen, shows a preview card and an on/off choice (off by default)', () => {
+    const out = html(3)
+    expect(out).toContain(t.overlay.title)
+    expect(out).toContain(t.overlay.step1)
+    expect(out).toContain(t.overlay.step2)
+    expect(out).toContain(t.overlay.note)
+    expect(out).toContain(t.overlay.toggle)
+    expect(out).toContain('class="ovp')
+    expect(out).toMatch(/<input type="checkbox"\/>/)
+    expect(out).not.toMatch(/<input type="checkbox" checked=""/)
   })
 
   test('Step 1: welcome text and language selector (system default and all languages)', () => {
@@ -66,24 +78,24 @@ describe('Onboarding step content', () => {
     expect(out).toContain(t.back)
   })
 
-  test('Step 3: recording mode radio cards (session selected by default) and default resolution, frame rate, and bitrate', () => {
+  test('Step 3: recording mode radio cards (gameplay only selected by default) and default resolution, frame rate, and bitrate', () => {
     const out = html(2)
-    expect(out).toContain('一局一個檔')
-    expect(out).toContain('從頭錄到尾')
+    expect(out).toContain(recordingI18n.match)
+    expect(out).toContain(recordingI18n.session)
     expect(out).toContain(t.recording.modeMatchDesc)
     expect(out).toContain(t.recording.modeSessionDesc)
-    expect(out).toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="session"/)
-    expect(out).not.toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="match"/)
+    expect(out).toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="match"/)
+    expect(out).not.toMatch(/<input[^>]*type="radio"[^>]*checked=""[^>]*value="session"/)
     expect(out).toMatch(/<option value="1080" selected/)
     expect(out).toMatch(/<option value="60" selected/)
     expect(out).toMatch(/<option value="10000" selected/)
     for (const label of ['720p (HD)', '1080p (Full HD)', '1440p (2K)', '原生']) expect(out).toContain(label)
   })
 
-  test('Step 4: settings summary and next steps, with a “Get started” button', () => {
-    const out = html(3, { mode: 'match', height: 1440, fps: 120, bitrateKbps: 30000 })
+  test('Step 5: settings summary and next steps, with a “Get started” button', () => {
+    const out = html(4, { mode: 'match', height: 1440, fps: 120, bitrateKbps: 30000 })
     expect(out).toContain(`儲存位置：${SUGGESTED}`)
-    expect(out).toContain('錄影模式：一局一個檔')
+    expect(out).toContain(`錄影模式：${recordingI18n.match}`)
     expect(out).toContain('畫質：1440p (2K)、120 fps、30000 kbps')
     expect(out).toContain(t.done.next1)
     expect(out).toContain(t.done.next2)
@@ -92,7 +104,7 @@ describe('Onboarding step content', () => {
   })
 
   test('Every step has a “Not now” option', () => {
-    for (const step of [0, 1, 2, 3]) expect(html(step)).toContain(t.skip)
+    for (const step of [0, 1, 2, 3, 4]) expect(html(step)).toContain(t.skip)
   })
 })
 
@@ -113,8 +125,14 @@ describe('Onboarding interactions and submitted data', () => {
     await flush()
     click(buttonByText(document.body, t.next)!)
     await flush()
-    // Step 3: switch to "One file per match".
-    click(document.querySelector<HTMLInputElement>('input[type="radio"][value="match"]')!)
+    // Step 3: switch to "Whole session" (gameplay only is the default).
+    click(document.querySelector<HTMLInputElement>('input[type="radio"][value="session"]')!)
+    await flush()
+    click(buttonByText(document.body, t.next)!)
+    await flush()
+    // Step 4: the overlay step (off by default); turn the overlay on.
+    expect(document.body.textContent).toContain(t.overlay.title)
+    click(document.querySelector<HTMLInputElement>('.ob-check input[type="checkbox"]')!)
     await flush()
     click(buttonByText(document.body, t.next)!)
     await flush()
@@ -124,7 +142,7 @@ describe('Onboarding interactions and submitted data', () => {
     expect(set).toHaveBeenCalledWith({
       storageRoot: SUGGESTED,
       onboardingDone: true,
-      recording: { mode: 'match', height: 1080, fps: 60, bitrateKbps: 10000 }
+      recording: { mode: 'session', height: 1080, fps: 60, bitrateKbps: 10000, overlay: { enabled: true } }
     })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -164,7 +182,7 @@ describe('Onboarding interactions and submitted data', () => {
       set: async () => ({ settings: DEFAULT_SETTINGS, persisted: true, errors: { storageRoot: '無法建立或寫入儲存位置：Z:/nope' } })
     })
     const onClose = vi.fn()
-    mount(<Onboarding api={api} language="auto" initialStep={3} onClose={onClose} />)
+    mount(<Onboarding api={api} language="auto" initialStep={4} onClose={onClose} />)
     await flush()
     click(buttonByText(document.body, t.finish)!)
     await flush()

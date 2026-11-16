@@ -427,6 +427,11 @@ struct ActiveCapture {
 
 /// Whether a monitor-fallback capture must be rebuilt because the window now sits on another display.
 /// Window captures follow the window themselves and never need this check.
+fn start_minimized(hwnd: HWND) -> bool {
+    // SAFETY: Query only; reads the target window's minimized state.
+    unsafe { IsIconic(hwnd).as_bool() }
+}
+
 fn monitor_moved(captured: Option<HMONITOR>, current: HMONITOR) -> bool {
     captured.is_some_and(|captured| captured != current)
 }
@@ -770,8 +775,12 @@ fn run(
         monitor_black: None,
         notices: notices.clone(),
     }));
+    // A minimized window reports a placeholder size (160×28), and the first size fixes the recording's output size for the whole
+    // session (a 6170×1080 video at 1080p). Start minimized windows on their monitor instead, as the minimized fallback: black until
+    // the window is restored, then the loop below switches back to window capture.
+    let minimized = start_minimized(hwnd);
     let mut active = Some(
-        ActiveCapture::new(hwnd, false, false, &opts, &shared)
+        ActiveCapture::new(hwnd, minimized, minimized, &opts, &shared)
             .map_err(|error| wgc_start_error(error, window_matches(hwnd, opts.pid)))?,
     );
     if let Some(capture) = &active {

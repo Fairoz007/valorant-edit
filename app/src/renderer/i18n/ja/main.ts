@@ -107,6 +107,10 @@ export const i18n: Messages['i18n'] = {
       cancel: 'キャンセル',
       removeFailed: '元の動画ファイルを削除できませんでした。アクセス権限や使用中でないかを確認してください。',
       montageTag: 'モンタージュ',
+      resultWin: '勝',
+      resultLoss: '負',
+      resultDraw: '分',
+      resultLabel: '{result} {ally}–{enemy}',
       montageRemoveConfirm: 'モンタージュ「{name}」をライブラリから削除しますか？ファイルはディスクに残り、元の録画とプロジェクトには影響しません。',
       montageOpenFailed: 'このモンタージュのプロジェクトを開けませんでした。'
     },

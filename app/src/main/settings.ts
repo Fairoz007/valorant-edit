@@ -10,7 +10,7 @@ import {
   SettingsSetResult
 } from '../shared/settings'
 import { AutoClipParams } from '../shared/types'
-import { RECORDING_RANGES, type RecordingSettings } from '../shared/recording'
+import { OVERLAY_POSITIONS, OVERLAY_RANGES, RECORDING_RANGES, type OverlaySettings, type RecordingSettings } from '../shared/recording'
 import { coerceAutoMontage, postAnalysisForMontage } from '../shared/montage'
 import { validateOutDir } from './settings-ipc'
 import { LANGUAGE_SETTINGS } from '../shared/locale'
@@ -19,6 +19,10 @@ import { isSafeLocalDirPath } from './safe-path'
 const RANGES = SETTINGS_RANGES
 /** First settings version with the 'auto' capture method. */
 const CAPTURE_AUTO_VERSION = 2
+/** Version 3 made 'match' (gameplay only) the default; earlier files saved the then-default 'session' whether chosen or not. */
+const GAMEPLAY_ONLY_VERSION = 3
+/** Version 4 turned the in-game overlay off by default; earlier files saved the then-default 'on' whether chosen or not. */
+const OVERLAY_OPT_IN_VERSION = 4
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -73,6 +77,19 @@ function pickDevice(v: unknown, fallback: string): string {
   return typeof v === 'string' && v.trim().length > 0 && v.length <= 4096 && !v.includes('\0') ? v : fallback
 }
 
+/** Field by field: an invalid field keeps its base value, numbers are clamped into range. */
+export function pickOverlay(v: unknown, base: OverlaySettings): OverlaySettings {
+  const s = isPlainObject(v) ? v : {}
+  return {
+    enabled: pickBool(s.enabled, base.enabled),
+    position: pickEnum(s.position, OVERLAY_POSITIONS, base.position),
+    durationSec: Math.round(clampRecordingNumber(s.durationSec, OVERLAY_RANGES.durationSec, base.durationSec)),
+    showKills: pickBool(s.showKills, base.showKills),
+    showRounds: pickBool(s.showRounds, base.showRounds),
+    opacity: Math.round(clampRecordingNumber(s.opacity, OVERLAY_RANGES.opacity, base.opacity) * 100) / 100
+  }
+}
+
 function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
   const s = isPlainObject(v) ? v : {}
   const codec = pickEnum(s.codec, ['hevc', 'h264', 'av1'] as const, base.codec)
@@ -93,6 +110,7 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
       /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(s.obsPasswordEnc)) ? s.obsPasswordEnc : base.obsPasswordEnc,
     obsFallbackBuiltin: pickBool(s.obsFallbackBuiltin, base.obsFallbackBuiltin),
     mode: pickEnum(s.mode, ['session', 'match'] as const, base.mode),
+    trimBuyPhase: pickBool(s.trimBuyPhase, base.trimBuyPhase),
     outputDir: pickStringOrNull(s.outputDir, base.outputDir),
     codec,
     gpu: pickDevice(s.gpu, base.gpu),
@@ -119,13 +137,14 @@ function pickRecording(v: unknown, base: RecordingSettings): RecordingSettings {
     captureCursor: pickBool(s.captureCursor, base.captureCursor),
     captureMethod: pickEnum(s.captureMethod, ['auto', 'wgc', 'dda', 'hook'] as const, base.captureMethod),
     openOnGameExit: pickBool(s.openOnGameExit, base.openOnGameExit),
-    autoMontage
+    autoMontage,
+    overlay: pickOverlay(s.overlay, base.overlay)
   }
 }
 
 /** Deep copy (prevent callers from mutating internal state or DEFAULT_SETTINGS). */
 function cloneSettings(s: Settings): Settings {
-  return { ...s, watchFolders: [...s.watchFolders], autoclip: { ...s.autoclip }, exportFormat: { ...s.exportFormat }, recording: { ...s.recording, autoMontage: { ...s.recording.autoMontage, include: { ...s.recording.autoMontage.include } } } }
+  return { ...s, watchFolders: [...s.watchFolders], autoclip: { ...s.autoclip }, exportFormat: { ...s.exportFormat }, recording: { ...s.recording, autoMontage: { ...s.recording.autoMontage, include: { ...s.recording.autoMontage.include } }, overlay: { ...s.recording.overlay } } }
 }
 
 /**
@@ -174,6 +193,16 @@ export function migrateSettings(raw: unknown): Settings {
   // Version 1 saved the then-default WGC whether or not the user chose it; DDA was never the default, so it is kept.
   if (rawVersion < CAPTURE_AUTO_VERSION && migrated.recording.captureMethod === 'wgc') {
     migrated = { ...migrated, recording: { ...migrated.recording, captureMethod: 'auto' } }
+  }
+  // Settings files store every field, so an older 'session' cannot be told apart from the old default; move it to
+  // gameplay only once. From version 3 on an explicit 'session' is kept.
+  if (rawVersion < GAMEPLAY_ONLY_VERSION && migrated.recording.mode === 'session') {
+    migrated = { ...migrated, recording: { ...migrated.recording, mode: 'match' } }
+  }
+  // The overlay could make a Fullscreen VALORANT minimize (docs/recording-mouse-input-fix.md); a saved 'on' from before version 4
+  // cannot be told apart from the old default, so it is turned off once. From version 4 on an explicit choice is kept.
+  if (rawVersion < OVERLAY_OPT_IN_VERSION && migrated.recording.overlay.enabled) {
+    migrated = { ...migrated, recording: { ...migrated.recording, overlay: { ...migrated.recording.overlay, enabled: false } } }
   }
   if (migrated.recording.outputDir !== null) {
     // An unavailable drive must not erase the saved location or redirect recording to another disk.

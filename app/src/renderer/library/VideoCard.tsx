@@ -13,6 +13,8 @@ import { cardStatusText, fileName } from './cardLogic'
 import { mediaUrl } from '../../shared/media-url'
 import { GAMES, SUPPORTED_GAME_IDS, gameOf, type GameId } from '../../shared/games'
 import { entryGame } from '../lib/libraryFilter'
+import { matchResult } from '../../shared/matchResult'
+import { fillTemplate } from '../../shared/template'
 import '../styles/autoEdit.css'
 
 export { fileName } from './cardLogic'
@@ -82,7 +84,9 @@ export function sameCardEntry(a: LibraryEntry, b: LibraryEntry): boolean {
     a.counts?.knock === b.counts?.knock &&
     a.counts?.assist === b.counts?.assist &&
     a.counts?.kill === b.counts?.kill &&
-    a.counts?.death === b.counts?.death
+    a.counts?.death === b.counts?.death &&
+    a.score?.ally === b.score?.ally &&
+    a.score?.enemy === b.score?.enemy
   )
 }
 
@@ -223,6 +227,18 @@ function VideoCardView({ entry, onOpen, onToggleFavorite, onRemove, onRetry, onS
           )}
 
           {badge && <span className="lib-pill warn vcard-badge">{badge}</span>}
+
+          {/* Match result and Montage tag sit top-right on the thumbnail so they read at a glance. */}
+          {(entry.score || entry.source === 'montage') && (
+            <span className="vcard-tags">
+              {entry.score && (() => {
+                const result = matchResult(entry.score)
+                const letter = result === 'win' ? t.resultWin : result === 'loss' ? t.resultLoss : t.resultDraw
+                return <span className={`vbadge result ${result}`}>{fillTemplate(t.resultLabel, { result: letter, ally: entry.score.ally, enemy: entry.score.enemy })}</span>
+              })()}
+              {entry.source === 'montage' && <span className="vbadge montage">{t.montageTag}</span>}
+            </span>
+          )}
 
           {done && (
             <span className="vcard-counts">

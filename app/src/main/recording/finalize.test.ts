@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
-import { finalizeSession, publishRecordingPart, readIndex, removeSessionDir, resumeMatchPart, writeJson } from './finalize'
+import { contiguousRuns, finalizeSession, matchSelection, remuxJumpCut, publishRecordingPart, readIndex, removeSessionDir, resumeMatchPart, writeJson } from './finalize'
 import { recoverSessions } from './recovery'
 import { RecordingSessionService } from './session'
 import { copySegments, createSegments, ffmpeg, makeDeps, sessionDir, tempRoot } from './test-support'
@@ -10,6 +10,30 @@ import { copySegments, createSegments, ffmpeg, makeDeps, sessionDir, tempRoot } 
 const roots: string[] = []
 function root(): string { const value = tempRoot(); roots.push(value); return value }
 afterEach(() => { for (const value of roots.splice(0)) fs.rmSync(value, { recursive: true, force: true }) })
+
+describe('VALORANT match selection (gameplay only)', () => {
+  const entries = Array.from({ length: 200 }, (_, i) => ({ seq: i + 1, pts: i * 2, dur: 2 }))
+  const rounds = [{ start: 130, end: 230, winner: 'ally', ally: 1, enemy: 0 }, { start: 230, end: 330, winner: 'enemy', ally: 1, enemy: 1 }]
+  const config = { startedAt: 0, postAnalysis: 'none' as const, mode: 'match' as const, game: 'valorant' as const }
+
+  it('starts VALORANT matches at the first HUD frame and leaves Apex unchanged', () => {
+    const v = matchSelection(entries, { start: 80, end: 340 }, config, { rounds, events: [] })
+    expect([v.start, v.entries[0].pts, v.entries.at(-1)!.pts, v.jumpCut]).toEqual([128, 128, 344, false])
+    const apex = matchSelection(entries, { start: 80, end: 340 }, { ...config, game: 'apex' }, { rounds, events: [] })
+    expect([apex.start, apex.entries[0].pts]).toEqual([80, 74])
+  })
+
+  it('trimBuyPhase leaves out whole segments inside the buy phase only', () => {
+    const v = matchSelection(entries, { start: 80, end: 340 }, { ...config, trimBuyPhase: true }, { rounds, events: [] })
+    expect(v.jumpCut).toBe(true)
+    expect(contiguousRuns(v.entries).map((run) => [run[0].pts, run.at(-1)!.pts])).toEqual([[128, 238], [262, 344]])
+  })
+
+  it('contiguousRuns splits on sequence gaps', () => {
+    expect(contiguousRuns([{ seq: 1, pts: 0, dur: 2 }, { seq: 2, pts: 2, dur: 2 }, { seq: 5, pts: 8, dur: 2 }]).map((r) => r.length)).toEqual([2, 1])
+    expect(contiguousRuns([])).toEqual([])
+  })
+})
 
 describe('writeJson', () => {
   afterEach(() => vi.restoreAllMocks())
@@ -273,6 +297,40 @@ describe.skipIf(!ffmpeg)('finalization with real ffmpeg streams', () => {
     expect(probe.status, probe.stderr).toBe(0)
     expect(Number(probe.stdout)).toBeGreaterThanOrEqual(4)
     expect(fs.readdirSync(path.dirname(output)).some((name) => name.endsWith('.part.mp4'))).toBe(false)
+  })
+
+  it('a jump cut (buy phase / remainder) plays straight through the cut: 12 s recorded, 4 s dropped, 8 s out', async () => {
+    const base = root()
+    const src = path.join(base, 'long.mp4')
+    const made = spawnSync(ffmpeg!, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10:duration=12',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=12', '-c:v', 'mpeg4', '-g', '20', '-bf', '0', '-c:a', 'aac',
+      '-movflags', '+frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', src], { windowsHide: true, encoding: 'utf8' })
+    expect(made.status, made.stderr).toBe(0)
+    const dir = sessionDir(base)
+    const bytes = fs.readFileSync(src)
+    const starts: number[] = []
+    for (let o = 0; o < bytes.length; o += bytes.readUInt32BE(o)) if (bytes.toString('ascii', o + 4, o + 8) === 'moof') starts.push(o)
+    fs.writeFileSync(path.join(dir, 'init.mp4'), bytes.subarray(0, starts[0]))
+    const entries = starts.map((start, i) => {
+      fs.writeFileSync(path.join(dir, `seg_${String(i + 1).padStart(6, '0')}.m4s`), bytes.subarray(start, starts[i + 1] ?? bytes.length))
+      return { seq: i + 1, pts: i * 2, dur: 2 }
+    })
+    expect(entries).toHaveLength(6)
+    const output = path.join(base, 'jump.mp4')
+    // Keep 0–4 s and 8–12 s; drop 4–8 s.
+    await remuxJumpCut(ffmpeg!, dir, [entries.slice(0, 2), entries.slice(4)], output, { startedAt: 0, postAnalysis: 'none', mode: 'match', game: 'valorant' })
+    const ffprobe = path.join(path.dirname(ffmpeg!), 'ffprobe' + (process.platform === 'win32' ? '.exe' : ''))
+    const probe = spawnSync(ffprobe, ['-v', 'error', '-show_entries', 'format=duration,start_time:format_tags=aditor_game', '-of', 'json', output], { windowsHide: true, encoding: 'utf8' })
+    expect(probe.status, probe.stderr).toBe(0)
+    const format = JSON.parse(probe.stdout).format
+    expect(Number(format.duration)).toBeGreaterThan(7.5)
+    expect(Number(format.duration)).toBeLessThan(8.6)
+    expect(Number(format.start_time)).toBeLessThan(0.2)
+    expect(format.tags.aditor_game).toBe('valorant')
+    const decoded = spawnSync(ffmpeg!, ['-v', 'error', '-i', output, '-map', '0:v', '-map', '0:a', '-f', 'null', '-'], { windowsHide: true, encoding: 'utf8' })
+    expect(decoded.status, decoded.stderr).toBe(0)
+    // The intermediate parts and the list are removed.
+    expect(fs.readdirSync(dir).filter((n) => n.startsWith('jump'))).toEqual([])
   })
 
   it('places the full output in the local date folder for its start time, not in outputDir root, and keeps .sessions in place', async () => {

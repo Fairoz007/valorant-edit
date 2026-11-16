@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { LOCALES, LOCALE_NAMES, recordingI18n, shellI18n, settingsI18n } from '../i18n'
 import type { LanguageSetting } from '../../shared/locale'
-import type { RecordingSettings } from '../../shared/recording'
+import { DEFAULT_OVERLAY_SETTINGS, type RecordingSettings } from '../../shared/recording'
 import type { Settings } from '../../shared/settings'
 import { tr } from '../../shared/locale'
 import { useFocusTrap } from '../a11y/useFocusTrap'
 import { SelectControl, type ControlIds } from '../settings/SettingControls'
 import { StoragePreview } from '../settings/StoragePreview'
+import { OverlayPreview } from '../settings/OverlayControl'
 import { bitrateOptions, fpsOptions, heightOptions } from '../settings/recordingOptions'
 import { fillTemplate } from '../settings/settingsModel'
 import {
@@ -122,6 +123,28 @@ function RecordingStep({ draft, onDraft }: StepProps): JSX.Element {
   )
 }
 
+/** Windowed Fullscreen: the overlay is never shown over a Fullscreen game (it can minimize the game). Off by default. */
+function OverlayStep({ draft, onDraft }: StepProps): JSX.Element {
+  const o = t.overlay
+  return (
+    <>
+      <p className="ob-text">{o.intro}</p>
+      <div className="ob-overlay">
+        <ol className="ob-next">
+          <li>{o.step1}</li>
+          <li>{o.step2}</li>
+        </ol>
+        <OverlayPreview settings={{ ...DEFAULT_OVERLAY_SETTINGS, enabled: draft.overlay }} />
+      </div>
+      <p className="ob-text ob-note">{o.note}</p>
+      <label className="ob-check">
+        <input type="checkbox" checked={draft.overlay} onChange={(e) => onDraft({ overlay: e.target.checked })} />
+        {o.toggle}
+      </label>
+    </>
+  )
+}
+
 function DoneStep({ draft }: { draft: OnboardingDraft }): JSX.Element {
   const heightLabel = heightOptions().find((o) => o.value === String(draft.height))?.label ?? String(draft.height)
   const modeLabel = draft.mode === 'match' ? recordingI18n.match : recordingI18n.session
@@ -142,7 +165,7 @@ function DoneStep({ draft }: { draft: OnboardingDraft }): JSX.Element {
   )
 }
 
-const STEP_TITLES: readonly string[] = [t.welcome.title, t.storage.title, t.recording.title, t.done.title]
+const STEP_TITLES: readonly string[] = [t.welcome.title, t.storage.title, t.recording.title, t.overlay.title, t.done.title]
 
 export interface OnboardingProps {
   /** Defaults to window.api; tests can inject a value. */
@@ -232,6 +255,7 @@ export function Onboarding({ api, language, initialStep = 0, initialDraft, onClo
     <WelcomeStep key="welcome" language={lang} onLanguage={changeLanguage} />,
     <StorageStep key="storage" draft={draft} onPick={() => void pickFolder()} />,
     <RecordingStep key="recording" draft={draft} onDraft={patchDraft} />,
+    <OverlayStep key="overlay" draft={draft} onDraft={patchDraft} />,
     <DoneStep key="done" draft={draft} />
   ][step]
 

@@ -3,8 +3,8 @@ import { DEFAULT_RECORDING_SETTINGS, type RecordingSettings } from '../../shared
 import type { Settings, SettingsSetResult } from '../../shared/settings'
 import { tr } from '../../shared/locale'
 
-/** Onboarding step order: welcome and language, storage location, recording settings, and completion. */
-export const ONBOARDING_STEPS = ['welcome', 'storage', 'recording', 'done'] as const
+/** Onboarding step order: welcome and language, storage location, recording settings, in-game overlay (Windowed Fullscreen), and completion. */
+export const ONBOARDING_STEPS = ['welcome', 'storage', 'recording', 'overlay', 'done'] as const
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]
 
 /** Values selected during onboarding; settings are written once on completion. */
@@ -15,13 +15,15 @@ export interface OnboardingDraft {
   height: RecordingSettings['height']
   fps: RecordingSettings['fps']
   bitrateKbps: number
+  /** Show the in-game overlay (needs VALORANT in Windowed Fullscreen). */
+  overlay: boolean
 }
 
 /** Payload sent to `settings:set`. */
 export interface OnboardingPatch {
   storageRoot?: string
   onboardingDone: true
-  recording?: Pick<RecordingSettings, 'mode' | 'height' | 'fps' | 'bitrateKbps'>
+  recording?: Pick<RecordingSettings, 'mode' | 'height' | 'fps' | 'bitrateKbps'> & { overlay?: { enabled: boolean } }
 }
 
 /** Subset of window.api used by onboarding. */
@@ -43,7 +45,7 @@ export function shouldShowOnboarding(settings: Settings | null): boolean {
 /** Draft defaults; recording fields come from DEFAULT_RECORDING_SETTINGS. */
 export function defaultDraft(storageRoot: string): OnboardingDraft {
   const { mode, height, fps, bitrateKbps } = DEFAULT_RECORDING_SETTINGS
-  return { storageRoot, mode, height, fps, bitrateKbps }
+  return { storageRoot, mode, height, fps, bitrateKbps, overlay: DEFAULT_RECORDING_SETTINGS.overlay.enabled }
 }
 
 /** "Get started": write the storage location, completion flag, and four recording fields at once. */
@@ -52,7 +54,8 @@ export function buildFinishPatch(draft: OnboardingDraft): OnboardingPatch {
   return {
     ...(draft.storageRoot ? { storageRoot: draft.storageRoot } : {}),
     onboardingDone: true,
-    recording: { mode, height, fps, bitrateKbps }
+    // Main validates the partial overlay field by field and keeps its other options.
+    recording: { mode, height, fps, bitrateKbps, overlay: { enabled: draft.overlay } }
   }
 }
 
