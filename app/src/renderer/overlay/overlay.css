@@ -43,7 +43,6 @@ body {
   background: transparent;
   overflow: hidden;
   user-select: none;
-  cursor: default;
   font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }

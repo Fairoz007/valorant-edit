@@ -72,3 +72,10 @@ describe('Overlay card contrast', () => {
     expect(contrast(vars['--ov-detail'], vars['--ov-surface'])).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+describe('Overlay page never changes the cursor', () => {
+  it('overlay.css sets no CSS cursor (the window is click-through; the game below owns the pointer)', () => {
+    const css = fs.readFileSync(path.join(__dirname, 'overlay.css'), 'utf8')
+    expect(css).not.toMatch(/(^|[;{\s])cursor\s*:/)
+  })
+})

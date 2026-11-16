@@ -22,7 +22,9 @@ param(
     [int[]]$Spectator = @(960, 540, 96, 48),
     [switch]$NoMicrophone,
     [switch]$NoAudio,
-    [switch]$NoEncode
+    [switch]$NoEncode,
+    # Record without the mouse pointer (capture_cursor: false).
+    [switch]$NoCursor
 )
 $ErrorActionPreference = 'Stop'
 if ($Banner.Count -ne 4 -or $Spectator.Count -ne 4) { throw 'Each ROI must contain four integers: x, y, w, and h.' }
@@ -40,7 +42,7 @@ $video = $null
 if (-not $NoEncode) { $video = @{ codec = $Codec; encoder = $Encoder; fps = $Fps; height = $Height; bitrate_kbps = $BitrateKbps } }
 $audio = $null
 if (-not $NoAudio -and -not $NoEncode) { $audio = @{ render = $RenderDevice; capture = $CaptureDevice; mic_gain = $MicGain; mic_enabled = -not $NoMicrophone } }
-$request = @{ id = 1; cmd = 'start'; pid = $TargetPid; session_dir = $directory; session_id = $sessionId; encode = $video; audio = $audio; frames = @{ banner = $Banner; spec = $Spectator; base = @(1920, 1080) }; capture = $Capture }
+$request = @{ id = 1; cmd = 'start'; pid = $TargetPid; session_dir = $directory; session_id = $sessionId; encode = $video; audio = $audio; frames = @{ banner = $Banner; spec = $Spectator; base = @(1920, 1080) }; capture = $Capture; capture_cursor = -not $NoCursor }
 if ($Capture -eq 'hook') { $request.hook_dir = (Resolve-Path -LiteralPath $HookDir).Path }
 $info = [Diagnostics.ProcessStartInfo]::new()
 $info.FileName = $executable
