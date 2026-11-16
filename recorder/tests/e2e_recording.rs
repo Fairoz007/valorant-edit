@@ -789,7 +789,18 @@ fn wgc_recovers_when_minimized_and_can_restart_while_minimized() {
     let mut request = start(&directory(), 3, true);
     request["audio"] = Value::Null;
     process.send(request);
+    let restarted = process.until(|v| v["ev"] == "started" || v["ok"] == false);
     assert_eq!(process.reply(3)["ok"], true);
+    // Started while minimized: the size comes from the monitor, not the minimized window's 160×28 placeholder
+    // (which used to give a 6170×1080 recording).
+    let (w, h) = (
+        restarted["width"].as_f64().unwrap(),
+        restarted["height"].as_f64().unwrap(),
+    );
+    assert!(
+        h >= 480.0 && w / h < 3.0,
+        "output size from a minimized window: {restarted}"
+    );
     process.until(|v| v["ev"] == "segment");
     // SAFETY: Restore only this test's window without changing the foreground application.
     unsafe {

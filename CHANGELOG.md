@@ -79,6 +79,10 @@
     window and the cursor clip every 50 ms: unchanged, and hit-testing passed through to the window below.
   - "Record mouse cursor" now says that it only changes the video, never the pointer on screen.
   - Not verified in a VALORANT match: see "What is still unverified" in the findings doc.
+- **Recordings started while the game was minimized got the minimized window's shape** (for example 6170×1080 at 1080p).
+  WGC reports a 160×28 placeholder size for a minimized window, and the first size fixed the output size for the whole
+  session. Such a start now begins on the game's monitor (black until the game is restored) and switches to window capture
+  on restore.
   - Not yet checked over a running VALORANT match.
 
 - **Record gameplay only** (VALORANT, built-in recorder):

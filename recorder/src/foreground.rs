@@ -1,8 +1,8 @@
 //! `aditorrec --foreground <pid>`: one read-only window-manager query for the app's focus guard and in-game overlay.
 //! Prints one JSON line and exits. It never opens the game process (no OpenProcess) and changes no window, focus or cursor state.
 use serde_json::{json, Value};
-use windows::Win32::Foundation::{HWND, RECT};
 use windows::core::PCWSTR;
+use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplaySettingsW, GetMonitorInfoW, MonitorFromWindow, DEVMODEW, ENUM_CURRENT_SETTINGS,
     ENUM_REGISTRY_SETTINGS, HMONITOR, MONITORINFO, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST,
@@ -144,7 +144,12 @@ mod tests {
 
     #[test]
     fn covers_and_mode_change_rules() {
-        let r = |l, t, rr, b| RECT { left: l, top: t, right: rr, bottom: b };
+        let r = |l, t, rr, b| RECT {
+            left: l,
+            top: t,
+            right: rr,
+            bottom: b,
+        };
         let monitor = r(0, 0, 2560, 1440);
         assert!(covers(r(0, 0, 2560, 1440), monitor));
         // A window larger than its monitor (seen with VALORANT) still covers it.

@@ -153,9 +153,9 @@ below exactly as far as they went.
 03:05–03:10 sessions, while the game was still running. The guard let the main window show because the game was no longer the
 foreground window, which fits the game having been minimized first.
 
-Side finding (not fixed here): two sessions were encoded at `6170x1080`, and a test recording at `4114x720`. A minimized window's
-rect is `-32000,-32000 160x28` (measured), and 160/28 × 1080 = 6171. So a recording that starts while the game is minimized takes
-its output aspect from the minimized window.
+Side finding (fixed, see "Fix" item 7): two sessions were encoded at `6170x1080`, and a test recording at `4114x720`. A minimized
+window's rect is `-32000,-32000 160x28` (measured), and 160/28 × 1080 = 6171. So a recording that starts while the game is minimized
+takes its output aspect from the minimized window.
 
 ## What was measured
 
@@ -236,6 +236,12 @@ the standalone `aditorrec` (WGC with and without the cursor, DDA) and shows over
 5. Every toast goes through the focus guard, also with the overlay off: shown at once when the game is not in front, otherwise
    after it loses focus.
 6. The overlay page sets no CSS cursor (tested). The "Record mouse cursor" help text says it only changes the video.
+7. **Recording size when the game is minimized at start** (`recorder/src/capture/mod.rs`). WGC reports a minimized window's
+   placeholder size, and the first size fixes the session's output size. A window that is minimized when recording starts now
+   begins in the existing minimized fallback: a monitor capture, black until the window is restored, after which the normal
+   restore check switches back to window capture. `wgc_recovers_when_minimized_and_can_restart_while_minimized` now checks
+   the output size of a start while minimized. Without the fix that start failed with NVENC "Invalid argument" (a size built
+   from 160×28 at native height); at the app's 1080p setting the same path gave the 6170×1080 files. With the fix it passes.
 
 Rules kept:
 - The recorder and the app never call SetCursor, ShowCursor, ClipCursor, SetCapture or SetCursorPos.
